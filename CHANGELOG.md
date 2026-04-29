@@ -3,6 +3,13 @@
 Tutte le modifiche rilevanti a questo progetto vengono documentate in questo file.
 Il formato è basato su [Keep a Changelog](https://keepachangelog.com/it/1.1.0/).
 
+## [Unreleased]
+
+### Aggiunte — Manuale utente con screenshot reali
+- [docs/manuale_utente/MANUALE_UTENTE.md](docs/manuale_utente/MANUALE_UTENTE.md) — manuale utente non-tecnico (~410 righe, 11 capitoli) per operatori che gestiscono regole, IA, clienti, orari. Linguaggio italiano accessibile, complementare al manuale tecnico auto-generato.
+- [scripts/capture_user_manual_screenshots.py](scripts/capture_user_manual_screenshots.py) — script Playwright (chromium headless) che fa login e cattura 18 screenshot delle viste principali (login, dashboard, regole, clienti, eventi, coda, activity, IA, profili, orari, template, utenti, manuale tecnico).
+- 18 PNG salvati in [docs/manuale_utente/img/](docs/manuale_utente/img/) — risoluzione 1440x900, full-page.
+
 ## [0.8.2] — 2026-04-29 — Queue UI + Customers Redesign + Test esaustivi
 
 ### Aggiunte — Queue & Quarantena ([routes/queue.py](domarc_relay_admin/routes/queue.py))
