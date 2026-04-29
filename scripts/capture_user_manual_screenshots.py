@@ -11,14 +11,15 @@ Richiede: server attivo su https://manager-dev.domarc.it:8443.
 """
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
-BASE_URL = "https://manager-dev.domarc.it:8443"
-USERNAME = "admin"
-PASSWORD = "domarc2026"
+BASE_URL = os.environ.get("DOMARC_BASE_URL", "https://manager-dev.domarc.it:8443")
+USERNAME = os.environ.get("DOMARC_USER", "admin")
+PASSWORD = os.environ.get("DOMARC_PASS", "")  # NON hardcodato: passa via env
 OUT_DIR = Path(__file__).resolve().parent.parent / "docs" / "manuale_utente" / "img"
 
 # Lista (path_relativo, filename, descrizione, eventuale azione_post_load)
@@ -44,6 +45,10 @@ PAGES: list[tuple[str, str, str]] = [
 
 
 def main() -> int:
+    if not PASSWORD:
+        print("[ERROR] Password admin non impostata: esporta DOMARC_PASS=<pwd>",
+              file=sys.stderr)
+        return 2
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
