@@ -48,7 +48,7 @@
     {% for item in items %}
         {% if item.type == 'group' %}
             {% set g = item.group %}
-            <div class="rule-group {% if not g.enabled %}collapsed{% endif %}" data-group-id="{{ g.id }}">
+            <div class="rule-group" data-group-id="{{ g.id }}">
                 <div class="rule-row rule-group-header" onclick="toggleGroup({{ g.id }})">
                     <span class="toggle" id="toggle-{{ g.id }}"><i class="fas fa-chevron-down"></i></span>
                     <span class="priority">{{ g.priority }}</span>
