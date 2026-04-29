@@ -70,6 +70,33 @@
     </div>
 </div>
 
+<section class="dr-section" style="margin-bottom:1.2rem;">
+    <div style="display:flex; gap:0.75rem; flex-wrap:wrap; align-items:center;
+                padding:0.85rem 1rem; background:#eff6ff; border:1px solid #bfdbfe;
+                border-radius:8px;">
+        <div style="font-size:1.4rem; color:#2563eb;"><i class="fas fa-book-open"></i></div>
+        <div style="flex:1; min-width:240px;">
+            <strong style="color:#1e3a8a;">Documentazione</strong>
+            <div style="font-size:0.82rem; color:#475569; margin-top:0.15rem;">
+                Manuali per operatori e amministratori — istruzioni passo-passo
+                con screenshot dell'applicativo.
+            </div>
+        </div>
+        <a href="{{ url_for('manual.user_manual') }}" class="dr-btn dr-btn-primary"
+           style="white-space:nowrap;">
+            <i class="fas fa-user-graduate"></i> Manuale utente
+        </a>
+        <a href="{{ url_for('manual.view') }}" class="dr-btn"
+           style="white-space:nowrap;">
+            <i class="fas fa-cogs"></i> Manuale tecnico
+        </a>
+        <a href="{{ url_for('manual.changelog') }}" class="dr-btn"
+           style="white-space:nowrap;">
+            <i class="fas fa-clock-rotate-left"></i> Changelog
+        </a>
+    </div>
+</section>
+
 <div class="charts-grid">
     <div class="chart-card">
         <h3><i class="fas fa-chart-line"></i> Eventi delle ultime 24 ore</h3>

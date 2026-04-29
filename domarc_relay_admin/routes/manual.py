@@ -19,18 +19,25 @@ manual_bp = Blueprint("manual", __name__, url_prefix="/manual")
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 CHANGELOG_PATH = REPO_ROOT / "CHANGELOG.md"
+USER_MANUAL_PATH = REPO_ROOT / "docs" / "manuale_utente" / "MANUALE_UTENTE.md"
+USER_MANUAL_IMG_DIR = REPO_ROOT / "docs" / "manuale_utente" / "img"
 
 
-def _markdown_to_html(md: str) -> str:
+def _markdown_to_html(md: str, *, image_url_prefix: str | None = None) -> str:
     """Renderer markdown leggero (NO dipendenze esterne).
 
     Supporta: header (#), tabelle, code inline (`...`), bold (**...**),
-    italic (_..._), liste, hr, link [...](...).
+    italic (_..._), liste, hr, link [...](...), immagini ![](img/...).
+    Se ``image_url_prefix`` è fornito, le immagini ``img/foo.png`` vengono
+    riscritte come ``{prefix}/foo.png``.
     """
     html: list[str] = []
     in_table = False
     in_list = False
     in_code_block = False
+
+    def _md(s: str) -> str:
+        return _inline_md(s, image_url_prefix=image_url_prefix)
 
     for raw in md.split("\n"):
         line = raw
@@ -52,18 +59,16 @@ def _markdown_to_html(md: str) -> str:
         if "|" in line and line.strip().startswith("|"):
             cells = [c.strip() for c in line.strip().strip("|").split("|")]
             if all(re.match(r"^\s*-+\s*$", c) or c == "" for c in cells):
-                # riga separatore della tabella, skip
                 continue
-            tag = "th" if not in_table else "td"
             if not in_table:
                 html.append('<table class="dr-table">')
                 in_table = True
                 html.append("<thead><tr>" + "".join(
-                    f"<th>{_inline_md(c)}</th>" for c in cells
+                    f"<th>{_md(c)}</th>" for c in cells
                 ) + "</tr></thead><tbody>")
             else:
                 html.append("<tr>" + "".join(
-                    f"<td>{_inline_md(c)}</td>" for c in cells
+                    f"<td>{_md(c)}</td>" for c in cells
                 ) + "</tr>")
             continue
         elif in_table:
@@ -74,7 +79,7 @@ def _markdown_to_html(md: str) -> str:
         m = re.match(r"^(#{1,6})\s+(.+)$", line)
         if m:
             level = len(m.group(1))
-            html.append(f"<h{level}>{_inline_md(m.group(2))}</h{level}>")
+            html.append(f"<h{level}>{_md(m.group(2))}</h{level}>")
             continue
 
         # Hr
@@ -87,7 +92,7 @@ def _markdown_to_html(md: str) -> str:
             if not in_list:
                 html.append("<ul>")
                 in_list = True
-            html.append(f"<li>{_inline_md(line.lstrip().lstrip('-*').strip())}</li>")
+            html.append(f"<li>{_md(line.lstrip().lstrip('-*').strip())}</li>")
             continue
         elif in_list:
             html.append("</ul>")
@@ -95,7 +100,7 @@ def _markdown_to_html(md: str) -> str:
 
         # Paragrafo
         if line.strip():
-            html.append(f"<p>{_inline_md(line)}</p>")
+            html.append(f"<p>{_md(line)}</p>")
         else:
             html.append("")
 
@@ -112,8 +117,8 @@ def _escape_html(text: str) -> str:
     return (text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
 
 
-def _inline_md(text: str) -> str:
-    """Inline transformations: code, bold, italic, link."""
+def _inline_md(text: str, *, image_url_prefix: str | None = None) -> str:
+    """Inline transformations: code, bold, italic, link, image."""
     # Escape primo tutti i tag HTML potenzialmente pericolosi
     text = _escape_html(text)
     # Code inline `...`
@@ -122,6 +127,19 @@ def _inline_md(text: str) -> str:
     text = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", text)
     # Italic _..._
     text = re.sub(r"\b_([^_]+)_\b", r"<em>\1</em>", text)
+    # Image ![alt](src) — DEVE precedere il link generico
+    if image_url_prefix:
+        def _img_repl(m: re.Match) -> str:
+            alt = m.group(1)
+            src = m.group(2)
+            # Solo immagini relative al sotto-folder img/
+            if src.startswith("img/"):
+                src = f"{image_url_prefix.rstrip('/')}/{src[len('img/'):]}"
+            return (f'<img src="{src}" alt="{alt}" '
+                    f'style="max-width:100%; border:1px solid #cbd5e1; '
+                    f'border-radius:6px; margin:0.6rem 0; '
+                    f'box-shadow:0 1px 3px rgba(0,0,0,0.06);">')
+        text = re.sub(r"!\[([^\]]*)\]\(([^)]+)\)", _img_repl, text)
     # Link [text](url)
     text = re.sub(
         r"\[([^\]]+)\]\(([^)]+)\)",
@@ -168,6 +186,44 @@ def changelog():
                             raw_url=None,
                             other_link_url=url_for("manual.view"),
                             other_link_label="Manuale tecnico")
+
+
+@manual_bp.route("/utente")
+@login_required()
+def user_manual():
+    """Manuale utente non-tecnico (operatori/amministratori) con screenshot."""
+    if USER_MANUAL_PATH.exists():
+        md = USER_MANUAL_PATH.read_text(encoding="utf-8")
+    else:
+        md = "# Manuale utente\n\n_File non disponibile._"
+    img_prefix = url_for("manual.user_manual_image", filename="").rstrip("/")
+    html_content = _markdown_to_html(md, image_url_prefix=img_prefix)
+    return render_template("admin/manual_view.html",
+                            html_content=html_content,
+                            title="Manuale utente",
+                            raw_url=None,
+                            other_link_url=url_for("manual.view"),
+                            other_link_label="Manuale tecnico")
+
+
+@manual_bp.route("/utente/img/<path:filename>")
+@login_required()
+def user_manual_image(filename: str):
+    """Serve gli screenshot del manuale utente (PNG)."""
+    # Sicurezza: solo file dentro USER_MANUAL_IMG_DIR, niente path traversal
+    safe = USER_MANUAL_IMG_DIR / filename
+    try:
+        safe = safe.resolve()
+        safe.relative_to(USER_MANUAL_IMG_DIR.resolve())
+    except (ValueError, OSError):
+        return Response("Forbidden", status=403)
+    if not safe.is_file():
+        return Response("Not found", status=404)
+    suffix = safe.suffix.lower()
+    mime = {".png": "image/png", ".jpg": "image/jpeg",
+             ".jpeg": "image/jpeg", ".svg": "image/svg+xml"}.get(suffix,
+                                                                  "application/octet-stream")
+    return Response(safe.read_bytes(), mimetype=mime)
 
 
 @manual_bp.route("/regenerate", methods=["POST"])
