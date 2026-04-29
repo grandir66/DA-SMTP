@@ -180,6 +180,17 @@ class Storage(ABC):
                                          source: str = "manual") -> int:
         raise NotImplementedError
 
+    def list_ai_rule_proposals(self, *, tenant_id: int | None = None,
+                                 state: str | None = None,
+                                 limit: int = 200) -> list[dict[str, Any]]:
+        raise NotImplementedError
+
+    def get_ai_rule_proposal(self, proposal_id: int) -> dict[str, Any] | None:
+        raise NotImplementedError
+
+    def upsert_ai_rule_proposal(self, data: dict[str, Any]) -> int:
+        raise NotImplementedError
+
     def list_ai_error_clusters(self, *, tenant_id: int | None = None,
                                 states: tuple[str, ...] | None = None,
                                 limit: int = 200) -> list[dict[str, Any]]:

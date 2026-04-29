@@ -2004,6 +2004,92 @@ class SqliteStorage(Storage):
             ).fetchall()
             return [dict(r) for r in rows]
 
+    # ============================================ AI RULE PROPOSALS (F3.5) ===
+
+    def list_ai_rule_proposals(self, *, tenant_id: int | None = None,
+                                 state: str | None = None,
+                                 limit: int = 200) -> list[dict[str, Any]]:
+        where: list[str] = []
+        params: list[Any] = []
+        if tenant_id is not None:
+            where.append("tenant_id = ?"); params.append(int(tenant_id))
+        if state:
+            where.append("state = ?"); params.append(state)
+        ws = "WHERE " + " AND ".join(where) if where else ""
+        params.append(int(limit))
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"SELECT * FROM ai_rule_proposals {ws} "
+                f"ORDER BY created_at DESC LIMIT ?", params,
+            ).fetchall()
+            return [_decode_ai_proposal(r) for r in rows]
+
+    def get_ai_rule_proposal(self, proposal_id: int) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM ai_rule_proposals WHERE id = ?", (proposal_id,),
+            ).fetchone()
+            return _decode_ai_proposal(row) if row else None
+
+    def upsert_ai_rule_proposal(self, data: dict[str, Any]) -> int:
+        """Insert/update di una proposta. Idempotente per fingerprint_hex
+        (UNIQUE non strict ma logico via dedup nel proposer)."""
+        am = data.get("suggested_action_map_json")
+        if isinstance(am, (dict, list)):
+            am = json.dumps(am, ensure_ascii=False)
+        pid = data.get("id")
+        with self.transaction() as conn:
+            if pid:
+                fields = []
+                values: list[Any] = []
+                for col in ("suggested_match_subject", "suggested_match_from",
+                              "suggested_match_to", "suggested_match_in_service",
+                              "suggested_match_contract_active", "suggested_action",
+                              "confidence", "evidence_decision_ids", "sample_subjects",
+                              "state", "accepted_rule_id", "reviewer", "review_notes",
+                              "fingerprint_hex"):
+                    if col in data:
+                        fields.append(f"{col} = ?")
+                        values.append(data[col])
+                if "suggested_action_map_json" in data:
+                    fields.append("suggested_action_map_json = ?")
+                    values.append(am)
+                if data.get("review_at") == "datetime('now')":
+                    fields.append("review_at = datetime('now')")
+                if not fields:
+                    return int(pid)
+                values.append(int(pid))
+                conn.execute(
+                    f"UPDATE ai_rule_proposals SET {', '.join(fields)} WHERE id = ?",
+                    values,
+                )
+                return int(pid)
+            cur = conn.execute(
+                """INSERT INTO ai_rule_proposals
+                       (tenant_id, fingerprint_hex, suggested_match_subject,
+                        suggested_match_from, suggested_match_to,
+                        suggested_match_in_service, suggested_match_contract_active,
+                        suggested_action, suggested_action_map_json, confidence,
+                        evidence_decision_ids, sample_subjects, state)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    int(data.get("tenant_id", 1)),
+                    data.get("fingerprint_hex"),
+                    data.get("suggested_match_subject"),
+                    data.get("suggested_match_from"),
+                    data.get("suggested_match_to"),
+                    data.get("suggested_match_in_service"),
+                    data.get("suggested_match_contract_active"),
+                    data.get("suggested_action"),
+                    am,
+                    data.get("confidence"),
+                    data.get("evidence_decision_ids"),
+                    data.get("sample_subjects"),
+                    data.get("state", "pending"),
+                ),
+            )
+            return int(cur.lastrowid or 0)
+
     # ============================================ AI ERROR CLUSTERS (F2) ===
 
     def list_ai_error_clusters(self, *, tenant_id: int | None = None,
@@ -2347,6 +2433,16 @@ def _decode_ai_decision(row) -> dict[str, Any]:
                 d[k] = json.loads(d[k])
             except (TypeError, ValueError):
                 d[k] = {}
+    return d
+
+
+def _decode_ai_proposal(row) -> dict[str, Any]:
+    d = dict(row)
+    if d.get("suggested_action_map_json") and isinstance(d["suggested_action_map_json"], str):
+        try:
+            d["suggested_action_map_json"] = json.loads(d["suggested_action_map_json"])
+        except (TypeError, ValueError):
+            d["suggested_action_map_json"] = {}
     return d
 
 

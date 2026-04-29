@@ -1,0 +1,89 @@
+{% extends "admin/_base.html" %}
+{% block title %}AI Rule Proposals{% endblock %}
+{% block content %}
+<section class="dr-section">
+    <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+        <a href="{{ url_for('ai.dashboard') }}" class="dr-btn"><i class="fas fa-arrow-left"></i> AI Dashboard</a>
+        <h2 style="margin:0;"><i class="fas fa-wand-magic-sparkles"></i> Rule Proposer (F3.5)</h2>
+        <form method="post" action="{{ url_for('ai.proposals_run') }}" style="margin-left:auto;">
+            <button class="dr-btn dr-btn-primary" style="width:auto;">
+                <i class="fas fa-play"></i> Esegui proposer ora
+            </button>
+        </form>
+    </div>
+    <p style="color:var(--dr-gray-dark); font-size:0.85rem;">
+        Il proposer scansiona le decisioni IA recenti, le raggruppa per pattern e propone <strong>regole statiche</strong>
+        per ridurre nel tempo le chiamate IA su pattern ricorrenti. Configurabile in
+        <a href="{{ url_for('settings.settings_view') }}">Settings</a>:
+        <code>ai_proposal_min_decisions</code>={{ min_decisions }},
+        <code>ai_proposal_consistency_threshold</code>={{ consistency }},
+        <code>ai_proposal_window_days</code>={{ window_days }}.
+    </p>
+
+    <div style="display:flex; gap:0.5rem; margin-top:0.7rem; flex-wrap:wrap;">
+        <a href="?state=pending" class="dr-btn" style="width:auto; {% if state_filter=='pending' %}background:#3b82f6; color:#fff;{% endif %}">
+            Pending <strong>{{ stats.pending }}</strong>
+        </a>
+        <a href="?state=accepted" class="dr-btn" style="width:auto; {% if state_filter=='accepted' %}background:#10b981; color:#fff;{% endif %}">
+            Accepted <strong>{{ stats.accepted }}</strong>
+        </a>
+        <a href="?state=rejected" class="dr-btn" style="width:auto; {% if state_filter=='rejected' %}background:#dc2626; color:#fff;{% endif %}">
+            Rejected <strong>{{ stats.rejected }}</strong>
+        </a>
+    </div>
+</section>
+
+<div class="dr-table-wrap">
+<table class="dr-table">
+    <thead>
+        <tr>
+            <th class="num">#</th>
+            <th>Subject pattern suggerito</th>
+            <th>Action</th>
+            <th class="num">Confidence</th>
+            <th class="num">Evidence</th>
+            <th>Stato</th>
+            <th>Quando</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for p in proposals %}
+    <tr>
+        <td class="num">{{ p.id }}</td>
+        <td class="mono" style="max-width:350px;">
+            <small>{{ (p.suggested_match_subject or '—')|truncate(50) }}</small>
+            {% if p.suggested_match_from %}<br><small>from: {{ p.suggested_match_from }}</small>{% endif %}
+        </td>
+        <td><span class="dr-action-pill {{ p.suggested_action }}">{{ p.suggested_action }}</span></td>
+        <td class="num">
+            {% if p.confidence %}{{ '%.2f'|format(p.confidence) }}
+            {% if p.confidence >= 0.85 %}<span style="color:#10b981;">✓</span>{% endif %}
+            {% else %}—{% endif %}
+        </td>
+        <td class="num">{{ (p.evidence_decision_ids or '').count(',') + 1 if p.evidence_decision_ids else 0 }}</td>
+        <td>
+            {% if p.state == 'pending' %}<span class="rule-inherit-badge">pending</span>
+            {% elif p.state == 'accepted' %}<span class="rule-status on">accepted</span>
+            {% elif p.state == 'rejected' %}<span class="rule-status off">rejected</span>
+            {% else %}<small>{{ p.state }}</small>{% endif %}
+        </td>
+        <td><small>{{ p.created_at }}</small></td>
+        <td>
+            <a href="{{ url_for('ai.proposal_detail', proposal_id=p.id) }}" class="dr-btn" style="width:auto; padding:0.2rem 0.5rem;">
+                <i class="fas fa-eye"></i>
+            </a>
+        </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="8" class="dr-empty">
+        Nessuna proposta nello stato <code>{{ state_filter }}</code>.
+        {% if state_filter == 'pending' %}
+        <br>Esegui il proposer manualmente per generare proposte dalle decisioni recenti.
+        {% endif %}
+    </td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endblock %}

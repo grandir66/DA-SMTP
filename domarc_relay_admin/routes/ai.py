@@ -221,6 +221,93 @@ def decision_detail(decision_id: int):
     return render_template("admin/ai_decision_detail.html", decision=decision)
 
 
+@ai_bp.route("/proposals")
+@login_required(role="admin")
+def proposals_list():
+    """F3.5 — Lista delle proposte di regole statiche generate dal Rule Proposer."""
+    storage = _storage()
+    tid = _tid()
+    state_filter = (request.args.get("state") or "pending").strip() or None
+    proposals = storage.list_ai_rule_proposals(tenant_id=tid, state=state_filter, limit=500)
+    settings = {s["key"]: s["value"] for s in storage.list_settings()}
+    stats = {
+        "pending": len(storage.list_ai_rule_proposals(tenant_id=tid, state="pending", limit=2000)),
+        "accepted": len(storage.list_ai_rule_proposals(tenant_id=tid, state="accepted", limit=2000)),
+        "rejected": len(storage.list_ai_rule_proposals(tenant_id=tid, state="rejected", limit=2000)),
+    }
+    return render_template("admin/ai_proposals.html",
+                            proposals=proposals,
+                            stats=stats,
+                            state_filter=state_filter,
+                            min_decisions=settings.get("ai_proposal_min_decisions", "20"),
+                            consistency=settings.get("ai_proposal_consistency_threshold", "0.80"),
+                            window_days=settings.get("ai_proposal_window_days", "14"))
+
+
+@ai_bp.route("/proposals/run", methods=["POST"])
+@login_required(role="admin")
+def proposals_run():
+    """Trigger manuale del rule proposer."""
+    from ..ai_assistant.rule_proposer import generate_proposals
+    storage = _storage()
+    tid = _tid()
+    created = generate_proposals(storage=storage, tenant_id=tid)
+    if created:
+        flash(f"✓ {len(created)} nuove proposte generate dal Rule Proposer.", "success")
+    else:
+        flash("Nessuna nuova proposta generata: nessun cluster ha superato le soglie "
+              "(o tutti i cluster hanno già una proposta in archivio).", "info")
+    return redirect(url_for("ai.proposals_list"))
+
+
+@ai_bp.route("/proposals/<int:proposal_id>", methods=["GET", "POST"])
+@login_required(role="admin")
+def proposal_detail(proposal_id: int):
+    storage = _storage()
+    tid = _tid()
+    proposal = storage.get_ai_rule_proposal(proposal_id)
+    if not proposal:
+        flash("Proposta non trovata.", "error")
+        return redirect(url_for("ai.proposals_list"))
+
+    if request.method == "POST":
+        from ..ai_assistant.rule_proposer import accept_proposal, reject_proposal
+        action = (request.form.get("action") or "").strip()
+        notes = (request.form.get("review_notes") or "").strip() or None
+        priority = int(request.form.get("priority") or 200)
+        try:
+            if action == "accept":
+                rule_id = accept_proposal(
+                    storage=storage, proposal_id=proposal_id,
+                    reviewer=_actor(), review_notes=notes, priority=priority,
+                )
+                flash(f"✓ Proposta accettata. Regola creata con id #{rule_id}.", "success")
+                return redirect(url_for("rules.form_view", rule_id=rule_id))
+            elif action == "reject":
+                reject_proposal(
+                    storage=storage, proposal_id=proposal_id,
+                    reviewer=_actor(), review_notes=notes,
+                )
+                flash("Proposta rifiutata.", "success")
+                return redirect(url_for("ai.proposals_list"))
+        except ValueError as exc:
+            flash(str(exc), "error")
+
+    # Carica decisioni evidence per UI
+    decision_ids = []
+    if proposal.get("evidence_decision_ids"):
+        decision_ids = [int(x) for x in proposal["evidence_decision_ids"].split(",")
+                        if x.strip().isdigit()]
+    decisions = []
+    for did in decision_ids[:10]:
+        d = storage.get_ai_decision(did)
+        if d:
+            decisions.append(d)
+
+    return render_template("admin/ai_proposal_detail.html",
+                            proposal=proposal, decisions=decisions)
+
+
 @ai_bp.route("/clusters")
 @login_required(role="admin")
 def clusters_list():

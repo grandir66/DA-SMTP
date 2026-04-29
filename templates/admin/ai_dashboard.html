@@ -10,6 +10,7 @@
         <a href="{{ url_for('ai.rules_overview') }}" class="dr-btn" style="width:auto;"><i class="fas fa-sitemap"></i> Regole IA</a>
         <a href="{{ url_for('ai.shadow_mode_switch') }}" class="dr-btn" style="width:auto;{% if not shadow_mode %}background:#047857; color:#fff;{% endif %}"><i class="fas fa-toggle-on"></i> Shadow ↔ Live</a>
         <a href="{{ url_for('ai.clusters_list') }}" class="dr-btn" style="width:auto;"><i class="fas fa-layer-group"></i> Error Clusters</a>
+        <a href="{{ url_for('ai.proposals_list') }}" class="dr-btn" style="width:auto;"><i class="fas fa-wand-magic-sparkles"></i> Rule Proposals</a>
         <a href="{{ url_for('ai.decisions_list') }}" class="dr-btn" style="width:auto;"><i class="fas fa-list-check"></i> Decisioni</a>
         <a href="{{ url_for('ai.pii_dictionary') }}" class="dr-btn" style="width:auto;"><i class="fas fa-user-shield"></i> PII dictionary</a>
     </div>

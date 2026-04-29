@@ -1,0 +1,139 @@
+{% extends "admin/_base.html" %}
+{% block title %}Proposta #{{ proposal.id }}{% endblock %}
+{% block content %}
+<section class="dr-section">
+    <a href="{{ url_for('ai.proposals_list') }}" class="dr-btn"><i class="fas fa-arrow-left"></i> Proposte</a>
+    <h2 style="margin:0.5rem 0;"><i class="fas fa-wand-magic-sparkles"></i> Proposta #{{ proposal.id }}</h2>
+</section>
+
+<div style="display:grid; grid-template-columns:1.2fr 1fr; gap:1rem; max-width:1100px;">
+    {# ============================== REGOLA SUGGERITA ============================== #}
+    <div class="dr-card" style="background:#fff; border:1px solid #cbd5e1; border-radius:8px; padding:1rem;">
+        <h3 style="margin:0 0 0.6rem; color:var(--dr-primary);">Regola suggerita</h3>
+        <div class="dr-form-row">
+            <label>Subject regex</label>
+            <div class="mono">{{ proposal.suggested_match_subject or '—' }}</div>
+        </div>
+        <div class="dr-form-row">
+            <label>From regex</label>
+            <div class="mono">{{ proposal.suggested_match_from or '—' }}</div>
+        </div>
+        <div class="dr-form-row">
+            <label>Action</label>
+            <div><span class="dr-action-pill {{ proposal.suggested_action }}">{{ proposal.suggested_action }}</span></div>
+        </div>
+        <div class="dr-form-row">
+            <label>Action map</label>
+            <div class="mono"><pre style="background:#0f172a; color:#e2e8f0; padding:0.6rem; border-radius:4px; font-size:0.78rem;">{{ proposal.suggested_action_map_json|tojson(indent=2) }}</pre></div>
+        </div>
+        <div class="dr-form-row">
+            <label>Confidence</label>
+            <div>
+                <strong style="font-size:1.2rem;">
+                    {% if proposal.confidence %}{{ '%.2f'|format(proposal.confidence) }}{% else %}—{% endif %}
+                </strong>
+                {% if proposal.confidence and proposal.confidence >= 0.85 %}
+                <span class="rule-status on">alta</span>
+                {% elif proposal.confidence and proposal.confidence >= 0.70 %}
+                <span class="rule-inherit-badge">media</span>
+                {% else %}
+                <span class="rule-status off">bassa</span>
+                {% endif %}
+            </div>
+        </div>
+        <div class="dr-form-row">
+            <label>Stato</label>
+            <div>
+                {% if proposal.state == 'pending' %}<span class="rule-inherit-badge">pending</span>
+                {% elif proposal.state == 'accepted' %}<span class="rule-status on">accepted (rule #{{ proposal.accepted_rule_id }})</span>
+                {% elif proposal.state == 'rejected' %}<span class="rule-status off">rejected</span>
+                {% else %}<small>{{ proposal.state }}</small>{% endif %}
+                {% if proposal.reviewer %}<br><small>by {{ proposal.reviewer }} at {{ proposal.review_at }}</small>{% endif %}
+                {% if proposal.review_notes %}<br><small><em>{{ proposal.review_notes }}</em></small>{% endif %}
+            </div>
+        </div>
+        <div class="dr-form-row">
+            <label>Fingerprint</label>
+            <div><code style="font-size:0.78rem;">{{ proposal.fingerprint_hex }}</code></div>
+        </div>
+    </div>
+
+    {# ============================== AZIONI ============================== #}
+    <div>
+        {% if proposal.state == 'pending' %}
+        <div class="dr-card" style="background:#ecfdf5; border:1px solid #6ee7b7; border-radius:8px; padding:1rem; margin-bottom:1rem;">
+            <h3 style="margin:0 0 0.6rem; color:#047857;"><i class="fas fa-check"></i> Accetta</h3>
+            <p style="font-size:0.85rem;">Crea automaticamente la regola in <code>rules</code> con <code>created_by='ai_proposal_{{ proposal.id }}'</code>.</p>
+            <form method="post">
+                <input type="hidden" name="action" value="accept">
+                <div class="dr-form-row">
+                    <label>Priority</label>
+                    <input type="number" name="priority" value="200" min="1" max="999999" required>
+                </div>
+                <div class="dr-form-row">
+                    <label>Note</label>
+                    <input type="text" name="review_notes" placeholder="es. validata su 30 mail">
+                </div>
+                <button class="dr-btn" style="width:auto; background:#047857; color:#fff;">
+                    <i class="fas fa-check"></i> Crea regola
+                </button>
+            </form>
+        </div>
+
+        <div class="dr-card" style="background:#fef2f2; border:1px solid #fca5a5; border-radius:8px; padding:1rem;">
+            <h3 style="margin:0 0 0.6rem; color:#991b1b;"><i class="fas fa-xmark"></i> Rifiuta</h3>
+            <p style="font-size:0.85rem;">La proposta viene archiviata. Il proposer NON la rigenererà (dedup via fingerprint).</p>
+            <form method="post" onsubmit="return confirm('Rifiutare la proposta? Non sarà più rigenerata.');">
+                <input type="hidden" name="action" value="reject">
+                <div class="dr-form-row">
+                    <label>Motivo</label>
+                    <input type="text" name="review_notes" placeholder="es. troppe variazioni, IA migliore" required>
+                </div>
+                <button class="dr-btn dr-btn-danger" style="width:auto;">
+                    <i class="fas fa-xmark"></i> Rifiuta
+                </button>
+            </form>
+        </div>
+        {% else %}
+        <div class="dr-card" style="background:#f8fafc; border:1px solid #cbd5e1; border-radius:8px; padding:1rem;">
+            <h3 style="margin:0; color:var(--dr-gray-dark);">Proposta {{ proposal.state }}</h3>
+            <p style="font-size:0.85rem; color:var(--dr-gray-dark);">Già processata. {% if proposal.accepted_rule_id %}
+                <a href="{{ url_for('rules.form_view', rule_id=proposal.accepted_rule_id) }}">→ Vedi regola creata</a>
+            {% endif %}</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{# ============================== EVIDENCE ============================== #}
+<div class="dr-card" style="background:#fff; border:1px solid #cbd5e1; border-radius:8px; padding:1rem; margin-top:1rem; max-width:1100px;">
+    <h3 style="margin:0 0 0.6rem; color:var(--dr-primary);"><i class="fas fa-clipboard-list"></i> Evidence — esempi</h3>
+    {% if proposal.sample_subjects %}
+    <div style="background:#f8fafc; padding:0.7rem 0.9rem; border-radius:5px; margin-bottom:0.7rem;">
+        <small style="color:var(--dr-gray-dark); text-transform:uppercase;">Sample subjects:</small><br>
+        <code>{{ proposal.sample_subjects }}</code>
+    </div>
+    {% endif %}
+
+    {% if decisions %}
+    <h4 style="margin:0 0 0.4rem; font-size:0.9rem;">Decisioni IA che hanno generato la proposta (max 10)</h4>
+    <table class="dr-table">
+        <thead><tr><th>id</th><th>Quando</th><th>Intent</th><th>Urgenza</th><th>Summary</th><th>Confidence</th></tr></thead>
+        <tbody>
+        {% for d in decisions %}
+        <tr>
+            <td><a href="{{ url_for('ai.decision_detail', decision_id=d.id) }}">#{{ d.id }}</a></td>
+            <td><small>{{ d.created_at }}</small></td>
+            <td>{{ d.intent or '—' }}</td>
+            <td>{{ d.urgenza_proposta or '—' }}</td>
+            <td><small>{{ (d.summary or '—')|truncate(60) }}</small></td>
+            <td>{% if d.confidence %}{{ '%.2f'|format(d.confidence) }}{% else %}—{% endif %}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <small>Decisioni evidence non più disponibili (limite di retention).</small>
+    {% endif %}
+</div>
+{% endblock %}

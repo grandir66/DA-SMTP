@@ -3,6 +3,44 @@
 Tutte le modifiche rilevanti a questo progetto vengono documentate in questo file.
 Il formato è basato su [Keep a Changelog](https://keepachangelog.com/it/1.1.0/).
 
+## [0.5.0] — 2026-04-29
+
+### Aggiunte — F3.5 Rule Proposer (learning loop AI → regole statiche)
+- **Migration 016** ([migrations/016_ai_proposal_settings.sqlite.sql](domarc_relay_admin/migrations/016_ai_proposal_settings.sqlite.sql)): 3 nuovi setting runtime:
+  - `ai_proposal_min_decisions` (default 20) — volume minimo per generare proposta.
+  - `ai_proposal_consistency_threshold` (default 0.80) — % minima decisioni con stessa classification.
+  - `ai_proposal_window_days` (default 14) — finestra temporale decisioni considerate.
+- **Migration 017** ([migrations/017_ai_proposals_fingerprint.sqlite.sql](domarc_relay_admin/migrations/017_ai_proposals_fingerprint.sqlite.sql)): aggiunge `fingerprint_hex` su `ai_rule_proposals` + indice → dedup proposte (re-run del proposer non ricrea cluster già processati).
+- **Modulo** [ai_assistant/rule_proposer.py](domarc_relay_admin/ai_assistant/rule_proposer.py):
+  - `generate_proposals(storage, tenant_id)` — scansiona ai_decisions ultimi N giorni, raggruppa per (intent, suggested_action, subject_pattern_normalizzato, from_domain), filtra per soglia minima e consistency dell'urgenza dominante, calcola confidence aggregato (media confidence delle decisioni dominanti), genera regex con lookahead AND `(?i)(?=.*\bword1\b)(?=.*\bword2\b).*` dalle keyword significative del subject.
+  - `accept_proposal(storage, proposal_id, reviewer, priority)` — crea regola in `rules` con `created_by='ai_proposal_<id>'` e marca proposta `state=accepted` con `accepted_rule_id`.
+  - `reject_proposal(storage, proposal_id, reviewer, notes)` — marca `state=rejected`, riusa il fingerprint per dedup futuri.
+- **DAO** ([storage/sqlite_impl.py](domarc_relay_admin/storage/sqlite_impl.py)) esteso con: `list_ai_rule_proposals` (filtro per stato), `get_ai_rule_proposal`, `upsert_ai_rule_proposal` (insert + update parziale + decode JSON action_map).
+- **UI** ([routes/ai.py](domarc_relay_admin/routes/ai.py)) blueprint:
+  - `/ai/proposals` — lista filtrabile per stato (pending/accepted/rejected) con stats KPI 3-card e bottone "Esegui proposer ora".
+  - `/ai/proposals/<id>` — dettaglio: regola suggerita (subject regex, from regex, action, action_map JSON), confidence, fingerprint, evidence (sample subjects + 10 decisioni IA correlate), form Accept con priority custom + form Reject con motivo. Accept reindirizza al form della regola appena creata.
+  - `/ai/proposals/run` POST — trigger manuale del proposer (in futuro cron).
+  - Voce dashboard AI: pulsante "Rule Proposals".
+- **Test pytest** [tests/test_ai_rule_proposer.py](tests/test_ai_rule_proposer.py) — 10 casi: generate con soglie raggiunte, skip sotto soglia, skip per inconsistenza urgenza, idempotenza dedup, regex generato con lookahead, accept crea rule + marca accepted, accept-already-accepted raise, accept-nonexistent raise, reject marca state, reject dedup futuri.
+
+### Modifiche
+- Versione bump 0.4.0 → 0.5.0.
+- Schema DB: v15 → v17.
+- Test suite: 152 → 162 (10 nuovi proposer).
+
+### Architettura — chiusura del loop AI
+Il modulo F3.5 chiude il ciclo virtuoso dell'IA:
+
+1. **Decisioni IA** ricche di feedback (intent, urgenza, summary, suggested_action) accumulate in `ai_decisions`.
+2. **Proposer** raggruppa decisioni simili e propone regole statiche.
+3. **Operatore** rivede le proposte e accetta quelle ad alta confidence.
+4. Le regole accettate **intercettano future mail simili senza più chiamare l'IA** → riduzione costo e latenza nel tempo.
+5. Le decisioni **non più necessarie** liberano budget per casi nuovi/edge.
+
+Risultato: nel tempo il rule engine diventa più preciso e l'IA è invocata solo sui casi veramente nuovi.
+
+---
+
 ## [0.4.0] — 2026-04-29
 
 ### Aggiunte — Health check sistema + dashboard di osservabilità
