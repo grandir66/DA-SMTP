@@ -5,6 +5,32 @@ Il formato è basato su [Keep a Changelog](https://keepachangelog.com/it/1.1.0/)
 
 ## [Unreleased]
 
+### Correzioni — BUG CRITICO consegna mail in shadow mode IA
+- **Bug**: tutte le mail processate da una regola con `action='ai_classify'`
+  in IA shadow mode NON venivano consegnate al destinatario reale, anche se
+  la regola aveva `keep_original_delivery=true`. Sintomo: `state='sent'`
+  fasullo nei log dell'admin (in realtà l'evento era stato accettato ma
+  mai inserito in `outbound_queue`).
+- **Causa**: in `relay/pipeline.py` la funzione `_dispatch_action` chiamava
+  `_do_default_delivery(...)` (definita altrove) usando la variabile
+  `pre_event_uuid`, che è scope-locale di `process_message` e quindi non
+  visibile in `_dispatch_action`. Risultato: `NameError: name
+  'pre_event_uuid' is not defined`, intercettato da un `try/except
+  Exception` con log `WARNING relay.pipeline: keep_original_delivery
+  fallito: name 'pre_event_uuid' is not defined`. Il warning passava
+  inosservato e la mail veniva persa silenziosamente.
+- **Fix** in [/opt/stormshield-smtp-relay/relay/pipeline.py](file:///opt/stormshield-smtp-relay/relay/pipeline.py):
+  1. `_do_default_delivery(...)` ora accetta `event_uuid: str | None = None`
+     come parametro esplicito (genera fresh UUID se mancante).
+  2. I 4 chiamanti (`privacy_bypass`, `rules_disabled`, `no_rule_match`,
+     `keep_original_after_<action>`) passano l'event_uuid corretto del
+     loro scope locale.
+  3. In `_dispatch_action` la chiamata usa `event_uuid` (parametro keyword
+     della funzione), non `pre_event_uuid` che era scope sbagliato.
+- **Verifica**: test post-fix `r.grandi@domarc.it → r.grandi@datia.it`
+  produce `outbound_queue id=105 action=default_delivery state=sent`,
+  delivered in 6s allo smarthost EOP.
+
 ### Aggiunte — Manuale utente con screenshot reali
 - [docs/manuale_utente/MANUALE_UTENTE.md](docs/manuale_utente/MANUALE_UTENTE.md) — manuale utente non-tecnico (~410 righe, 11 capitoli) per operatori che gestiscono regole, IA, clienti, orari. Linguaggio italiano accessibile, complementare al manuale tecnico auto-generato.
 - [scripts/capture_user_manual_screenshots.py](scripts/capture_user_manual_screenshots.py) — script Playwright (chromium headless) che fa login e cattura 18 screenshot delle viste principali (login, dashboard, regole, clienti, eventi, coda, activity, IA, profili, orari, template, utenti, manuale tecnico).
