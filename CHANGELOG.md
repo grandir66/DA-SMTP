@@ -5,6 +5,21 @@ Il formato è basato su [Keep a Changelog](https://keepachangelog.com/it/1.1.0/)
 
 ## [Unreleased]
 
+### Correzioni — Match colonne mancanti nel listener
+- **Bug**: la tabella `rules_cache` del listener non conosceva 5 colonne
+  che l'admin invia: `match_from_domain`, `match_contract_active`,
+  `match_known_customer`, `match_has_exception_today`, `match_tag`.
+  Le regole con questi criteri venivano sincronizzate ma le colonne
+  perse silenziosamente, e il listener non poteva mai matcharle.
+- **Fix** in [/opt/stormshield-smtp-relay/relay/](file:///opt/stormshield-smtp-relay/relay/):
+  1. `storage.py`: schema `rules_cache` esteso + 5 mini-migrazioni `ALTER
+     TABLE ADD COLUMN` retro-compatibili. `replace_rules` ora persiste i
+     5 campi (con `_tristate()` helper per i 3 booleani).
+  2. `rules.py::_rule_matches` aggiunge la valutazione di:
+     - `match_from_domain` (parsing `@dominio` da from_address)
+     - `match_contract_active` / `match_known_customer` /
+       `match_has_exception_today` (tristate vs context cliente)
+
 ### Aggiunte — Catena di regole valutate negli eventi
 - **Lista eventi**: badge verde "+N" accanto al `rule_id` quando più di una
   regola ha matchato durante la valutazione (es. gruppo padre + figlio).
