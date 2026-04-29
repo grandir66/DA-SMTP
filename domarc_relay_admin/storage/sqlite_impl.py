@@ -1604,6 +1604,52 @@ class SqliteStorage(Storage):
 
     # ====================================================== PRIVACY BYPASS ===
 
+    def upsert_address_with_privacy_bypass(self, *, kind: str, value: str,
+                                             tenant_id: int = 1,
+                                             privacy_bypass: bool = True,
+                                             reason: str | None = None,
+                                             actor: str | None = None) -> int:
+        """Crea (se non esiste) un indirizzo e ne setta il privacy_bypass.
+        Idempotente. Usato dai wizard di import.
+        """
+        if kind not in ("from", "to"):
+            raise ValueError("kind deve essere 'from' o 'to'")
+        tbl = f"addresses_{kind}"
+        v = value.strip().lower()
+        if "@" not in v:
+            raise ValueError(f"Indirizzo non valido: {v!r}")
+        with self.transaction() as conn:
+            row = conn.execute(
+                f"SELECT id FROM {tbl} WHERE tenant_id = ? AND LOWER(email_address) = ?",
+                (int(tenant_id), v),
+            ).fetchone()
+            if row:
+                addr_id = int(row["id"])
+            else:
+                cur = conn.execute(
+                    f"INSERT INTO {tbl} (tenant_id, email_address, privacy_bypass, "
+                    f"privacy_bypass_reason, privacy_bypass_at, privacy_bypass_by) "
+                    f"VALUES (?, ?, ?, ?, datetime('now'), ?)",
+                    (int(tenant_id), v, 1 if privacy_bypass else 0,
+                     reason, actor),
+                )
+                addr_id = int(cur.lastrowid or 0)
+                # audit
+                conn.execute(
+                    """INSERT INTO privacy_bypass_audit
+                           (tenant_id, target_kind, target_value, action, reason, actor)
+                       VALUES (?, ?, ?, ?, ?, ?)""",
+                    (int(tenant_id), f"address_{kind}", v,
+                     "enable" if privacy_bypass else "create_off", reason, actor),
+                )
+                return addr_id
+        # Se già esistente, applica anche privacy_bypass
+        if privacy_bypass:
+            self.set_address_privacy_bypass(
+                kind, addr_id, on=True, reason=reason, actor=actor,
+            )
+        return addr_id
+
     def set_address_privacy_bypass(self, kind: str, addr_id: int, *,
                                     on: bool, reason: str | None = None,
                                     actor: str | None = None) -> None:

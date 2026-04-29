@@ -68,6 +68,77 @@ def index():
     )
 
 
+SENSITIVE_ROLES = [
+    ("privacy",       "Privacy / GDPR — comunicazioni con interessati"),
+    ("dpo",           "Data Protection Officer"),
+    ("gdpr",          "GDPR alias"),
+    ("legale",        "Ufficio legale"),
+    ("legal",         "Ufficio legale (en)"),
+    ("amministrazione","Amministrazione (fatture, pagamenti, contratti)"),
+    ("contabilita",   "Contabilità"),
+    ("hr",            "HR / Risorse umane"),
+    ("risorseumane",  "HR alias"),
+    ("personale",     "HR alias (it)"),
+    ("sindacale",     "Comunicazioni sindacali"),
+    ("rsu",           "Rappresentanza sindacale"),
+    ("direzione",     "Direzione generale"),
+    ("ceo",           "CEO"),
+    ("presidenza",    "Presidenza"),
+    ("presidente",    "Presidente"),
+    ("medico",        "Medico competente / sicurezza"),
+    ("dl",            "Datore di lavoro / sicurezza"),
+    ("rspp",          "Responsabile sicurezza"),
+    ("avvocato",      "Avvocati esterni"),
+    ("notaio",        "Notaio"),
+    ("commercialista","Commercialista"),
+    ("revisore",      "Revisori"),
+]
+
+
+@privacy_bp.route("/suggest-sensitive", methods=["GET", "POST"])
+@login_required(role="admin")
+def suggest_sensitive():
+    """Wizard: propone ruoli sensibili tipici (privacy/DPO/legale/HR/etc.)
+    e li importa nella privacy bypass list per il dominio scelto.
+    Da usare prima del cutover di un dominio (es. domarc.it) per
+    proteggere automaticamente i destinatari più riservati.
+    """
+    storage = _storage()
+    tid = _tid()
+    domain = (request.values.get("domain") or "").strip().lower()
+    if request.method == "POST" and domain:
+        chosen = request.form.getlist("role")
+        n = 0
+        for role in chosen:
+            if not role.replace("_", "").isalnum():
+                continue
+            email = f"{role}@{domain}"
+            try:
+                storage.upsert_address_with_privacy_bypass(
+                    kind="to", value=email, tenant_id=tid, privacy_bypass=True,
+                    actor=_actor(),
+                    reason=f"Wizard ruoli sensibili: {role}@{domain}",
+                )
+                n += 1
+            except Exception as exc:  # noqa: BLE001
+                current_app.logger.warning("Import sensibile %s fallito: %s", email, exc)
+        flash(f"✓ {n} indirizzi sensibili aggiunti a privacy bypass per {domain}.", "success")
+        return redirect(url_for("privacy_bypass.index"))
+
+    # GET: mostra wizard. Lista email già esistenti per evitare duplicati.
+    existing = {
+        (a.get("email_address") or "").lower()
+        for a in storage.list_addresses("to", tenant_id=tid, limit=10000)
+        if a.get("email_address")
+    }
+    return render_template(
+        "admin/privacy_bypass_wizard.html",
+        sensitive_roles=SENSITIVE_ROLES,
+        domain=domain or "domarc.it",
+        existing=existing,
+    )
+
+
 @privacy_bp.route("/address/<kind>/<int:addr_id>/toggle", methods=["POST"])
 @login_required(role="admin")
 def toggle_address(kind: str, addr_id: int):

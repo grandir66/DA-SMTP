@@ -28,7 +28,13 @@
 
 {% block content %}
 <section class="dr-section">
-    <h2 style="margin:0;"><i class="fas fa-user-shield"></i> Privacy bypass list</h2>
+    <div style="display:flex; align-items:center; gap:1rem; margin-bottom:0.5rem;">
+        <h2 style="margin:0;"><i class="fas fa-user-shield"></i> Privacy bypass list</h2>
+        <span style="flex:1;"></span>
+        <a href="{{ url_for('privacy_bypass.suggest_sensitive') }}" class="dr-btn dr-btn-primary">
+            <i class="fas fa-magic"></i> Wizard ruoli sensibili
+        </a>
+    </div>
     <div class="pb-banner">
         <h3><i class="fas fa-exclamation-triangle"></i> Indirizzi e domini esclusi da qualsiasi elaborazione</h3>
         <p>

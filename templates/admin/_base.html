@@ -10,6 +10,23 @@
     {% block extra_head %}{% endblock %}
 </head>
 <body>
+    {% if RELAY_PASSTHROUGH_ONLY %}
+    <div style="background:#fef3c7; border-bottom:3px solid #f59e0b; padding:0.55rem 1rem;
+                display:flex; align-items:center; gap:0.7rem; font-size:0.88rem; color:#78350f;">
+        <i class="fas fa-exclamation-triangle" style="font-size:1.2rem; color:#b45309;"></i>
+        <strong>KILL SWITCH ATTIVO</strong>
+        <span>Il relay sta facendo solo passthrough via smarthost. Rule engine, IA e aggregations sono <strong>disattivati</strong>. Le mail vengono consegnate al destinatario reale senza filtri.</span>
+        {% if session.get('role') in ('admin','superadmin') %}
+        <span style="flex:1;"></span>
+        <form method="post" action="{{ url_for('settings.toggle_passthrough') }}" style="margin:0;">
+            <button class="dr-btn" style="background:#16a34a; color:#fff; border-color:#15803d;
+                                            font-weight:600;">
+                <i class="fas fa-power-off"></i> Disattiva
+            </button>
+        </form>
+        {% endif %}
+    </div>
+    {% endif %}
     <header class="dr-header">
         <div class="dr-brand">
             <i class="fas fa-tower-broadcast"></i>

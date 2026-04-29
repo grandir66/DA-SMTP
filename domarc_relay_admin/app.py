@@ -160,8 +160,15 @@ def create_app(config: AppConfig | None = None, *, init_db: bool = True) -> Flas
 
     @app.context_processor
     def _inject_globals() -> dict[str, Any]:
+        passthrough = False
+        try:
+            v = (storage.get_setting("relay_passthrough_only") or "false").strip().lower()
+            passthrough = v in ("true", "1", "yes", "on")
+        except Exception:  # noqa: BLE001
+            pass
         return {
             "DOMARC_RELAY_VERSION": __version__,
+            "RELAY_PASSTHROUGH_ONLY": passthrough,
         }
 
     return app

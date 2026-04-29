@@ -5,6 +5,29 @@ Il formato è basato su [Keep a Changelog](https://keepachangelog.com/it/1.1.0/)
 
 ## [Unreleased]
 
+### Aggiunte — Kill switch passthrough + wizard privacy bypass (pre-cutover)
+- **Kill switch globale** `relay_passthrough_only` (setting boolean):
+  - Listener: `storage.is_passthrough_only()` + nuovo blocco subito dopo
+    privacy bypass in `pipeline.process()`. Se attivo, salta rule engine,
+    IA, aggregations, dispatcher e fa solo `_do_default_delivery` via
+    smarthost del dominio. Audit completo (event_uuid, body memorizzato,
+    flag `passthrough_only=true`, action_taken=`passthrough_only`).
+  - Admin: endpoint `POST /settings/passthrough/toggle` (admin/superadmin)
+    + banner giallo prominente in `_base.html` su tutte le pagine quando
+    attivo, con bottone "Disattiva" 1-click. In dashboard, sezione
+    `<details>` con descrizione + pulsante "Attiva" quando inattivo.
+  - Context processor `RELAY_PASSTHROUGH_ONLY` esposto a tutti i template.
+- **Wizard ruoli sensibili** `/privacy-bypass/suggest-sensitive`:
+  - 23 ruoli proposti (privacy/dpo/legale/hr/sindacale/amministrazione/
+    direzione/medico/rspp/avvocato/notaio/commercialista/...).
+  - Selezione checkbox dei ruoli + dominio target (default `domarc.it`).
+  - Importa massivamente in privacy bypass (`addresses_to` con
+    `privacy_bypass=1`). Idempotente: se l'indirizzo esiste già lo
+    flagga senza errori, marcandoli con badge "già censito" nella UI.
+  - Audit GDPR completo per ogni inserimento.
+- **DAO nuovo** `storage.upsert_address_with_privacy_bypass()` (admin) per
+  creare-o-flaggare un indirizzo in privacy bypass in un'unica transazione.
+
 ### Aggiunte — Gruppi clienti per regole (feature M:N)
 - **Migration 018**: nuove tabelle `customer_groups` (anagrafica gruppi
   per tenant) + `customer_group_members` (M:N codcli↔gruppo) + colonna

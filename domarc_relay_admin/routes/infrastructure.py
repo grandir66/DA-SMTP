@@ -254,6 +254,41 @@ def address_delete(kind: str, addr_id: int):
 settings_bp = Blueprint("settings", __name__)
 
 
+@settings_bp.route("/settings/passthrough/toggle", methods=["POST"])
+@login_required(role="admin")
+def toggle_passthrough():
+    """Kill-switch globale: attiva/disattiva relay_passthrough_only.
+
+    Quando ATTIVO il listener bypassa rule engine + IA e fa solo default
+    delivery via smarthost del dominio. Da usare in caso di problemi al
+    cutover. La modifica si propaga al listener al prossimo sync (≤5min)
+    o subito dopo restart del scheduler.
+    """
+    storage = _storage()
+    cur = (storage.get_setting("relay_passthrough_only") or "false").strip().lower()
+    new_value = "false" if cur in ("true", "1", "yes", "on") else "true"
+    storage.upsert_setting(
+        "relay_passthrough_only", new_value,
+        description="KILL SWITCH: bypass rule engine + IA, solo default delivery via smarthost",
+    )
+    actor = session.get("username") or "?"
+    if new_value == "true":
+        flash(
+            f"⚠ KILL SWITCH ATTIVATO: il relay ora consegna SOLO via smarthost "
+            f"(bypass rule engine + IA). Attivato da {actor}. Si propaga al "
+            f"listener entro 5 min o subito con `systemctl restart "
+            f"stormshield-smtp-relay-scheduler`.",
+            "warning",
+        )
+    else:
+        flash(
+            f"✓ Kill switch disattivato. Il relay torna al normale flusso "
+            f"con regole + IA. Disattivato da {actor}.",
+            "success",
+        )
+    return redirect(request.referrer or url_for("dashboard.index"))
+
+
 @settings_bp.route("/settings", methods=["GET", "POST"])
 @login_required(role="admin")
 def settings_view():

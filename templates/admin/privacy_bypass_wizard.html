@@ -1,0 +1,72 @@
+{% extends "admin/_base.html" %}
+{% block title %}Wizard ruoli sensibili — Privacy bypass{% endblock %}
+
+{% block content %}
+<section class="dr-section">
+    <a href="{{ url_for('privacy_bypass.index') }}" class="dr-btn">
+        <i class="fas fa-arrow-left"></i> Torna alla privacy bypass
+    </a>
+    <h2 style="margin:0.5rem 0;">
+        <i class="fas fa-shield-halved"></i> Wizard ruoli sensibili
+    </h2>
+    <p style="color:#64748b; font-size:0.88rem; max-width:780px;">
+        Aggiunge automaticamente alla privacy bypass list i destinatari "ruolo"
+        riservati per legge o per policy interna (DPO, legale, HR, sindacale,
+        amministrazione, etc.). Le mail dirette a questi indirizzi
+        <strong>NON</strong> verranno toccate dal rule engine, dall'IA né dalle
+        aggregazioni: vengono solo recapitate al destinatario reale, e nell'audit
+        viene salvato il minimo necessario (no body, no chain).
+    </p>
+</section>
+
+<form method="post" action="{{ url_for('privacy_bypass.suggest_sensitive') }}"
+      style="background:#fff; border:1px solid #cbd5e1; border-radius:8px; padding:1.2rem; max-width:1000px;">
+    <div class="dr-form-row" style="margin-bottom:1rem;">
+        <label>Dominio</label>
+        <input type="text" name="domain" value="{{ domain }}" required pattern="[a-z0-9.-]+"
+               style="font-family:ui-monospace,Menlo,monospace; font-size:0.95rem;">
+        <div class="help">Il wizard creerà gli indirizzi <code>{ruolo}@{dominio}</code> selezionati come destinatari in privacy bypass.</div>
+    </div>
+
+    <div style="display:flex; gap:0.5rem; align-items:center; margin-bottom:0.6rem;">
+        <strong style="color:#0b2a4a;">Seleziona ruoli da proteggere</strong>
+        <span style="flex:1;"></span>
+        <button type="button" class="dr-btn" onclick="document.querySelectorAll('input[name=role]').forEach(c => c.checked = true);">
+            <i class="fas fa-check-double"></i> Seleziona tutti
+        </button>
+        <button type="button" class="dr-btn" onclick="document.querySelectorAll('input[name=role]').forEach(c => c.checked = false);">
+            <i class="fas fa-square"></i> Deseleziona
+        </button>
+    </div>
+
+    <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(360px, 1fr)); gap:0.4rem;">
+        {% for role, descr in sensitive_roles %}
+        {% set proposed_email = (role + '@' + domain)|lower %}
+        {% set already_in = proposed_email in existing %}
+        <label style="display:flex; align-items:flex-start; gap:0.5rem; padding:0.5rem 0.7rem;
+                      border:1px solid {% if already_in %}#fbbf24{% else %}#e2e8f0{% endif %};
+                      border-radius:5px;
+                      background:{% if already_in %}#fefce8{% else %}#fafbfd{% endif %};
+                      cursor:pointer; user-select:none; font-size:0.85rem;">
+            <input type="checkbox" name="role" value="{{ role }}"
+                   {% if not already_in %}checked{% endif %}
+                   style="margin-top:0.2rem;">
+            <div style="flex:1;">
+                <code style="font-weight:600; color:#0b2a4a;">{{ role }}@{{ domain }}</code>
+                {% if already_in %}
+                <span style="color:#92400e; font-size:0.72rem; font-weight:600;">⚠ già censito</span>
+                {% endif %}
+                <div style="color:#64748b; font-size:0.78rem; margin-top:0.15rem;">{{ descr }}</div>
+            </div>
+        </label>
+        {% endfor %}
+    </div>
+
+    <div style="margin-top:1.2rem; display:flex; gap:0.6rem;">
+        <button type="submit" class="dr-btn dr-btn-primary">
+            <i class="fas fa-shield-halved"></i> Importa selezionati in privacy bypass
+        </button>
+        <a href="{{ url_for('privacy_bypass.index') }}" class="dr-btn">Annulla</a>
+    </div>
+</form>
+{% endblock %}
