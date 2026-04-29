@@ -1,0 +1,67 @@
+{% extends "admin/_base.html" %}
+{% block title %}Gruppi di {{ customer.ragione_sociale or customer.codice_cliente }} — Domarc SMTP Relay{% endblock %}
+
+{% block content %}
+<section class="dr-section">
+    <a href="{{ url_for('customers.list_view') }}" class="dr-btn">
+        <i class="fas fa-arrow-left"></i> Torna ai clienti
+    </a>
+    <h2 style="margin:0.5rem 0;">
+        <i class="fas fa-layer-group"></i> Gruppi di
+        <code>{{ customer.codice_cliente }}</code> — {{ customer.ragione_sociale or '—' }}
+    </h2>
+    <p style="color:#64748b; font-size:0.88rem;">
+        I gruppi qui assegnati possono essere usati come criterio di match nelle regole.
+        Un cliente può appartenere a più gruppi; le regole `match_customer_groups`
+        scattano se almeno un gruppo combacia.
+    </p>
+</section>
+
+<form method="post" style="background:#fff; border:1px solid #cbd5e1; border-radius:8px; padding:1.2rem; max-width:900px;">
+    {% if all_groups %}
+    <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:0.6rem;">
+        {% for g in all_groups %}
+        <label style="display:flex; align-items:center; gap:0.5rem; padding:0.6rem 0.8rem;
+                      border:1px solid {% if g.id in current_ids %}#86efac{% else %}#e2e8f0{% endif %};
+                      border-radius:6px;
+                      background:{% if g.id in current_ids %}#f0fdf4{% else %}#fafbfd{% endif %};
+                      cursor:pointer; user-select:none;">
+            <input type="checkbox" name="group_ids" value="{{ g.id }}"
+                   {% if g.id in current_ids %}checked{% endif %}
+                   {% if not g.enabled %}disabled{% endif %}
+                   style="margin:0;">
+            <span style="display:inline-block; width:0.7rem; height:0.7rem;
+                         background:{{ g.color or '#94a3b8' }}; border-radius:50%; flex-shrink:0;"></span>
+            <span style="flex:1; min-width:0;">
+                <strong style="display:block;">{{ g.name }}</strong>
+                <small style="color:#64748b; font-family:ui-monospace,Menlo,monospace; font-size:0.75rem;">
+                    {{ g.code }}
+                </small>
+                {% if g.description %}
+                <small style="display:block; color:#94a3b8; margin-top:0.15rem;">{{ g.description }}</small>
+                {% endif %}
+            </span>
+            {% if not g.enabled %}
+            <span class="pill pill-muted" style="font-size:0.7rem;">spento</span>
+            {% endif %}
+        </label>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div style="color:#94a3b8; padding:1.5rem; text-align:center;">
+        Nessun gruppo definito. <a href="{{ url_for('customer_groups.new_view') }}">Crea il primo gruppo</a>.
+    </div>
+    {% endif %}
+
+    <div style="margin-top:1.2rem; display:flex; gap:0.6rem;">
+        <button type="submit" class="dr-btn dr-btn-primary">
+            <i class="fas fa-save"></i> Salva assegnazioni
+        </button>
+        <a href="{{ url_for('customers.list_view') }}" class="dr-btn">Annulla</a>
+        <span style="flex:1;"></span>
+        <a href="{{ url_for('customer_groups.list_view') }}" class="dr-btn">
+            <i class="fas fa-cog"></i> Gestisci gruppi
+        </a>
+    </div>
+</form>
+{% endblock %}

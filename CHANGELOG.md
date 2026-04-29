@@ -5,6 +5,36 @@ Il formato è basato su [Keep a Changelog](https://keepachangelog.com/it/1.1.0/)
 
 ## [Unreleased]
 
+### Aggiunte — Gruppi clienti per regole (feature M:N)
+- **Migration 018**: nuove tabelle `customer_groups` (anagrafica gruppi
+  per tenant) + `customer_group_members` (M:N codcli↔gruppo) + colonna
+  `rules.match_customer_groups` (CSV "top,sanita" — match OR).
+- **DAO** [storage/sqlite_impl.py](domarc_relay_admin/storage/sqlite_impl.py):
+  `list_customer_groups`, `get/upsert/delete_customer_group`,
+  `list_group_members`, `list_groups_for_customer`,
+  `set_customer_groups`, `list_all_customer_group_memberships`.
+- **Blueprint** [routes/customer_groups.py](domarc_relay_admin/routes/customer_groups.py):
+  CRUD `/customer-groups` + form con multi-select inline filtri/ricerca clienti.
+- **UI tabella clienti**: nuova colonna "Gruppi" con badge colorati (max 3
+  visibili + "+N"), pulsante "gruppi" per cliente che apre form di assegnazione.
+- **UI form regola** [rule_form.html](templates/admin/rule_form.html): dropdown
+  multi-select dei gruppi (logica OR) accanto agli altri match_*.
+- **Endpoint API** `/api/v1/relay/customer-groups/active` per il listener
+  (lista gruppi enabled + membership flat). Fallback safe 404 per backend
+  pre-018.
+- **Listener**:
+  - schema `rules_cache` esteso con `match_customer_groups` + 2 tabelle
+    nuove `customer_groups_cache` e `customer_group_members_cache`,
+  - `manager_client.fetch_active_customer_groups()` + payload dataclass,
+  - `sync.py` step di sync gruppi nel ciclo `sync_customers_and_rules`,
+  - `pipeline._event_dict()` arricchito con `customer_groups` (lookup via
+    `storage.get_groups_for_codcli`),
+  - `rules._rule_matches()` valuta `match_customer_groups`: la regola
+    matcha se il cliente del messaggio appartiene ad almeno uno dei
+    gruppi listati (set intersection).
+- **Verifica**: 3 test direct rule engine (gruppo in/out/missing) passano;
+  UI smoke test 200 su `/customer-groups/`, `/customers`, `/rules/<id>`.
+
 ### Correzioni — Audit completo voci action_map: 5 campi UI fantasma implementati
 - L'admin permetteva di configurare 5 campi nel form regola che venivano salvati
   in `action_map` ma il listener **non li leggeva mai** (UI fantasma):

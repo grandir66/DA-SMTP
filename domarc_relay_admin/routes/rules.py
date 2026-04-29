@@ -104,6 +104,8 @@ def form_view(rule_id: int | None = None):
     ai_active_bindings, ai_providers_map, ai_global_status, ai_recent_decisions = \
         _build_ai_form_context(rule_id)
 
+    customer_groups = _storage().list_customer_groups(tenant_id=_tid())
+
     return render_template(
         "admin/rule_form.html",
         is_new=is_new,
@@ -111,6 +113,7 @@ def form_view(rule_id: int | None = None):
         templates=templates,
         from_event_id=from_event_id,
         known_domains=known_domains,
+        customer_groups=customer_groups,
         ai_active_bindings=ai_active_bindings,
         ai_providers=ai_providers_map,
         ai_global_status=ai_global_status,
@@ -580,6 +583,9 @@ def _parse_form(form) -> dict:
         "match_contract_active": _tristate(form.get("match_contract_active")),
         "match_known_customer": _tristate(form.get("match_known_customer")),
         "match_has_exception_today": _tristate(form.get("match_has_exception_today")),
+        "match_customer_groups": ",".join(
+            sorted(set(g.strip() for g in form.getlist("match_customer_groups") if g.strip()))
+        ) or None,
         "match_tag": form.get("match_tag"),
         "action": form.get("action"),
         "action_map": action_map if action_map else None,

@@ -277,6 +277,29 @@
                 </div>
             </div>
             <div class="rf-row">
+                <label>Gruppi clienti</label>
+                <div>
+                    {% set selected_groups = (record.match_customer_groups or '').split(',') | map('trim') | list %}
+                    <select name="match_customer_groups" multiple
+                            style="width:100%; min-height:120px; font-family:ui-monospace, monospace; font-size:0.85rem;">
+                        {% for g in (customer_groups or []) %}
+                        <option value="{{ g.code }}"
+                                {% if g.code in selected_groups %}selected{% endif %}>
+                            {{ g.code }} — {{ g.name }} ({{ g.member_count }} membri)
+                        </option>
+                        {% else %}
+                        <option disabled>Nessun gruppo definito</option>
+                        {% endfor %}
+                    </select>
+                    <div class="help">
+                        La regola scatta se il cliente del messaggio appartiene ad
+                        <strong>almeno uno</strong> dei gruppi selezionati (logica OR).
+                        Tieni Ctrl/Cmd per selezione multipla.
+                        <a href="{{ url_for('customer_groups.list_view') }}">Gestisci gruppi</a>.
+                    </div>
+                </div>
+            </div>
+            <div class="rf-row">
                 <label>Match tag</label>
                 <input type="text" name="match_tag" value="{{ record.match_tag or '' }}" placeholder="es. priority/spam">
             </div>

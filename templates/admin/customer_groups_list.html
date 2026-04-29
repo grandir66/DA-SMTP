@@ -1,0 +1,71 @@
+{% extends "admin/_base.html" %}
+{% block title %}Gruppi clienti — Domarc SMTP Relay{% endblock %}
+
+{% block content %}
+<section class="dr-section">
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:1rem;">
+        <h2 style="margin:0;"><i class="fas fa-layer-group"></i> Gruppi clienti
+            <small style="color:#64748b; font-weight:400;">{{ groups|length }}</small>
+        </h2>
+        <a href="{{ url_for('customer_groups.new_view') }}" class="dr-btn dr-btn-primary">
+            <i class="fas fa-plus"></i> Nuovo gruppo
+        </a>
+    </div>
+    <p style="color:#64748b; font-size:0.88rem; margin-top:0.4rem;">
+        Raggruppa i clienti per applicare regole all'intero gruppo invece che a
+        singoli clienti. Un cliente può appartenere a più gruppi (es. "Top Customer"
+        + "Settore Sanità").
+    </p>
+</section>
+
+<div class="table-outer">
+    <div class="table-scroll">
+        <table class="fw-table">
+            <thead>
+                <tr>
+                    <th>Codice</th>
+                    <th>Nome</th>
+                    <th>Descrizione</th>
+                    <th style="text-align:center;">Membri</th>
+                    <th style="text-align:center;">Stato</th>
+                    <th>Azioni</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for g in groups %}
+                <tr>
+                    <td>
+                        {% if g.color %}
+                        <span style="display:inline-block; width:0.7rem; height:0.7rem; background:{{ g.color }}; border-radius:50%; margin-right:0.4rem; vertical-align:middle;"></span>
+                        {% endif %}
+                        <code>{{ g.code }}</code>
+                    </td>
+                    <td><strong>{{ g.name }}</strong></td>
+                    <td style="color:#64748b; font-size:0.85rem;">{{ g.description or '—' }}</td>
+                    <td style="text-align:center;">
+                        <span class="pill pill-info">{{ g.member_count }}</span>
+                    </td>
+                    <td style="text-align:center;">
+                        {% if g.enabled %}
+                        <span class="pill pill-success">attivo</span>
+                        {% else %}
+                        <span class="pill pill-muted">spento</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <a href="{{ url_for('customer_groups.detail_view', group_id=g.id) }}"
+                           class="dr-btn" title="Modifica">
+                            <i class="fas fa-pen"></i>
+                        </a>
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="6" style="text-align:center; color:#94a3b8; padding:2rem;">
+                    Nessun gruppo definito. <a href="{{ url_for('customer_groups.new_view') }}">Crea il primo</a>.
+                </td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

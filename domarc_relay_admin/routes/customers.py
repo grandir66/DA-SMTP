@@ -8,7 +8,8 @@ from __future__ import annotations
 
 from datetime import date as _date
 
-from flask import Blueprint, current_app, g, render_template, request
+from flask import (Blueprint, abort, current_app, flash, g, redirect,
+                   render_template, request, session, url_for)
 
 from ..auth import login_required
 
@@ -80,6 +81,21 @@ def list_view():
     except Exception:  # noqa: BLE001
         pass
 
+    # Gruppi per ogni cliente (per badge in tabella)
+    groups_by_codcli: dict[str, list[dict]] = {}
+    try:
+        for row in storage._connect().execute(
+            """SELECT m.codice_cliente, g.id, g.code, g.name, g.color
+                 FROM customer_group_members m
+                 JOIN customer_groups g ON g.id = m.group_id
+                WHERE g.tenant_id = ? AND g.enabled = 1
+                ORDER BY g.name COLLATE NOCASE""",
+            (tid,),
+        ).fetchall():
+            groups_by_codcli.setdefault(row["codice_cliente"], []).append(dict(row))
+    except Exception:  # noqa: BLE001
+        pass
+
     health = cs.health()
     return render_template(
         "admin/customers_list.html",
@@ -91,9 +107,41 @@ def list_view():
         contract_inactive_count=sum(1 for c in all_customers if not c.contract_active),
         sh_records=sh_records_by_codcli,
         exceptions_today=exceptions_today_by_codcli,
+        groups_by_codcli=groups_by_codcli,
         health=health,
         search=request.args.get("q") or "",
         profile_filter=profile_filter,
         contract_filter=contract_filter,
         today=today,
+    )
+
+
+@customers_bp.route("/customers/<codcli>/groups", methods=["GET", "POST"])
+@login_required(role="operator")
+def groups_view(codcli: str):
+    """Form assegnazione gruppi a un singolo cliente."""
+    cs = current_app.extensions["domarc_customer_source"]
+    storage = _storage()
+    customer = cs.get_by_codcli(codcli)
+    if customer is None:
+        abort(404)
+
+    if request.method == "POST":
+        group_ids = [int(x) for x in request.form.getlist("group_ids") if x.isdigit()]
+        n = storage.set_customer_groups(
+            codcli, group_ids,
+            tenant_id=_tid(),
+            actor=session.get("username") or "?",
+        )
+        flash(f"✓ {n} gruppi assegnati a {customer.ragione_sociale or codcli}.", "success")
+        return redirect(url_for("customers.list_view"))
+
+    all_groups = storage.list_customer_groups(tenant_id=_tid())
+    current_groups = storage.list_groups_for_customer(codcli, tenant_id=_tid())
+    current_ids = {int(g["id"]) for g in current_groups}
+    return render_template(
+        "admin/customer_assign_groups.html",
+        customer=customer,
+        all_groups=all_groups,
+        current_ids=current_ids,
     )

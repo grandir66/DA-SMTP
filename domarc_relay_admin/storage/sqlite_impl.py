@@ -403,6 +403,7 @@ class SqliteStorage(Storage):
                           match_body_regex = ?, match_to_domain = ?, match_from_domain = ?,
                           match_at_hours = ?, match_in_service = ?, match_contract_active = ?,
                           match_known_customer = ?, match_has_exception_today = ?,
+                          match_customer_groups = ?,
                           match_tag = ?, action = ?, action_map = ?, severity = ?,
                           continue_after_match = ?,
                           parent_id = ?, is_group = ?, group_label = ?,
@@ -426,6 +427,7 @@ class SqliteStorage(Storage):
                         _bint(data.get("match_contract_active")),
                         _bint(data.get("match_known_customer")),
                         _bint(data.get("match_has_exception_today")),
+                        data.get("match_customer_groups") or None,
                         data.get("match_tag") or None,
                         action_value,
                         action_map,
@@ -447,11 +449,11 @@ class SqliteStorage(Storage):
                         match_from_regex, match_to_regex, match_subject_regex, match_body_regex,
                         match_to_domain, match_from_domain, match_at_hours, match_in_service,
                         match_contract_active, match_known_customer, match_has_exception_today,
-                        match_tag, action, action_map, severity,
+                        match_customer_groups, match_tag, action, action_map, severity,
                         continue_after_match, created_by,
                         parent_id, is_group, group_label,
                         exclusive_match, continue_in_group, exit_group_continue)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                            ?, ?, ?, ?, ?, ?)""",
                 (
                     int(tenant_id),
@@ -471,6 +473,7 @@ class SqliteStorage(Storage):
                     _bint(data.get("match_contract_active")),
                     _bint(data.get("match_known_customer")),
                     _bint(data.get("match_has_exception_today")),
+                    data.get("match_customer_groups") or None,
                     data.get("match_tag") or None,
                     action_value,
                     action_map,
@@ -2411,6 +2414,140 @@ class SqliteStorage(Storage):
                     ORDER BY o.last_seen DESC LIMIT ?""", params,
             ).fetchall()
             return [dict(r) for r in rows]
+
+    # ============================================================ customer_groups
+
+    def list_customer_groups(self, *, tenant_id: int = 1,
+                              only_enabled: bool = False) -> list[dict[str, Any]]:
+        """Lista gruppi clienti con conteggio membri."""
+        sql = """
+            SELECT g.*, COUNT(m.id) AS member_count
+              FROM customer_groups g
+              LEFT JOIN customer_group_members m ON m.group_id = g.id
+             WHERE g.tenant_id = ?
+        """
+        params: list[Any] = [int(tenant_id)]
+        if only_enabled:
+            sql += " AND g.enabled = 1"
+        sql += " GROUP BY g.id ORDER BY g.name COLLATE NOCASE"
+        with self._connect() as conn:
+            return [dict(r) for r in conn.execute(sql, params).fetchall()]
+
+    def get_customer_group(self, group_id: int) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM customer_groups WHERE id = ?", (int(group_id),)
+            ).fetchone()
+            return dict(row) if row else None
+
+    def get_customer_group_by_code(self, code: str, *,
+                                    tenant_id: int = 1) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM customer_groups WHERE tenant_id = ? AND code = ?",
+                (int(tenant_id), code),
+            ).fetchone()
+            return dict(row) if row else None
+
+    def upsert_customer_group(self, *, group_id: int | None = None,
+                               tenant_id: int = 1,
+                               code: str, name: str,
+                               description: str | None = None,
+                               color: str | None = None,
+                               enabled: bool = True,
+                               actor: str | None = None) -> int:
+        """Crea o aggiorna un gruppo. Ritorna l'id."""
+        code = (code or "").strip().lower()
+        name = (name or "").strip()
+        if not code or not name:
+            raise ValueError("code e name obbligatori")
+        with self.transaction() as conn:
+            if group_id:
+                conn.execute(
+                    """UPDATE customer_groups
+                          SET code = ?, name = ?, description = ?, color = ?,
+                              enabled = ?, updated_at = datetime('now')
+                        WHERE id = ? AND tenant_id = ?""",
+                    (code, name, description, color, 1 if enabled else 0,
+                     int(group_id), int(tenant_id)),
+                )
+                return int(group_id)
+            cur = conn.execute(
+                """INSERT INTO customer_groups
+                       (tenant_id, code, name, description, color, enabled, created_by)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (int(tenant_id), code, name, description, color,
+                 1 if enabled else 0, actor),
+            )
+            return int(cur.lastrowid or 0)
+
+    def delete_customer_group(self, group_id: int) -> None:
+        with self.transaction() as conn:
+            conn.execute("DELETE FROM customer_groups WHERE id = ?", (int(group_id),))
+
+    def list_group_members(self, group_id: int) -> list[dict[str, Any]]:
+        with self._connect() as conn:
+            return [dict(r) for r in conn.execute(
+                """SELECT id, codice_cliente, added_at, added_by
+                     FROM customer_group_members
+                    WHERE group_id = ?
+                    ORDER BY codice_cliente""", (int(group_id),)
+            ).fetchall()]
+
+    def list_groups_for_customer(self, codice_cliente: str, *,
+                                  tenant_id: int = 1) -> list[dict[str, Any]]:
+        """Tutti i gruppi a cui appartiene un cliente."""
+        with self._connect() as conn:
+            return [dict(r) for r in conn.execute(
+                """SELECT g.*
+                     FROM customer_groups g
+                     JOIN customer_group_members m ON m.group_id = g.id
+                    WHERE g.tenant_id = ? AND m.codice_cliente = ?
+                    ORDER BY g.name COLLATE NOCASE""",
+                (int(tenant_id), codice_cliente),
+            ).fetchall()]
+
+    def set_customer_groups(self, codice_cliente: str, group_ids: list[int], *,
+                             tenant_id: int = 1, actor: str | None = None) -> int:
+        """Imposta atomicamente i gruppi di un cliente. Returns count."""
+        target_ids = set(int(g) for g in (group_ids or []) if g)
+        with self.transaction() as conn:
+            current = {
+                int(r[0]): int(r[1]) for r in conn.execute(
+                    "SELECT id, group_id FROM customer_group_members "
+                    "WHERE tenant_id = ? AND codice_cliente = ?",
+                    (int(tenant_id), codice_cliente),
+                ).fetchall()
+            }
+            current_ids = set(current.values())
+            to_remove = current_ids - target_ids
+            to_add = target_ids - current_ids
+            for gid in to_remove:
+                conn.execute(
+                    "DELETE FROM customer_group_members "
+                    "WHERE tenant_id = ? AND codice_cliente = ? AND group_id = ?",
+                    (int(tenant_id), codice_cliente, int(gid)),
+                )
+            for gid in to_add:
+                conn.execute(
+                    """INSERT OR IGNORE INTO customer_group_members
+                           (tenant_id, group_id, codice_cliente, added_by)
+                       VALUES (?, ?, ?, ?)""",
+                    (int(tenant_id), int(gid), codice_cliente, actor),
+                )
+            return len(target_ids)
+
+    def list_all_customer_group_memberships(self, *,
+                                             tenant_id: int = 1) -> list[dict[str, Any]]:
+        """Per il sync verso il listener: ogni riga {codice_cliente, group_code}."""
+        with self._connect() as conn:
+            return [dict(r) for r in conn.execute(
+                """SELECT m.codice_cliente, g.code AS group_code, g.id AS group_id
+                     FROM customer_group_members m
+                     JOIN customer_groups g ON g.id = m.group_id
+                    WHERE m.tenant_id = ? AND g.enabled = 1""",
+                (int(tenant_id),),
+            ).fetchall()]
 
 
 # ============================================================= HELPERS ===

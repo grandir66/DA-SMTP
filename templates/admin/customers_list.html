@@ -23,7 +23,7 @@
 .cust-filters .pill-link.active.profile-NO { background:#64748b; color:#fff; }
 
 .cust-table { background:#fff; border:1px solid var(--dr-gray); border-radius:8px; overflow:hidden; }
-.cust-row { display:grid; grid-template-columns: 70px 1.5fr 80px 90px 1fr 130px 130px;
+.cust-row { display:grid; grid-template-columns: 70px 1.4fr 75px 80px 0.9fr 110px 0.7fr 150px;
             gap:0.7rem; padding:0.7rem 0.9rem; align-items:center; border-bottom:1px solid #eef2f7;
             transition:background 0.1s; }
 .cust-row:hover { background:#f8fafc; }
@@ -135,6 +135,7 @@
         <div>Contratto</div>
         <div>Domini / Alias</div>
         <div>Orari servizio</div>
+        <div>Gruppi</div>
         <div>Azioni</div>
     </div>
     {% for c in customers %}
@@ -187,7 +188,32 @@
             <small style="color:var(--dr-gray);">— da profilo default —</small>
             {% endif %}
         </div>
+        <div>
+            {% set cust_groups = (groups_by_codcli or {}).get(cc, []) %}
+            {% if cust_groups %}
+                {% for g in cust_groups[:3] %}
+                <span title="{{ g.name }}"
+                      style="display:inline-block; padding:0.05rem 0.4rem; margin:0.05rem;
+                             background:{{ g.color or '#e0e7ff' }}; color:#fff;
+                             border-radius:9px; font-size:0.7rem; font-weight:600;
+                             font-family:ui-monospace, monospace;">
+                    {{ g.code }}
+                </span>
+                {% endfor %}
+                {% if cust_groups|length > 3 %}
+                <small style="color:var(--dr-gray-dark);">+{{ cust_groups|length - 3 }}</small>
+                {% endif %}
+            {% else %}
+                <small style="color:var(--dr-gray);">—</small>
+            {% endif %}
+        </div>
         <div class="cust-actions">
+            <a href="{{ url_for('customers.groups_view', codcli=cc) }}"
+               class="exception"
+               title="Assegna gruppi a {{ cc }}"
+               style="background:#eef2ff; color:#3730a3; border-color:#c7d2fe;">
+                <i class="fas fa-layer-group"></i> gruppi
+            </a>
             <a href="{{ url_for('service_hours.form_view', codcli=cc) }}"
                class="{% if has_today_exc %}has-exception{% else %}exception{% endif %}"
                title="Gestisci orari + eccezioni per {{ cc }}">

@@ -104,6 +104,44 @@ def customers_active():
     }), 200
 
 
+@api_bp.route("/customer-groups/active", methods=["GET"])
+@require_api_key
+def customer_groups_active():
+    """Gruppi clienti + membership per il listener.
+
+    Risposta:
+        {
+          "synced_at": "...",
+          "groups": [{"id":1, "code":"top", "name":"Top Customer", "enabled":true}, ...],
+          "members": [{"codcli":"00123", "group_codes":["top","sanita"]}, ...]
+        }
+    """
+    storage = _storage()
+    tenant_id = 1  # multi-tenant TODO: estrarre da header/query
+    groups = [
+        {
+            "id": int(g["id"]),
+            "code": g["code"],
+            "name": g["name"],
+            "enabled": bool(g["enabled"]),
+        }
+        for g in storage.list_customer_groups(tenant_id=tenant_id, only_enabled=True)
+    ]
+    # Aggrega membership per codcli
+    members_map: dict[str, list[str]] = {}
+    for row in storage.list_all_customer_group_memberships(tenant_id=tenant_id):
+        members_map.setdefault(row["codice_cliente"], []).append(row["group_code"])
+    members = [
+        {"codcli": k, "group_codes": sorted(v)}
+        for k, v in members_map.items()
+    ]
+    return jsonify({
+        "synced_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "groups": groups,
+        "members": members,
+    }), 200
+
+
 @api_bp.route("/rules/active", methods=["GET"])
 @require_api_key
 def rules_active():
@@ -152,6 +190,7 @@ def rules_active():
             "match_contract_active": r.get("match_contract_active"),
             "match_known_customer": r.get("match_known_customer"),
             "match_has_exception_today": r.get("match_has_exception_today"),
+            "match_customer_groups": r.get("match_customer_groups"),
             "action": r["action"],
             "action_map": am,
             "continue_after_match": bool(r.get("continue_after_match")),

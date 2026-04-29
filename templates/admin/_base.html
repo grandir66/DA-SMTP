@@ -24,7 +24,7 @@
         {% set ep = request.endpoint or '' %}
         {% set in_ops = ep.startswith('dashboard') or ep.startswith('events') or ep.startswith('routes') %}
         {% set in_rules = ep.startswith('rules') or ep.startswith('templates') or ep.startswith('aggregations') or ep.startswith('auth_codes') %}
-        {% set in_anag = ep.startswith('customers') or ep.startswith('addresses') or ep.startswith('domains') %}
+        {% set in_anag = ep.startswith('customers') or ep.startswith('addresses') or ep.startswith('domains') or ep.startswith('customer_groups') %}
         {% set in_orari = ep.startswith('service_hours') or ep.startswith('profiles') %}
         {% set in_config = ep.startswith('settings') or ep.startswith('connection') or ep.startswith('tenants') or ep.startswith('users') %}
         <nav class="dr-mainnav">
@@ -53,6 +53,7 @@
                 <button type="button" class="dr-nav-btn"><i class="fas fa-address-book"></i> Anagrafiche <i class="fas fa-caret-down"></i></button>
                 <div class="dr-nav-menu">
                     <a href="{{ url_for('customers.list_view') }}" class="{% if ep.startswith('customers') %}active{% endif %}"><i class="fas fa-users"></i> Clienti</a>
+                    <a href="{{ url_for('customer_groups.list_view') }}" class="{% if ep.startswith('customer_groups') %}active{% endif %}"><i class="fas fa-layer-group"></i> Gruppi clienti</a>
                     <a href="{{ url_for('addresses.from_list') }}" class="{% if ep == 'addresses.from_list' or ep == 'addresses.auto_match_codcli' %}active{% endif %}"><i class="fas fa-paper-plane"></i> Mittenti</a>
                     <a href="{{ url_for('addresses.to_list') }}" class="{% if ep == 'addresses.to_list' %}active{% endif %}"><i class="fas fa-envelope-open"></i> Destinatari</a>
                     <a href="{{ url_for('domains.domains_list') }}" class="{% if ep.startswith('domains') %}active{% endif %}"><i class="fas fa-globe"></i> Domini</a>

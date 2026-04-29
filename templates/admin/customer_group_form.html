@@ -1,0 +1,158 @@
+{% extends "admin/_base.html" %}
+{% block title %}{% if group %}{{ group.name }}{% else %}Nuovo gruppo{% endif %} — Gruppi clienti{% endblock %}
+
+{% block content %}
+<section class="dr-section">
+    <a href="{{ url_for('customer_groups.list_view') }}" class="dr-btn">
+        <i class="fas fa-arrow-left"></i> Torna ai gruppi
+    </a>
+    <h2 style="margin:0.5rem 0;">
+        <i class="fas fa-layer-group"></i>
+        {% if group %}{{ group.name }} <small style="color:#64748b;"><code>{{ group.code }}</code></small>
+        {% else %}Nuovo gruppo cliente{% endif %}
+    </h2>
+</section>
+
+<form method="post" style="background:#fff; border:1px solid #cbd5e1; border-radius:8px; padding:1.2rem; max-width:1100px;">
+    <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:1rem;">
+        <div class="dr-form-row">
+            <label>Codice <small style="color:#94a3b8;">(slug, es. <code>top_customer</code>)</small></label>
+            <input type="text" name="code" required pattern="[a-z0-9_-]+"
+                   value="{{ group.code if group else '' }}"
+                   placeholder="top_customer">
+        </div>
+        <div class="dr-form-row">
+            <label>Nome visualizzato</label>
+            <input type="text" name="name" required maxlength="80"
+                   value="{{ group.name if group else '' }}"
+                   placeholder="Top Customer">
+        </div>
+        <div class="dr-form-row" style="grid-column:1/3;">
+            <label>Descrizione <small style="color:#94a3b8;">(facoltativa)</small></label>
+            <input type="text" name="description" maxlength="200"
+                   value="{{ group.description or '' if group else '' }}">
+        </div>
+        <div class="dr-form-row">
+            <label>Colore badge UI</label>
+            <input type="color" name="color"
+                   value="{{ group.color or '#3b82f6' if group else '#3b82f6' }}">
+        </div>
+        <div class="dr-form-row">
+            <label>Stato</label>
+            <label style="font-weight:400;">
+                <input type="checkbox" name="enabled" value="1"
+                       {% if not group or group.enabled %}checked{% endif %}>
+                Attivo (regole con match su questo gruppo verranno valutate)
+            </label>
+        </div>
+    </div>
+
+    {% if group %}
+    <hr style="margin:1.5rem 0; border:none; border-top:1px solid #e2e8f0;">
+
+    <h3 style="margin:0 0 0.5rem 0; color:#0b2a4a;">
+        <i class="fas fa-users"></i> Membri del gruppo
+        <small style="color:#64748b;">{{ members|length }}</small>
+    </h3>
+    <p style="color:#64748b; font-size:0.85rem; margin-bottom:0.6rem;">
+        Spunta i clienti da includere. Sono inclusi automaticamente i loro domini e alias.
+    </p>
+
+    <div style="margin-bottom:0.6rem;">
+        <input type="text" id="customerFilter" placeholder="🔎 cerca per codice o ragione sociale…"
+               style="width:100%; padding:0.5rem 0.7rem; font-size:0.88rem;">
+    </div>
+
+    <div style="border:1px solid #cbd5e1; border-radius:6px; max-height:480px; overflow-y:auto; background:#fafbfd;">
+        <table class="fw-table" id="customersTable" style="margin:0;">
+            <thead style="position:sticky; top:0; background:#f1f5f9; z-index:1;">
+                <tr>
+                    <th style="width:40px; text-align:center;">
+                        <input type="checkbox" id="selectAllVisible" title="Seleziona tutti visibili">
+                    </th>
+                    <th>Codice</th>
+                    <th>Ragione sociale</th>
+                    <th>Domini</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for c in available_customers %}
+                <tr class="customer-row" data-search="{{ (c.codice_cliente or '')|lower }} {{ (c.ragione_sociale or '')|lower }} {{ c.domains|join(' ')|lower }}">
+                    <td style="text-align:center;">
+                        <input type="checkbox" name="members" value="{{ c.codice_cliente }}"
+                               class="member-cb"
+                               {% if c.codice_cliente in (member_codcli or []) %}checked{% endif %}>
+                    </td>
+                    <td><code>{{ c.codice_cliente }}</code></td>
+                    <td>{{ c.ragione_sociale or '—' }}</td>
+                    <td style="font-size:0.82rem; color:#64748b;">
+                        {% for d in (c.domains or [])[:3] %}<span class="pill pill-muted">{{ d }}</span>{% endfor %}
+                        {% if c.domains and c.domains|length > 3 %}<small>+{{ c.domains|length - 3 }}</small>{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <p style="margin-top:0.4rem; font-size:0.82rem; color:#64748b;">
+        <span id="selectedCount">{{ member_codcli|length if member_codcli else 0 }}</span> selezionati
+        di <span id="totalCount">{{ available_customers|length }}</span>
+    </p>
+    {% endif %}
+
+    <div style="margin-top:1.2rem; display:flex; gap:0.6rem;">
+        <button type="submit" class="dr-btn dr-btn-primary">
+            <i class="fas fa-save"></i> Salva
+        </button>
+        <a href="{{ url_for('customer_groups.list_view') }}" class="dr-btn">Annulla</a>
+        {% if group %}
+        <span style="flex:1;"></span>
+        <button type="button" class="dr-btn dr-btn-danger"
+                onclick="if(confirm('Eliminare il gruppo «{{ group.name }}»? La membership sarà persa.')) document.getElementById('deleteForm').submit();">
+            <i class="fas fa-trash"></i> Elimina gruppo
+        </button>
+        {% endif %}
+    </div>
+</form>
+
+{% if group %}
+<form id="deleteForm" method="post" action="{{ url_for('customer_groups.delete_view', group_id=group.id) }}" style="display:none;"></form>
+{% endif %}
+
+<script>
+(function() {
+    const filterInput = document.getElementById('customerFilter');
+    const rows = document.querySelectorAll('.customer-row');
+    const cbAll = document.getElementById('selectAllVisible');
+    const cbItems = document.querySelectorAll('.member-cb');
+    const selectedCount = document.getElementById('selectedCount');
+
+    function updateCount() {
+        if (!selectedCount) return;
+        const n = document.querySelectorAll('.member-cb:checked').length;
+        selectedCount.textContent = n;
+    }
+    cbItems.forEach(cb => cb.addEventListener('change', updateCount));
+
+    if (filterInput) {
+        filterInput.addEventListener('input', () => {
+            const q = filterInput.value.toLowerCase().trim();
+            rows.forEach(r => {
+                r.style.display = (!q || r.dataset.search.includes(q)) ? '' : 'none';
+            });
+        });
+    }
+    if (cbAll) {
+        cbAll.addEventListener('change', () => {
+            rows.forEach(r => {
+                if (r.style.display !== 'none') {
+                    const cb = r.querySelector('.member-cb');
+                    if (cb) cb.checked = cbAll.checked;
+                }
+            });
+            updateCount();
+        });
+    }
+})();
+</script>
+{% endblock %}
