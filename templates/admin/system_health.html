@@ -1,0 +1,118 @@
+{% extends "admin/_base.html" %}
+{% block title %}Health check sistema{% endblock %}
+{% block extra_head %}
+<style>
+    .hc-overall { display:inline-flex; align-items:center; gap:0.5rem; padding:0.6rem 1.2rem; border-radius:8px; font-weight:700; font-size:1.1rem; }
+    .hc-overall.ok { background:#d1fae5; color:#047857; }
+    .hc-overall.warning { background:#fef3c7; color:#92400e; }
+    .hc-overall.error { background:#fee2e2; color:#dc2626; }
+
+    .hc-card { background:#fff; border:1px solid var(--dr-gray); border-radius:8px; padding:1rem; margin-bottom:0.6rem;
+                display:grid; grid-template-columns:24px 200px 1fr; gap:0.7rem; align-items:center; }
+    .hc-card.status-ok { border-left:4px solid #10b981; }
+    .hc-card.status-warning { border-left:4px solid #f59e0b; }
+    .hc-card.status-error { border-left:4px solid #dc2626; }
+    .hc-card.status-info { border-left:4px solid #3b82f6; }
+
+    .hc-icon { font-size:1.2rem; }
+    .hc-icon.ok { color:#10b981; }
+    .hc-icon.warning { color:#f59e0b; }
+    .hc-icon.error { color:#dc2626; }
+    .hc-icon.info { color:#3b82f6; }
+
+    .hc-label { font-weight:600; color:var(--dr-primary); font-size:0.92rem; }
+    .hc-detail { font-size:0.85rem; color:var(--dr-gray-dark); }
+
+    .hc-test-result { padding:0.5rem 0.8rem; border-radius:5px; margin-top:0.3rem; font-family:ui-monospace, monospace; font-size:0.82rem; }
+    .hc-test-result.ok { background:#ecfdf5; color:#047857; border-left:3px solid #10b981; }
+    .hc-test-result.error { background:#fef2f2; color:#991b1b; border-left:3px solid #dc2626; }
+    .hc-test-result.warning { background:#fffbeb; color:#92400e; border-left:3px solid #f59e0b; }
+    .hc-test-result.info { background:#eff6ff; color:#1e40af; border-left:3px solid #3b82f6; }
+</style>
+{% endblock %}
+{% block content %}
+<section class="dr-section">
+    <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+        <h2 style="margin:0;"><i class="fas fa-heart-pulse"></i> Health check sistema</h2>
+        <a href="{{ url_for('manual.view') }}" class="dr-btn" style="width:auto;">
+            <i class="fas fa-book"></i> Manual tecnico
+        </a>
+        <a href="{{ url_for('health.health_full') }}" class="dr-btn" style="width:auto;" target="_blank">
+            <i class="fas fa-file-code"></i> JSON
+        </a>
+        <button id="test-stack-btn" type="button" class="dr-btn dr-btn-primary" style="width:auto; margin-left:auto;">
+            <i class="fas fa-play"></i> Test stack completo
+        </button>
+    </div>
+
+    <div style="margin-top:0.8rem;">
+        <div class="hc-overall {{ health.overall }}">
+            {% if health.overall == 'ok' %}<i class="fas fa-circle-check"></i> Sistema OK
+            {% elif health.overall == 'warning' %}<i class="fas fa-triangle-exclamation"></i> Sistema con avvertimenti
+            {% else %}<i class="fas fa-circle-xmark"></i> Sistema con errori{% endif %}
+        </div>
+        <span style="margin-left:0.7rem; font-size:0.88rem; color:var(--dr-gray-dark);">
+            <strong>Versione</strong> v{{ health.version }} —
+            <span class="hc-icon ok">✓ {{ health.summary.ok }}</span>
+            <span class="hc-icon warning">⚠ {{ health.summary.warning }}</span>
+            <span class="hc-icon error">✗ {{ health.summary.error }}</span>
+        </span>
+    </div>
+</section>
+
+{# ============================== CHECKS ============================== #}
+<div style="max-width:1100px;">
+{% for c in health.checks %}
+<div class="hc-card status-{{ c.status }}">
+    <span class="hc-icon {{ c.status }}">
+        {% if c.status == 'ok' %}<i class="fas fa-check"></i>
+        {% elif c.status == 'warning' %}<i class="fas fa-triangle-exclamation"></i>
+        {% elif c.status == 'error' %}<i class="fas fa-xmark"></i>
+        {% else %}<i class="fas fa-info-circle"></i>{% endif %}
+    </span>
+    <div class="hc-label">{{ c.label }}</div>
+    <div class="hc-detail">{{ c.detail }}</div>
+</div>
+{% endfor %}
+</div>
+
+{# ============================== TEST STACK RESULTS ============================== #}
+<div id="test-stack-results" style="margin-top:1.5rem; max-width:1100px; display:none;">
+    <h3 style="margin:0 0 0.5rem; color:var(--dr-primary);"><i class="fas fa-vial"></i> Risultato test stack</h3>
+    <div id="test-stack-list"></div>
+</div>
+
+<script>
+document.getElementById('test-stack-btn').addEventListener('click', async () => {
+    const btn = document.getElementById('test-stack-btn');
+    const results = document.getElementById('test-stack-results');
+    const list = document.getElementById('test-stack-list');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Test in corso…';
+    list.innerHTML = '';
+    results.style.display = 'block';
+
+    try {
+        const resp = await fetch('{{ url_for("health.test_stack") }}', { method: 'POST' });
+        const data = await resp.json();
+        for (const t of (data.tests || [])) {
+            const div = document.createElement('div');
+            div.className = 'hc-test-result ' + (t.status || 'info');
+            const icon = t.status === 'ok' ? '✓' : t.status === 'error' ? '✗'
+                       : t.status === 'warning' ? '⚠' : 'ℹ';
+            div.innerHTML = `<strong>${icon} ${t.name}</strong> · ${t.duration_ms}ms — ${t.detail}`;
+            list.appendChild(div);
+        }
+        const summary = document.createElement('div');
+        summary.className = 'hc-test-result ' + (data.overall_ok ? 'ok' : 'warning');
+        summary.innerHTML = `<strong>${data.overall_ok ? '✓ Stack completo OK' : '⚠ Alcuni test falliti'}</strong>`;
+        list.appendChild(summary);
+    } catch (exc) {
+        list.innerHTML = `<div class="hc-test-result error">Errore: ${exc}</div>`;
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-play"></i> Test stack completo';
+    }
+});
+</script>
+{% endblock %}

@@ -3,6 +3,37 @@
 Tutte le modifiche rilevanti a questo progetto vengono documentate in questo file.
 Il formato è basato su [Keep a Changelog](https://keepachangelog.com/it/1.1.0/).
 
+## [0.4.0] — 2026-04-29
+
+### Aggiunte — Health check sistema + dashboard di osservabilità
+- **3 nuovi endpoint** in [routes/__init__.py](domarc_relay_admin/routes/__init__.py):
+  - `GET /health/full` (admin) — JSON con check completo di tutti i componenti.
+  - `POST /health/test-stack` (admin) — test live: DB read + Fernet roundtrip + Claude API connectivity.
+  - `GET /health/system` (admin) — pagina HTML con check visivi colorati.
+- **10 check componenti** verificati automaticamente:
+  1. Database storage (schema version, tenants, eventi count)
+  2. Customer source (raggiungibilità manager esterno)
+  3. Master key Fernet (presenza file + permessi 600/400)
+  4. Moduli Python (anthropic/cryptography critici, spaCy/sentence-transformers opzionali)
+  5. AI Provider configurati (count attivi)
+  6. AI Routing per job (master switch + bindings classify_email)
+  7. Privacy bypass list (totale entries)
+  8. Settings critici (5 setting AI verificati presenti)
+  9. Spazio disco (% libero su path DB)
+  10. AI activity 24h (decisioni, errori, % budget)
+- **Pagina UI** [templates/admin/system_health.html](templates/admin/system_health.html):
+  - Banner overall stato (OK/Warning/Error)
+  - Card per ogni check con badge colorato + dettaglio
+  - Bottone "Test stack completo" (JS async fetch) che esegue 3 test live e mostra risultati con latency.
+- **Voce menu** "Health sistema" (icona heart-pulse) nel dropdown Configurazione, visibile a tutti gli admin/superadmin.
+- **Verifica live**: 3/3 test stack OK su sistema reale (DB read 0ms, Fernet roundtrip 0ms, **Claude API 820ms con haiku-4-5**).
+
+### Modifiche
+- Versione bump 0.3.0 → 0.4.0.
+- Test suite invariata (152/152 verdi — i nuovi check sono integration-level).
+
+---
+
 ## [0.3.0] — 2026-04-29
 
 ### Aggiunte — F2 AI Error Aggregator (migration 015)

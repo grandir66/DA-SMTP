@@ -17,7 +17,7 @@
             <small>SMTP Relay Admin</small>
             <a href="{{ url_for('manual.view') }}" title="Manuale auto-generato"
                style="color:rgba(255,255,255,0.6); font-size:0.75rem; text-decoration:none; margin-left:0.5rem;">
-                v{{ session.get('app_version') or '0.3.0' }}
+                v{{ session.get('app_version') or '0.4.0' }}
             </a>
         </div>
         {% if session.get('username') %}
@@ -73,6 +73,7 @@
                     <a href="{{ url_for('users.list_view') }}" class="{% if ep.startswith('users') %}active{% endif %}"><i class="fas fa-user-shield"></i> Utenti</a>
                     <a href="{{ url_for('ai.dashboard') }}" class="{% if ep.startswith('ai.') %}active{% endif %}" style="color:#7c3aed;"><i class="fas fa-robot"></i> AI Assistant</a>
                     {% endif %}
+                    <a href="{{ url_for('health.system_dashboard') }}" class="{% if ep == 'health.system_dashboard' %}active{% endif %}"><i class="fas fa-heart-pulse"></i> Health sistema</a>
                     <a href="{{ url_for('settings.settings_view') }}" class="{% if ep.startswith('settings') %}active{% endif %}"><i class="fas fa-sliders"></i> Settings</a>
                     {% if session.role in ('admin', 'superadmin') %}
                     <a href="{{ url_for('secrets_modules.api_keys_list') }}" class="{% if ep.startswith('secrets_modules.api') %}active{% endif %}"><i class="fas fa-key"></i> Chiavi API</a>
