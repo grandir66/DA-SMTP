@@ -71,4 +71,6 @@ plans/
 
 # --- Documentazione locale non destinata al pubblico ---
 docs/handbook/
-docs/manuale_utente/img/*.png
+# Gli screenshot del manuale utente SONO tracciati: contengono solo dati
+# di test (mittenti @example.com / r.grandi, anagrafica clienti
+# anonimizzata via scripts/anonymize_customers_screenshot.py).

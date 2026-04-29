@@ -31,23 +31,17 @@ Le decisioni le prende un **motore di regole** (Rule Engine) e, dove le regole n
 
 ### Flusso tipico di una mail
 
-```
-Mittente esterno
-      │
-      ▼
-[Listener SMTP riceve la mail]
-      │
-      ▼
-[Rule Engine: trova la regola che fa match]
-      │
-      ├──> azione "ignore" → drop silenzioso
-      ├──> azione "forward" → inoltro a destinatario
-      ├──> azione "ai_classify" → IA decide
-      ├──> azione "quarantine" → quarantena
-      └──> azione "create_ticket" → apre ticket
-```
+![Flusso di una mail in Domarc SMTP Relay](img/flow_email.svg)
 
-Tutto quello che succede viene tracciato e visualizzabile dalla console.
+In sintesi:
+
+1. Una mail arriva dal mittente esterno al **Listener SMTP** sulla porta 25.
+2. Se il mittente o il destinatario sono nella **Privacy bypass list**, la mail viene scartata senza neanche essere registrata.
+3. Altrimenti il **Rule Engine** scorre le regole in ordine di priorità e trova quella che fa match.
+4. La regola dice **cosa fare**: ignorare, inoltrare, mettere in quarantena, aprire ticket o passare la mail all'**IA** per una decisione semantica.
+5. Se l'azione è `ai_classify`, l'IA legge la mail (con i dati personali oscurati) e propone l'azione finale.
+
+Tutto quello che succede viene tracciato e visualizzabile in **Eventi** e **Activity Live**.
 
 ---
 
