@@ -54,6 +54,7 @@
                     <span class="priority">{{ g.priority }}</span>
                     <span class="label">
                         <span class="rule-badge-group"><i class="fas fa-folder-open"></i> gruppo</span>
+                        <span class="rule-id" title="ID regola">#{{ g.id }}</span>
                         <strong>{{ g.group_label or g.name }}</strong>
                         <span class="rule-badge-children">{{ item.children|length }} figli</span>
                         {% if g.exclusive_match %}<span class="rule-inherit-badge" title="exclusive_match: blocca i top-level successivi al primo match"><i class="fas fa-lock"></i> esclusivo</span>{% endif %}
@@ -89,6 +90,7 @@
                         <span class="toggle placeholder">└</span>
                         <span class="priority">{{ c.priority }}</span>
                         <span class="label">
+                            <span class="rule-id" title="ID regola">#{{ c.id }}</span>
                             <a href="{{ url_for('rules.child_form_view', group_id=g.id, child_id=c.id) }}"><strong>{{ c.name }}</strong></a>
                             <span class="dr-action-pill {{ c.action }}{% if c.action in ('ai_classify', 'ai_critical_check') %} ai-action{% endif %}">
                                 {%- if c.action == 'create_ticket' %}<i class="fas fa-ticket"></i>
@@ -139,6 +141,7 @@
                 <span class="priority">{{ r.priority }}</span>
                 <span class="label">
                     <span class="rule-badge-orphan">orfana</span>
+                    <span class="rule-id" title="ID regola">#{{ r.id }}</span>
                     <a href="{{ url_for('rules.form_view', rule_id=r.id) }}"><strong>{{ r.name }}</strong></a>
                     <span class="dr-action-pill {{ r.action }}{% if r.action in ('ai_classify', 'ai_critical_check') %} ai-action{% endif %}">
                         {%- if r.action == 'create_ticket' %}<i class="fas fa-ticket"></i>

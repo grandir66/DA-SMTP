@@ -369,6 +369,18 @@ code { background: #eef2f7; padding: 0.05rem 0.35rem; border-radius: 3px; font-s
     letter-spacing: 0.04em;
     text-transform: uppercase;
 }
+.rule-id {
+    display: inline-block;
+    background: #f1f5f9;
+    color: #475569;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 0.08rem 0.38rem;
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    margin-right: 0.15rem;
+}
 .rule-badge-children {
     background: var(--dr-accent);
     color: var(--dr-primary);
