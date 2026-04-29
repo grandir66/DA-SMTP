@@ -1,0 +1,89 @@
+{% extends "admin/_base.html" %}
+{% block title %}Anagrafica clienti{% endblock %}
+{% block content %}
+<section class="dr-section">
+    <h2><i class="fas fa-address-book"></i> Anagrafica clienti ({{ customers|length }})</h2>
+    <p class="dr-hint">
+        Sorgente: <code>{{ health.backend }}</code>
+        {% if health.path %}— path: <code>{{ health.path }}</code>{% endif %}
+        {% if health.base_url %}— url: <code>{{ health.base_url }}</code>{% endif %}
+        {% if health.last_error %}<span style="color:#b91c1c;">— errore: {{ health.last_error }}</span>{% endif %}
+    </p>
+    <p class="dr-hint">
+        Vista <strong>read-only</strong>: la fonte di verità è il backend configurato
+        (vedi <code>DOMARC_RELAY_CUSTOMER_SOURCE</code>). Vengono mostrati solo i clienti
+        <strong>abilitati</strong> sul gestionale (<code>is_active = TRUE</code>).
+    </p>
+    <form method="get" class="dr-filters">
+        <input type="search" name="q" value="{{ search }}" placeholder="cerca codcli / ragione sociale / dominio / alias…">
+        <button class="dr-btn"><i class="fas fa-magnifying-glass"></i></button>
+    </form>
+</section>
+
+<div class="dr-table-wrap">
+<table class="dr-table">
+    <thead>
+        <tr>
+            <th>Codcli</th>
+            <th>Ragione sociale</th>
+            <th>Profilo orari</th>
+            <th>Contratto</th>
+            <th>Domini</th>
+            <th>Alias</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for c in customers %}
+        <tr>
+            <td><strong>{{ c.codice_cliente }}</strong></td>
+            <td>
+                {% if c.ragione_sociale %}{{ c.ragione_sociale }}{% else %}<span style="color:var(--dr-gray);">—</span>{% endif %}
+            </td>
+            <td>
+                {% if c.tipologia_servizio %}
+                <span class="dr-badge dr-badge-{% if c.tipologia_servizio == 'H24' %}info{% elif c.tipologia_servizio == 'EXT' %}warn{% elif c.tipologia_servizio == 'NO' %}error{% else %}ok{% endif %}">
+                    {{ c.tipologia_servizio }}
+                </span>
+                {% if c.profile_description %}
+                <small style="color:var(--dr-gray); display:block;">{{ c.profile_description }}</small>
+                {% endif %}
+                {% else %}
+                <span style="color:var(--dr-gray);">—</span>
+                {% endif %}
+            </td>
+            <td>
+                {% if c.contract_type %}
+                <small>{{ c.contract_type }}</small>
+                {% if c.contract_expiry_date %}
+                <br><small style="color:var(--dr-gray);">scad. {{ c.contract_expiry_date }}</small>
+                {% endif %}
+                {% else %}
+                <span style="color:var(--dr-gray);">—</span>
+                {% endif %}
+            </td>
+            <td class="mono"><small>
+                {%- for d in c.domains -%}
+                {{ d }}{% if not loop.last %}<br>{% endif %}
+                {%- else -%}
+                <span style="color:var(--dr-gray);">—</span>
+                {%- endfor -%}
+            </small></td>
+            <td class="mono"><small>
+                {%- for a in c.aliases -%}
+                {{ a }}{% if not loop.last %}<br>{% endif %}
+                {%- else -%}
+                <span style="color:var(--dr-gray);">—</span>
+                {%- endfor -%}
+            </small></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="dr-empty">
+            <i class="fas fa-circle-info"></i>
+            Nessun cliente abilitato caricato dalla sorgente.
+            Controlla la configurazione (<code>DOMARC_RELAY_CUSTOMER_SOURCE</code>).
+        </td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endblock %}

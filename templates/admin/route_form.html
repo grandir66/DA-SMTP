@@ -1,0 +1,37 @@
+{% extends "admin/_base.html" %}
+{% block title %}{{ 'Nuovo alias' if is_new else (record.local_part + '@' + record.domain) }}{% endblock %}
+{% block content %}
+<section class="dr-section">
+    <a href="{{ url_for('routes.routes_list') }}" class="dr-btn">← Lista</a>
+    <h2>{% if is_new %}Nuovo alias intercept{% else %}{{ record.local_part }}@{{ record.domain }}{% endif %}</h2>
+</section>
+<form method="post">
+<div class="dr-section">
+    <div class="dr-form-row"><label>Local part *</label><input type="text" name="local_part" required value="{{ record.local_part or '' }}" placeholder="info"></div>
+    <div class="dr-form-row"><label>Dominio *</label><input type="text" name="domain" required value="{{ record.domain or '' }}" placeholder="acme.it"></div>
+    <div class="dr-form-row"><label>Codice cliente</label><input type="text" name="codice_cliente" value="{{ record.codice_cliente or '' }}"></div>
+
+    <h3>Forward (smarthost)</h3>
+    <div class="dr-form-row"><label>Target host</label><input type="text" name="forward_target" value="{{ record.forward_target or '' }}" placeholder="acme.mail.protection.outlook.com"></div>
+    <div class="dr-form-row"><label>Porta</label><input type="number" name="forward_port" value="{{ record.forward_port or 25 }}" style="width:120px;"></div>
+    <div class="dr-form-row"><label>TLS</label>
+        <select name="forward_tls">
+            {% for v in ['opportunistic','strict','none'] %}<option value="{{ v }}" {% if record.forward_tls==v %}selected{% endif %}>{{ v }}</option>{% endfor %}
+        </select></div>
+
+    <h3>Redirect (in alternativa)</h3>
+    <div class="dr-form-row"><label>Redirect target</label><input type="text" name="redirect_target" value="{{ record.redirect_target or '' }}" placeholder="r.grandi@domarc.it"></div>
+
+    <h3>Comportamento</h3>
+    <div class="dr-form-row"><label>Apply rules</label>
+        <div><label><input type="checkbox" name="apply_rules" {% if record.apply_rules or is_new %}checked{% endif %}> Le regole vengono valutate (default sì; off = bypass)</label></div></div>
+    <div class="dr-form-row"><label>Stato</label>
+        <div><label><input type="checkbox" name="enabled" {% if record.enabled or is_new %}checked{% endif %}> Attivo</label></div></div>
+    <div class="dr-form-row"><label>Note</label><textarea name="notes">{{ record.notes or '' }}</textarea></div>
+    <div style="text-align:right;">
+        <a href="{{ url_for('routes.routes_list') }}" class="dr-btn">Annulla</a>
+        <button class="dr-btn dr-btn-primary" style="width:auto;"><i class="fas fa-save"></i> Salva</button>
+    </div>
+</div>
+</form>
+{% endblock %}

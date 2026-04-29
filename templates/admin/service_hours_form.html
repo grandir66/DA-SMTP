@@ -1,0 +1,377 @@
+{% extends "admin/_base.html" %}
+{% block title %}Orari {{ record.codice_cliente or 'nuovo' }}{% endblock %}
+
+{% block extra_head %}
+<style>
+    .sh-row { display:grid; grid-template-columns:160px 1fr; gap:0.7rem; align-items:start; margin-bottom:0.7rem; }
+    .sh-row label { font-weight:500; padding-top:0.4rem; }
+    .sh-row input[type=text], .sh-row textarea, .sh-row select { width:100%; padding:0.45rem 0.6rem; border:1px solid #cbd5e1; border-radius:5px; font-family:inherit; }
+    textarea.json-editor { font-family:ui-monospace, Menlo, monospace; font-size:0.82rem; min-height:160px; }
+    textarea.json-editor.short { min-height:60px; }
+    .help { font-size:0.78rem; color:#64748b; margin-top:0.25rem; }
+    .schedule-grid { display:grid; grid-template-columns:80px 1fr auto; gap:0.4rem; padding:0.45rem 0.6rem; align-items:center; border-bottom:1px solid #f1f5f9; }
+    .schedule-grid.is-closed { background:#fef2f2; }
+    .schedule-grid label { font-weight:500; }
+    .schedule-slots { display:flex; gap:0.4rem; flex-wrap:wrap; }
+    .schedule-slot { display:inline-flex; gap:0.2rem; align-items:center; background:#f1f5f9; padding:0.18rem 0.4rem; border-radius:4px; }
+    .schedule-slot input { width:60px; padding:0.15rem 0.3rem; border:1px solid #cbd5e1; border-radius:3px; font-family:ui-monospace,Menlo,monospace; font-size:0.8rem; }
+    .schedule-slot button { background:transparent; border:none; color:#dc2626; cursor:pointer; padding:0 0.2rem; }
+    .schedule-grid .day-actions button { background:#0b2a4a; color:#fff; border:none; border-radius:3px; padding:0.18rem 0.5rem; font-size:0.78rem; cursor:pointer; }
+    .schedule-grid .day-actions button:hover { background:#13386a; }
+    .schedule-grid .closed-toggle { font-size:0.78rem; color:#64748b; display:inline-flex; gap:0.3rem; align-items:center; }
+    .exception-row { display:grid; grid-template-columns:130px 90px 90px auto 1fr auto; gap:0.4rem; padding:0.5rem 0; align-items:center; border-bottom:1px solid #f1f5f9; }
+    .exception-row input[type="date"], .exception-row input[type="time"], .exception-row input[type="text"] { padding:0.3rem 0.5rem; font-size:0.85rem; border:1px solid #cbd5e1; border-radius:3px; }
+    .exception-row.is-closed .exc-times-wrap input { background:#fee2e2; opacity:0.55; pointer-events:none; }
+    .profile-preview { background:#fffbeb; border:1px solid #fcd34d; border-radius:6px; padding:0.7rem 0.9rem; margin-top:0.4rem; }
+    .profile-preview strong { color:#78350f; }
+    .toolbar-btn { background:#f1f5f9; border:1px solid #cbd5e1; border-radius:4px; padding:0.3rem 0.6rem; font-size:0.82rem; cursor:pointer; margin-right:0.3rem; }
+    .toolbar-btn:hover { background:#e2e8f0; }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="dr-section">
+    <div style="display:flex; gap:0.5rem; align-items:center;">
+        <a href="{{ url_for('service_hours.list_view') }}" class="dr-btn"><i class="fas fa-arrow-left"></i> Lista</a>
+        <h2 style="margin:0;">
+            {% if is_new %}Nuovi orari servizio{% else %}Orari per {{ record.codice_cliente }}{% endif %}
+        </h2>
+        <a href="{{ url_for('profiles.list_view') }}" class="dr-btn" style="margin-left:auto;">
+            <i class="fas fa-clock"></i> Gestione profili
+        </a>
+    </div>
+</section>
+
+<form method="post" action="" style="max-width:1100px;">
+<section class="dr-card">
+    <div class="sh-row">
+        <label>Codice cliente *</label>
+        <input type="text" name="codice_cliente" required value="{{ record.codice_cliente or '' }}"
+               {% if not is_new %}readonly style="background:#f1f5f9;"{% endif %} maxlength="50">
+    </div>
+
+    <div class="sh-row">
+        <label>Profilo applicato</label>
+        <div>
+            <select name="profile_id" id="profile_id" onchange="onProfileChange()">
+                <option value="">— Custom inline (no profilo) —</option>
+                {% for p in profiles %}
+                <option value="{{ p.id }}"
+                        data-code="{{ p.code or '' }}"
+                        data-builtin="{{ '1' if p.is_builtin else '0' }}"
+                        data-schedule='{{ p.schedule | tojson }}'
+                        data-holidays='{{ p.holidays | tojson }}'
+                        data-description="{{ p.description or '' }}"
+                        {% if record.profile_id == p.id %}selected{% endif %}>
+                    {% if p.code %}[{{ p.code }}]{% endif %} {{ p.name }}{% if p.is_builtin %} · built-in{% endif %}
+                </option>
+                {% endfor %}
+            </select>
+            <div class="help">Selezionando un profilo, schedule + festività vengono ereditati. Le <em>eccezioni</em> sotto si applicano sopra il profilo per date specifiche.</div>
+            <div id="profile_preview" class="profile-preview" style="display:none;">
+                <strong id="prof_preview_name"></strong>
+                <div id="prof_preview_desc" style="font-size:0.85rem; color:#92400e; margin-top:0.2rem;"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="sh-row">
+        <label>Timezone</label>
+        <input type="text" name="timezone" value="{{ record.timezone or 'Europe/Rome' }}" maxlength="64">
+    </div>
+
+    <div class="sh-row">
+        <label>Stato</label>
+        <div>
+            <label style="font-weight:400;">
+                <input type="checkbox" name="enabled" {% if record.enabled or is_new %}checked{% endif %}>
+                Attivo
+            </label>
+        </div>
+    </div>
+
+    <div class="sh-row">
+        <label>Note</label>
+        <textarea name="notes" rows="2">{{ record.notes or '' }}</textarea>
+    </div>
+
+    <h3 style="margin:1.2rem 0 0.5rem 0; color:#0b2a4a;">
+        <i class="fas fa-calendar-week"></i> Schedule settimanale (editor visuale)
+    </h3>
+    <p class="help" style="margin-bottom:0.6rem;">
+        Lun-Dom con slot orari. Aggiungi più slot per giorno (es. mattina + pomeriggio) o segna chiuso.
+        Se è selezionato un profilo, lo schedule viene popolato dal profilo (override editando qui sotto).
+    </p>
+    <div>
+        <button type="button" class="toolbar-btn" onclick="copyDayToAll(0)"><i class="fas fa-copy"></i> Copia lunedì a tutti i giorni feriali</button>
+        <button type="button" class="toolbar-btn" onclick="presetWorkweek('std')">Preset STD (8:30-13/14:30-17:30)</button>
+        <button type="button" class="toolbar-btn" onclick="presetWorkweek('ext')">Preset EXT (6:30-19:30)</button>
+        <button type="button" class="toolbar-btn" onclick="presetWorkweek('h24')">Preset H24</button>
+        <button type="button" class="toolbar-btn" onclick="presetWorkweek('clear')">Pulisci</button>
+    </div>
+    <div id="schedule-grid" style="margin-top:0.5rem; border-top:1px solid #e2e8f0;"></div>
+
+    <h3 style="margin:1.2rem 0 0.5rem 0; color:#0b2a4a;">
+        <i class="fas fa-snowflake"></i> Festività
+    </h3>
+    <p class="help">Date in formato <code>YYYY-MM-DD</code>, una per riga oppure JSON array.</p>
+    <div class="sh-row">
+        <label>Holidays JSON</label>
+        <textarea name="holidays_json" id="holidays_json" class="json-editor short">{{ (record.holidays or []) | tojson }}</textarea>
+    </div>
+
+    <h3 style="margin:1.2rem 0 0.5rem 0; color:#0b2a4a;">
+        <i class="fas fa-calendar-day"></i> Eccezioni puntuali
+    </h3>
+    <p class="help" style="margin-bottom:0.6rem;">
+        Date specifiche con orario diverso dal profilo (es. apertura straordinaria, chiusura per ponte).
+    </p>
+    <div id="exceptions-list"></div>
+    <button type="button" class="dr-btn" style="width:auto;" onclick="addException()">
+        <i class="fas fa-plus"></i> Aggiungi eccezione
+    </button>
+
+    <input type="hidden" name="schedule_json" id="schedule_json">
+    <input type="hidden" name="schedule_exceptions_json" id="schedule_exceptions_json" value="[]">
+
+    <details style="margin-top:1.2rem;">
+        <summary style="cursor:pointer; color:#64748b; font-size:0.88rem;">JSON raw (debug / paste)</summary>
+        <div class="sh-row" style="margin-top:0.6rem;">
+            <label>Schedule JSON raw</label>
+            <textarea id="schedule_json_view" class="json-editor" oninput="onScheduleJsonEdit()"></textarea>
+        </div>
+    </details>
+
+    <div style="display:flex; gap:0.5rem; padding-top:1rem; border-top:1px solid #e2e8f0; margin-top:1rem;">
+        <a href="{{ url_for('service_hours.list_view') }}" class="dr-btn">Annulla</a>
+        <button type="submit" class="dr-btn dr-btn-primary" style="margin-left:auto; width:auto;" onclick="serializeAll()">
+            <i class="fas fa-save"></i> Salva
+        </button>
+    </div>
+</section>
+</form>
+
+<script>
+const DAYS = [
+    {key:'mon', label:'Lunedì'},
+    {key:'tue', label:'Martedì'},
+    {key:'wed', label:'Mercoledì'},
+    {key:'thu', label:'Giovedì'},
+    {key:'fri', label:'Venerdì'},
+    {key:'sat', label:'Sabato'},
+    {key:'sun', label:'Domenica'},
+];
+
+const INITIAL_SCHEDULE = {{ (record.schedule or {}) | tojson }};
+const INITIAL_EXCEPTIONS = {{ (record.schedule_exceptions or []) | tojson }};
+
+function renderScheduleGrid(sched) {
+    const root = document.getElementById('schedule-grid');
+    root.innerHTML = '';
+    DAYS.forEach((d, idx) => {
+        const slots = sched[d.key] || [];
+        const closed = slots.length === 0;
+        const row = document.createElement('div');
+        row.className = 'schedule-grid' + (closed ? ' is-closed' : '');
+        row.dataset.day = d.key;
+        let slotsHtml = '<div class="schedule-slots">';
+        slots.forEach((s, i) => {
+            slotsHtml += `<span class="schedule-slot">
+                <input type="time" value="${s[0] || ''}" data-pos="0" oninput="updateSchedule()">–
+                <input type="time" value="${s[1] || ''}" data-pos="1" oninput="updateSchedule()">
+                <button type="button" onclick="removeSlot(this)" title="Rimuovi slot">×</button>
+            </span>`;
+        });
+        slotsHtml += '</div>';
+        row.innerHTML = `
+            <label>${d.label}</label>
+            ${slotsHtml}
+            <div class="day-actions">
+                <button type="button" onclick="addSlot('${d.key}')" title="Aggiungi slot"><i class="fas fa-plus"></i></button>
+                <label class="closed-toggle" style="margin-left:0.4rem;">
+                    <input type="checkbox" ${closed ? 'checked' : ''} onchange="toggleClosed('${d.key}', this.checked)">
+                    chiuso
+                </label>
+            </div>`;
+        root.appendChild(row);
+    });
+    updateSchedule();
+}
+
+function readScheduleFromGrid() {
+    const out = {};
+    document.querySelectorAll('#schedule-grid .schedule-grid').forEach(row => {
+        const day = row.dataset.day;
+        if (row.classList.contains('is-closed')) {
+            out[day] = [];
+            return;
+        }
+        const slots = [];
+        row.querySelectorAll('.schedule-slot').forEach(slot => {
+            const ins = slot.querySelectorAll('input[type=time]');
+            const a = ins[0].value, b = ins[1].value;
+            if (a && b) slots.push([a, b]);
+        });
+        out[day] = slots;
+    });
+    return out;
+}
+
+function updateSchedule() {
+    const sched = readScheduleFromGrid();
+    document.getElementById('schedule_json').value = JSON.stringify(sched);
+    const view = document.getElementById('schedule_json_view');
+    if (view) view.value = JSON.stringify(sched, null, 2);
+}
+
+function onScheduleJsonEdit() {
+    try {
+        const sched = JSON.parse(document.getElementById('schedule_json_view').value);
+        renderScheduleGrid(sched);
+    } catch(e) { /* ignore parse errors mentre digiti */ }
+}
+
+function addSlot(day) {
+    const row = document.querySelector(`#schedule-grid .schedule-grid[data-day="${day}"]`);
+    if (!row) return;
+    row.classList.remove('is-closed');
+    const closedCb = row.querySelector('input[type=checkbox]');
+    if (closedCb) closedCb.checked = false;
+    const slots = row.querySelector('.schedule-slots');
+    const span = document.createElement('span');
+    span.className = 'schedule-slot';
+    span.innerHTML = `<input type="time" value="09:00" data-pos="0" oninput="updateSchedule()">–
+        <input type="time" value="18:00" data-pos="1" oninput="updateSchedule()">
+        <button type="button" onclick="removeSlot(this)" title="Rimuovi slot">×</button>`;
+    slots.appendChild(span);
+    updateSchedule();
+}
+
+function removeSlot(btn) {
+    btn.closest('.schedule-slot').remove();
+    updateSchedule();
+}
+
+function toggleClosed(day, isClosed) {
+    const row = document.querySelector(`#schedule-grid .schedule-grid[data-day="${day}"]`);
+    if (!row) return;
+    row.classList.toggle('is-closed', isClosed);
+    if (isClosed) {
+        row.querySelector('.schedule-slots').innerHTML = '';
+    }
+    updateSchedule();
+}
+
+function copyDayToAll(srcIdx) {
+    const sched = readScheduleFromGrid();
+    const src = sched[DAYS[srcIdx].key] || [];
+    for (let i = 1; i < 5; i++) {  // tue..fri
+        sched[DAYS[i].key] = JSON.parse(JSON.stringify(src));
+    }
+    renderScheduleGrid(sched);
+}
+
+function presetWorkweek(preset) {
+    let sched;
+    if (preset === 'std') {
+        sched = {
+            mon: [['08:30','13:00'],['14:30','17:30']],
+            tue: [['08:30','13:00'],['14:30','17:30']],
+            wed: [['08:30','13:00'],['14:30','17:30']],
+            thu: [['08:30','13:00'],['14:30','17:30']],
+            fri: [['08:30','13:00'],['14:30','17:30']],
+            sat: [], sun: []
+        };
+    } else if (preset === 'ext') {
+        sched = {
+            mon: [['06:30','19:30']], tue: [['06:30','19:30']], wed: [['06:30','19:30']],
+            thu: [['06:30','19:30']], fri: [['06:30','19:30']],
+            sat: [['06:30','13:00']], sun: []
+        };
+    } else if (preset === 'h24') {
+        sched = {mon:[['00:00','23:59']],tue:[['00:00','23:59']],wed:[['00:00','23:59']],
+                 thu:[['00:00','23:59']],fri:[['00:00','23:59']],sat:[['00:00','23:59']],sun:[['00:00','23:59']]};
+    } else {
+        sched = {mon:[],tue:[],wed:[],thu:[],fri:[],sat:[],sun:[]};
+    }
+    renderScheduleGrid(sched);
+}
+
+function onProfileChange() {
+    const sel = document.getElementById('profile_id');
+    const opt = sel.options[sel.selectedIndex];
+    const preview = document.getElementById('profile_preview');
+    if (!opt.value) {
+        preview.style.display = 'none';
+        return;
+    }
+    try {
+        const sched = opt.dataset.schedule ? JSON.parse(opt.dataset.schedule) : {};
+        const hols = opt.dataset.holidays ? JSON.parse(opt.dataset.holidays) : [];
+        renderScheduleGrid(sched);
+        document.getElementById('holidays_json').value = JSON.stringify(hols);
+        document.getElementById('prof_preview_name').textContent = opt.text;
+        document.getElementById('prof_preview_desc').textContent = opt.dataset.description || '';
+        preview.style.display = 'block';
+    } catch (e) { console.warn('profile data parse', e); }
+}
+
+// Inizializza eccezioni
+INITIAL_EXCEPTIONS.forEach(exc => addException(exc));
+
+function addException(exc) {
+    exc = exc || {};
+    const div = document.createElement('div');
+    div.className = 'exception-row';
+    let start = '', end = '';
+    let isClosed = false;
+    if (Array.isArray(exc.schedule) && exc.schedule.length === 0) {
+        isClosed = true;
+    } else if (Array.isArray(exc.schedule) && exc.schedule[0] && exc.schedule[0].length === 2) {
+        start = exc.schedule[0][0]; end = exc.schedule[0][1];
+    }
+    if (isClosed) div.classList.add('is-closed');
+    div.innerHTML = `
+        <input type="date" class="exc-date" value="${exc.date || ''}" required>
+        <span class="exc-times-wrap">
+            <input type="time" class="exc-start" value="${start}" placeholder="dalle">
+            <input type="time" class="exc-end" value="${end}" placeholder="alle">
+        </span>
+        <label class="closed-toggle">
+            <input type="checkbox" class="exc-closed" ${isClosed ? 'checked' : ''}
+                   onchange="this.closest('.exception-row').classList.toggle('is-closed', this.checked)">
+            chiuso
+        </label>
+        <input type="text" class="exc-note" value="${(exc.note || '').replace(/"/g,'&quot;')}" placeholder="nota">
+        <button type="button" class="dr-btn dr-btn-danger" style="width:auto;" onclick="this.parentElement.remove()"><i class="fas fa-trash"></i></button>`;
+    document.getElementById('exceptions-list').appendChild(div);
+}
+
+function serializeAll() {
+    updateSchedule();
+    const rows = document.querySelectorAll('#exceptions-list .exception-row');
+    const out = [];
+    rows.forEach(r => {
+        const date = r.querySelector('.exc-date').value;
+        if (!date) return;
+        const closed = r.querySelector('.exc-closed').checked;
+        let sched;
+        if (closed) {
+            sched = [];
+        } else {
+            const start = r.querySelector('.exc-start').value;
+            const end = r.querySelector('.exc-end').value;
+            sched = (start && end) ? [[start, end]] : [];
+        }
+        out.push({date, schedule: sched, note: r.querySelector('.exc-note').value || null});
+    });
+    document.getElementById('schedule_exceptions_json').value = JSON.stringify(out);
+}
+
+document.querySelector('form').addEventListener('submit', serializeAll);
+
+// Init
+renderScheduleGrid(INITIAL_SCHEDULE);
+onProfileChange();  // se profilo è già selezionato, mostra preview
+</script>
+{% endblock %}

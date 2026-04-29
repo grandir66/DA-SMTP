@@ -1,0 +1,49 @@
+{% extends "admin/_base.html" %}
+{% block title %}Codici autorizzazione{% endblock %}
+{% block content %}
+<section class="dr-section">
+    <h2><i class="fas fa-key"></i> Codici autorizzazione</h2>
+    <form method="post" action="{{ url_for('auth_codes.issue_view') }}" style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:end; padding-top:0.5rem;">
+        <div><small>Cliente</small><br><input type="text" name="codice_cliente" placeholder="opzionale"></div>
+        <div><small>TTL (h)</small><br><input type="number" name="ttl_hours" value="48" min="1" max="720" style="width:90px;"></div>
+        <div style="flex:1;"><small>Note</small><br><input type="text" name="note" style="width:100%;"></div>
+        <button class="dr-btn dr-btn-primary" style="width:auto;"><i class="fas fa-bolt"></i> Genera</button>
+    </form>
+</section>
+
+<section class="dr-section">
+    <form method="get" class="dr-filters">
+        <select name="state" onchange="this.form.submit()">
+            <option value="all" {% if not only_active %}selected{% endif %}>Tutti</option>
+            <option value="active" {% if only_active %}selected{% endif %}>Attivi non usati</option>
+        </select>
+        <input type="text" name="cliente" value="{{ cliente }}" placeholder="filtra per codcli">
+    </form>
+</section>
+
+<div class="dr-table-wrap">
+<table class="dr-table">
+    <thead><tr><th>Codice</th><th>Cliente</th><th>Generato</th><th>Valido fino</th><th>Usato</th><th>Note</th><th></th></tr></thead>
+    <tbody>
+        {% for c in codes %}
+        <tr>
+            <td><code style="font-weight:600; font-size:1rem;">{{ c.code }}</code></td>
+            <td>{{ c.codice_cliente or '—' }}</td>
+            <td><small>{{ c.generated_at }}</small></td>
+            <td><small>{{ c.valid_until }}</small></td>
+            <td>{% if c.used_at %}<small>{{ c.used_at }} ({{ c.used_by or '?' }})</small>{% else %}<span class="dr-badge dr-badge-ok">attivo</span>{% endif %}</td>
+            <td><small>{{ c.note or '' }}</small></td>
+            <td>
+                <form method="post" action="{{ url_for('auth_codes.delete_view', code_id=c.id) }}" style="display:inline;"
+                      onsubmit="return confirm('Eliminare il codice?');">
+                    <button class="dr-btn dr-btn-danger"><i class="fas fa-trash"></i></button>
+                </form>
+            </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="dr-empty">Nessun codice emesso.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endblock %}

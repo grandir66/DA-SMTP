@@ -1,0 +1,209 @@
+{% extends "admin/_base.html" %}
+{% block title %}Regole — Domarc SMTP Relay{% endblock %}
+{% block content %}
+<section class="dr-section">
+    <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+        <h2 style="margin:0;"><i class="fas fa-sitemap"></i> Regole SMTP</h2>
+        <a href="{{ url_for('rules.form_view') }}" class="dr-btn dr-btn-primary" style="width:auto;">
+            <i class="fas fa-plus"></i> Nuova regola
+        </a>
+        <a href="{{ url_for('rules.group_form_view') }}" class="dr-btn" style="width:auto;">
+            <i class="fas fa-folder-plus"></i> Nuovo gruppo
+        </a>
+        <a href="{{ url_for('rules.flatten_preview_view') }}" class="dr-btn" style="width:auto;" title="Anteprima regole flat verso il listener">
+            <i class="fas fa-list-ol"></i> Anteprima flatten
+        </a>
+        <a href="{{ url_for('rules.simulate_view') }}" class="dr-btn" style="width:auto;" title="Simula evento">
+            <i class="fas fa-vial"></i> Simulazione
+        </a>
+        <a href="{{ url_for('rules.groupable_wizard_view') }}" class="dr-btn" style="width:auto;" title="Suggerisce raggruppamenti">
+            <i class="fas fa-wand-magic-sparkles"></i> Suggerisci gruppi
+        </a>
+        <a href="{{ url_for('rules.export_view', fmt='csv') }}" class="dr-btn" style="width:auto;" title="Export CSV">
+            <i class="fas fa-file-csv"></i> CSV
+        </a>
+        <a href="{{ url_for('rules.export_view', fmt='json') }}" class="dr-btn" style="width:auto;" title="Export JSON">
+            <i class="fas fa-file-code"></i> JSON
+        </a>
+        <form method="get" class="dr-filters" style="margin-left:auto;">
+            <select name="state" onchange="this.form.submit()">
+                <option value="all" {% if filter_state=='all' %}selected{% endif %}>Tutte</option>
+                <option value="enabled" {% if filter_state=='enabled' %}selected{% endif %}>Attive</option>
+                <option value="disabled" {% if filter_state=='disabled' %}selected{% endif %}>Disabilitate</option>
+            </select>
+        </form>
+    </div>
+    <p style="color:var(--dr-gray-dark); font-size:0.85rem; margin:0.4rem 0;">
+        Vista gerarchica: <span class="rule-badge-group">gruppo</span> con figli annidati,
+        <span class="rule-badge-orphan">orfana</span> regola standalone.
+        Priority globale (1..999999) determina ordine di valutazione.
+    </p>
+</section>
+
+<div class="rule-tree">
+    {% if not items %}
+    <div class="dr-empty">Nessuna regola. <a href="{{ url_for('rules.form_view') }}">Crea la prima</a> o
+        <a href="{{ url_for('rules.group_form_view') }}">crea un gruppo</a>.</div>
+    {% endif %}
+    {% for item in items %}
+        {% if item.type == 'group' %}
+            {% set g = item.group %}
+            <div class="rule-group {% if not g.enabled %}collapsed{% endif %}" data-group-id="{{ g.id }}">
+                <div class="rule-row rule-group-header" onclick="toggleGroup({{ g.id }})">
+                    <span class="toggle" id="toggle-{{ g.id }}"><i class="fas fa-chevron-down"></i></span>
+                    <span class="priority">{{ g.priority }}</span>
+                    <span class="label">
+                        <span class="rule-badge-group"><i class="fas fa-folder-open"></i> gruppo</span>
+                        <strong>{{ g.group_label or g.name }}</strong>
+                        <span class="rule-badge-children">{{ item.children|length }} figli</span>
+                        {% if g.exclusive_match %}<span class="rule-inherit-badge" title="exclusive_match: blocca i top-level successivi al primo match"><i class="fas fa-lock"></i> esclusivo</span>{% endif %}
+                        <span class="match-summary">
+                            {%- if g.match_to_domain %}to_dom={{ g.match_to_domain }} {% endif -%}
+                            {%- if g.match_in_service is not none %}in_svc={{ 'sì' if g.match_in_service else 'no' }} {% endif -%}
+                            {%- if g.match_contract_active is not none %}contr={{ 'sì' if g.match_contract_active else 'no' }} {% endif -%}
+                            {%- if g.match_known_customer is not none %}noto={{ 'sì' if g.match_known_customer else 'no' }} {% endif -%}
+                        </span>
+                    </span>
+                    <span class="rule-status {{ 'on' if g.enabled else 'off' }}">{{ 'attivo' if g.enabled else 'spento' }}</span>
+                    <span></span>
+                    <span class="row-actions" onclick="event.stopPropagation();">
+                        <a href="{{ url_for('rules.group_form_view', group_id=g.id) }}" class="dr-btn" title="Modifica gruppo"><i class="fas fa-pen"></i></a>
+                        <a href="{{ url_for('rules.child_form_view', group_id=g.id) }}" class="dr-btn" title="Aggiungi figlio"><i class="fas fa-plus"></i></a>
+                        <form method="post" action="{{ url_for('rules.toggle_view', rule_id=g.id) }}" style="display:inline;">
+                            <button class="dr-btn" title="Toggle attivo"><i class="fas fa-power-off"></i></button>
+                        </form>
+                        <form method="post" action="{{ url_for('rules.delete_view', rule_id=g.id) }}" style="display:inline;"
+                              onsubmit="return confirm('Eliminare il gruppo «{{ g.group_label or g.name }}» e tutti i suoi figli ({{ item.children|length }})?');">
+                            <button class="dr-btn dr-btn-danger" title="Elimina gruppo + figli"><i class="fas fa-trash"></i></button>
+                        </form>
+                    </span>
+                </div>
+                <div class="rule-group-body" id="body-{{ g.id }}">
+                    {% if not item.children %}
+                    <div class="dr-empty" style="margin:0; padding:1rem;">
+                        Gruppo vuoto. <a href="{{ url_for('rules.child_form_view', group_id=g.id) }}">Aggiungi un figlio</a>.
+                    </div>
+                    {% endif %}
+                    {% for c in item.children %}
+                    <div class="rule-row rule-child" {% if not c.enabled %}style="opacity:0.55;"{% endif %}>
+                        <span class="toggle placeholder">└</span>
+                        <span class="priority">{{ c.priority }}</span>
+                        <span class="label">
+                            <a href="{{ url_for('rules.child_form_view', group_id=g.id, child_id=c.id) }}"><strong>{{ c.name }}</strong></a>
+                            <span class="dr-action-pill {{ c.action }}{% if c.action in ('ai_classify', 'ai_critical_check') %} ai-action{% endif %}">
+                                {%- if c.action == 'create_ticket' %}<i class="fas fa-ticket"></i>
+                                {%- elif c.action == 'auto_reply' %}<i class="fas fa-reply"></i>
+                                {%- elif c.action == 'forward' %}<i class="fas fa-share"></i>
+                                {%- elif c.action == 'redirect' %}<i class="fas fa-arrow-right-arrow-left"></i>
+                                {%- elif c.action == 'quarantine' %}<i class="fas fa-shield-virus"></i>
+                                {%- elif c.action == 'flag_only' %}<i class="fas fa-flag"></i>
+                                {%- elif c.action == 'ignore' %}<i class="fas fa-ban"></i>
+                                {%- elif c.action in ('ai_classify', 'ai_critical_check') %}<i class="fas fa-robot"></i>
+                                {%- endif %} {{ c.action }}
+                            </span>
+                            {% if c.action in ('ai_classify', 'ai_critical_check') %}
+                            <a href="{{ url_for('ai.rules_overview') }}" onclick="event.stopPropagation();"
+                               class="rule-ai-badge"
+                               title="Questa regola invoca l'IA (job: classify_email). Click per overview regole IA.">
+                               <i class="fas fa-robot"></i> IA
+                            </a>
+                            {% endif %}
+                            {% if c.continue_in_group %}<span class="rule-inherit-badge" title="continue_in_group"><i class="fas fa-arrow-right"></i> continua</span>{% endif %}
+                            {% if c.exit_group_continue %}<span class="rule-inherit-badge" title="exit_group_continue"><i class="fas fa-sign-out-alt"></i> esce</span>{% endif %}
+                            <span class="match-summary">
+                                {%- if c.match_subject_regex %}subj={{ c.match_subject_regex|truncate(30) }} {% endif -%}
+                                {%- if c.match_from_regex %}from={{ c.match_from_regex|truncate(25) }} {% endif -%}
+                            </span>
+                        </span>
+                        <span class="rule-status {{ 'on' if c.enabled else 'off' }}">{{ 'on' if c.enabled else 'off' }}</span>
+                        <span></span>
+                        <span class="row-actions">
+                            <a href="{{ url_for('rules.child_form_view', group_id=g.id, child_id=c.id) }}" class="dr-btn" title="Modifica"><i class="fas fa-pen"></i></a>
+                            <a href="{{ url_for('rules.simulate_view', rule_id=c.id) }}" class="dr-btn" title="Simula"><i class="fas fa-vial"></i></a>
+                            <form method="post" action="{{ url_for('rules.toggle_view', rule_id=c.id) }}" style="display:inline;">
+                                <button class="dr-btn" title="Toggle"><i class="fas fa-power-off"></i></button>
+                            </form>
+                            <form method="post" action="{{ url_for('rules.delete_view', rule_id=c.id) }}" style="display:inline;"
+                                  onsubmit="return confirm('Eliminare «{{ c.name }}»?');">
+                                <button class="dr-btn dr-btn-danger" title="Elimina"><i class="fas fa-trash"></i></button>
+                            </form>
+                        </span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        {% else %}
+            {% set r = item.rule %}
+            <div class="rule-row rule-orphan" {% if not r.enabled %}style="opacity:0.55;"{% endif %}>
+                <span class="toggle placeholder">•</span>
+                <span class="priority">{{ r.priority }}</span>
+                <span class="label">
+                    <span class="rule-badge-orphan">orfana</span>
+                    <a href="{{ url_for('rules.form_view', rule_id=r.id) }}"><strong>{{ r.name }}</strong></a>
+                    <span class="dr-action-pill {{ r.action }}{% if r.action in ('ai_classify', 'ai_critical_check') %} ai-action{% endif %}">
+                        {%- if r.action == 'create_ticket' %}<i class="fas fa-ticket"></i>
+                        {%- elif r.action == 'auto_reply' %}<i class="fas fa-reply"></i>
+                        {%- elif r.action == 'forward' %}<i class="fas fa-share"></i>
+                        {%- elif r.action == 'redirect' %}<i class="fas fa-arrow-right-arrow-left"></i>
+                        {%- elif r.action == 'quarantine' %}<i class="fas fa-shield-virus"></i>
+                        {%- elif r.action == 'flag_only' %}<i class="fas fa-flag"></i>
+                        {%- elif r.action == 'ignore' %}<i class="fas fa-ban"></i>
+                        {%- elif r.action in ('ai_classify', 'ai_critical_check') %}<i class="fas fa-robot"></i>
+                        {%- endif %} {{ r.action }}
+                    </span>
+                    {% if r.action in ('ai_classify', 'ai_critical_check') %}
+                    <a href="{{ url_for('ai.rules_overview') }}" onclick="event.stopPropagation();"
+                       class="rule-ai-badge"
+                       title="Questa regola invoca l'IA. Click per overview regole IA.">
+                       <i class="fas fa-robot"></i> IA
+                    </a>
+                    {% endif %}
+                    {% if r.continue_after_match %}<span class="rule-inherit-badge"><i class="fas fa-share-from-square"></i> cascata</span>{% endif %}
+                    <span class="match-summary">
+                        {%- if r.match_to_domain %}to_dom={{ r.match_to_domain }} {% endif -%}
+                        {%- if r.match_subject_regex %}subj={{ r.match_subject_regex|truncate(30) }} {% endif -%}
+                        {%- if r.match_in_service is not none %}in_svc={{ 'sì' if r.match_in_service else 'no' }} {% endif -%}
+                    </span>
+                </span>
+                <span class="rule-status {{ 'on' if r.enabled else 'off' }}">{{ 'attiva' if r.enabled else 'spenta' }}</span>
+                <span></span>
+                <span class="row-actions">
+                    <a href="{{ url_for('rules.form_view', rule_id=r.id) }}" class="dr-btn" title="Modifica"><i class="fas fa-pen"></i></a>
+                    <a href="{{ url_for('rules.simulate_view', rule_id=r.id) }}" class="dr-btn" title="Simula"><i class="fas fa-vial"></i></a>
+                    <form method="post" action="{{ url_for('rules.promote_view', rule_id=r.id) }}" style="display:inline;"
+                          onsubmit="return promptPromote(event, {{ r.id }});">
+                        <button class="dr-btn" title="Promuovi a gruppo"><i class="fas fa-folder-tree"></i></button>
+                    </form>
+                    <form method="post" action="{{ url_for('rules.toggle_view', rule_id=r.id) }}" style="display:inline;">
+                        <button class="dr-btn" title="Toggle"><i class="fas fa-power-off"></i></button>
+                    </form>
+                    <form method="post" action="{{ url_for('rules.delete_view', rule_id=r.id) }}" style="display:inline;"
+                          onsubmit="return confirm('Eliminare «{{ r.name }}»?');">
+                        <button class="dr-btn dr-btn-danger" title="Elimina"><i class="fas fa-trash"></i></button>
+                    </form>
+                </span>
+            </div>
+        {% endif %}
+    {% endfor %}
+</div>
+
+<script>
+function toggleGroup(gid) {
+    const el = document.querySelector('[data-group-id="' + gid + '"]');
+    if (!el) return;
+    el.classList.toggle('collapsed');
+    const icon = document.querySelector('#toggle-' + gid + ' i');
+    if (icon) icon.classList.toggle('fa-chevron-right');
+    if (icon) icon.classList.toggle('fa-chevron-down');
+}
+function promptPromote(evt, ruleId) {
+    const label = window.prompt("Etichetta del nuovo gruppo (es. \"Fuori orario contratto\"):");
+    if (!label) { evt.preventDefault(); return false; }
+    const form = evt.target;
+    const inp = document.createElement("input");
+    inp.type = "hidden"; inp.name = "group_label"; inp.value = label;
+    form.appendChild(inp);
+    return true;
+}
+</script>
+{% endblock %}

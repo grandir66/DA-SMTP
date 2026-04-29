@@ -1,0 +1,74 @@
+# =============================================================
+# Domarc SMTP Relay Admin — .gitignore
+# Esclude TUTTI i file con dati sensibili o derivabili.
+# =============================================================
+
+# --- Virtualenv & build artifacts ---
+.venv/
+venv/
+env/
+*.egg-info/
+build/
+dist/
+*.egg
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# --- Database (mai in repo: contengono dati operativi reali) ---
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# --- Backup pre-migration (locali, mai pubblici) ---
+backups/
+*.bak
+
+# --- Secrets & credenziali ---
+secrets.env
+.env
+.env.local
+.env.*.local
+master.key
+*.pem
+*.key
+!docs/**/*.key   # eventuali chiavi di esempio in docs (false positive)
+
+# --- Cache spaCy / modelli scaricati (200MB+) ---
+*_core_news_*/
+*sentence-transformers*/
+.cache/
+
+# --- Log ---
+*.log
+log/
+logs/
+
+# --- Test artefatti ---
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# --- Editor / OS ---
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# --- File generati (li ricrea l'app al boot) ---
+docs/manual.md
+
+# --- Plan / scratch ---
+/tmp/
+plans/
+
+# --- Documentazione locale non destinata al pubblico ---
+docs/handbook/
+docs/manuale_utente/img/*.png

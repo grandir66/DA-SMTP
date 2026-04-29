@@ -1,0 +1,108 @@
+{% extends "admin/_base.html" %}
+{% block title %}Moduli installabili{% endblock %}
+{% block content %}
+<section class="dr-section">
+    <h2 style="margin:0;"><i class="fas fa-cube"></i> Moduli Python</h2>
+    <p style="color:var(--dr-gray-dark); font-size:0.85rem;">
+        Catalogo whitelist di moduli Python installabili dall'UI tramite <code>pip install</code> (subprocess).
+        L'esecuzione richiede ruolo <strong>superadmin</strong>. Lo stato viene rivalutato ad ogni reload.
+    </p>
+</section>
+
+<div class="dr-table-wrap">
+<table class="dr-table">
+    <thead>
+        <tr><th>Modulo</th><th>Pacchetto pip</th><th>Stato</th><th>Versione</th><th>Dimensione</th><th>Richiesto da</th><th></th></tr>
+    </thead>
+    <tbody>
+    {% for m in modules %}
+    <tr>
+        <td>
+            <code>{{ m.code }}</code>
+            {% if m.optional %}<span class="rule-inherit-badge">opzionale</span>{% endif %}
+            {% if m.depends_on %}<br><small style="color:var(--dr-gray-dark);">richiede: <code>{{ m.depends_on }}</code></small>{% endif %}
+            <br><small>{{ m.description }}</small>
+        </td>
+        <td><code>{{ m.package }}</code></td>
+        <td>
+            {% if m.installed %}
+                <span class="rule-status on"><i class="fas fa-check"></i> installato</span>
+            {% else %}
+                <span class="rule-status off">non installato</span>
+            {% endif %}
+            {% if m.depends_on and not m.depends_satisfied %}
+                <br><small style="color:var(--dr-error);">⚠ dipendenza mancante</small>
+            {% endif %}
+        </td>
+        <td><small>{{ m.version or '—' }}</small></td>
+        <td><small>~{{ m.size_mb }} MB</small></td>
+        <td>
+            {% for f in m.required_for %}<small>• {{ f }}</small><br>{% endfor %}
+        </td>
+        <td style="white-space:nowrap;">
+            {% if session.role == 'superadmin' %}
+                {% if not m.installed %}
+                <form method="post" action="{{ url_for('secrets_modules.module_install', code=m.code) }}" style="display:inline;"
+                      {% if m.depends_on and not m.depends_satisfied %}onsubmit="return confirm('La dipendenza {{ m.depends_on }} non è installata. Procedere comunque?');"{% else %}onsubmit="return confirm('Installare il modulo «{{ m.code }}» (~{{ m.size_mb }} MB)? Operazione registrata in audit log.');"{% endif %}>
+                    <button class="dr-btn dr-btn-primary" style="width:auto; padding:0.2rem 0.6rem;">
+                        <i class="fas fa-download"></i> Installa
+                    </button>
+                </form>
+                {% else %}
+                <form method="post" action="{{ url_for('secrets_modules.module_install', code=m.code) }}" style="display:inline;"
+                      onsubmit="return confirm('Aggiornare il modulo «{{ m.code }}»? Operazione registrata in audit log.');">
+                    <button class="dr-btn" style="width:auto; padding:0.2rem 0.5rem;" title="Aggiorna alla versione più recente">
+                        <i class="fas fa-arrow-up"></i>
+                    </button>
+                </form>
+                {% if m.optional %}
+                <form method="post" action="{{ url_for('secrets_modules.module_uninstall', code=m.code) }}" style="display:inline;"
+                      onsubmit="return confirm('Disinstallare il modulo «{{ m.code }}»? Le feature collegate smetteranno di funzionare.');">
+                    <button class="dr-btn dr-btn-danger" style="width:auto; padding:0.2rem 0.5rem;">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </form>
+                {% endif %}
+                {% endif %}
+            {% else %}
+                <small style="color:var(--dr-gray-dark);">solo superadmin</small>
+            {% endif %}
+        </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+
+<section class="dr-section" style="margin-top:1.5rem;">
+    <h3 style="margin:0 0 0.5rem; color:var(--dr-primary);"><i class="fas fa-clipboard-list"></i> Audit log ultime 20 operazioni</h3>
+</section>
+
+<div class="dr-table-wrap">
+<table class="dr-table">
+    <thead>
+        <tr><th>Quando</th><th>Modulo</th><th>Operazione</th><th>Stato</th><th class="num">Durata</th><th>Operatore</th><th></th></tr>
+    </thead>
+    <tbody>
+    {% for l in log %}
+    <tr>
+        <td><small>{{ l.started_at }}</small></td>
+        <td><code>{{ l.module_code }}</code></td>
+        <td>{{ l.operation }}</td>
+        <td>
+            {% if l.status == 'success' %}<span class="rule-status on">success</span>
+            {% elif l.status == 'failed' %}<span class="rule-status off">failed</span>
+            {% elif l.status == 'running' %}<span class="rule-inherit-badge">running</span>
+            {% else %}<small>{{ l.status }}</small>{% endif %}
+        </td>
+        <td class="num">{{ l.duration_ms or '—' }}ms</td>
+        <td><small>{{ l.actor or '—' }}</small></td>
+        <td><a href="{{ url_for('secrets_modules.module_log_detail', log_id=l.id) }}" class="dr-btn" style="width:auto; padding:0.1rem 0.4rem;"><i class="fas fa-eye"></i></a></td>
+    </tr>
+    {% else %}
+    <tr><td colspan="7" class="dr-empty">Nessuna operazione registrata.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endblock %}

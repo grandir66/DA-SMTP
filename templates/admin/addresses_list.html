@@ -1,0 +1,131 @@
+{% extends "admin/_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block extra_head %}
+<style>
+    .addr-stats { display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:0.7rem; margin-bottom:1rem; }
+    .addr-stat-card { background:#fff; border:1px solid #cbd5e1; border-radius:6px; padding:0.7rem 1rem; }
+    .addr-stat-card .label { font-size:0.74rem; color:#64748b; text-transform:uppercase; letter-spacing:0.04em; }
+    .addr-stat-card .value { font-size:1.4rem; font-weight:600; color:#0b2a4a; line-height:1.1; padding-top:0.2rem; }
+    .addr-stat-card.warn { border-left:3px solid #f59e0b; }
+    .addr-stat-card.ok { border-left:3px solid #10b981; }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="dr-section">
+    <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+        <h2 style="margin:0;"><i class="fas fa-{% if kind=='from' %}paper-plane{% else %}envelope-open{% endif %}"></i> {{ title }} ({{ rows|length }})</h2>
+        {% if kind == 'from' %}
+        <form method="post" action="{{ url_for('addresses.auto_match_codcli') }}" style="display:inline;"
+              onsubmit="return confirm('Esegui auto-match codcli su tutti i mittenti senza codcli (cerca i domini nei clienti)?');">
+            <button class="dr-btn dr-btn-primary" style="width:auto;" title="Cerca i domini dei mittenti nei clienti per popolare codcli">
+                <i class="fas fa-link"></i> Auto-match codcli
+            </button>
+        </form>
+        {% endif %}
+    </div>
+    <p class="dr-hint">
+        {% if kind == 'from' %}
+        Anagrafica dei <strong>mittenti esterni</strong> visti dal listener. Il <code>codcli</code>
+        viene auto-derivato dal dominio: puoi sovrascriverlo manualmente qui sotto.
+        {% else %}
+        Anagrafica dei <strong>destinatari</strong> intercettati (utili per riconoscere alias non
+        mappati e creare nuove routes).
+        {% endif %}
+    </p>
+</section>
+
+<div class="addr-stats">
+    <div class="addr-stat-card">
+        <div class="label">Totale</div>
+        <div class="value">{{ stats.total }}</div>
+    </div>
+    {% if kind == 'from' %}
+    <div class="addr-stat-card ok">
+        <div class="label">Con codcli</div>
+        <div class="value">{{ stats.with_codcli }}</div>
+    </div>
+    <div class="addr-stat-card warn">
+        <div class="label">Senza codcli</div>
+        <div class="value">{{ stats.without_codcli }}</div>
+    </div>
+    {% endif %}
+    <div class="addr-stat-card">
+        <div class="label">Domini unici</div>
+        <div class="value">{{ stats.unique_domains }}</div>
+    </div>
+</div>
+
+<section class="dr-section">
+    <form method="get" class="dr-filters" style="display:flex; gap:0.4rem; flex-wrap:wrap;">
+        <input type="search" name="q" value="{{ search }}" placeholder="cerca email…" style="flex:1; min-width:180px;">
+        <input type="text" name="domain" value="{{ domain_filter or '' }}" placeholder="filtra per dominio (es. acme.com)" style="flex:1; min-width:180px;">
+        {% if kind == 'from' %}
+        <label style="display:inline-flex; align-items:center; gap:0.3rem; padding:0 0.5rem;">
+            <input type="checkbox" name="no_codcli" {% if no_codcli %}checked{% endif %}>
+            <small>solo senza codcli</small>
+        </label>
+        {% endif %}
+        <button class="dr-btn dr-btn-primary" style="width:auto;"><i class="fas fa-magnifying-glass"></i> Filtra</button>
+        <a href="{% if kind == 'from' %}{{ url_for('addresses.from_list') }}{% else %}{{ url_for('addresses.to_list') }}{% endif %}" class="dr-btn"><i class="fas fa-rotate-left"></i> Reset</a>
+    </form>
+</section>
+
+<div class="dr-table-wrap">
+<table class="dr-table">
+    <thead>
+        <tr>
+            <th>Email</th>
+            <th>Dominio</th>
+            <th>Codcli</th>
+            {% if kind == 'from' %}<th>Origine</th>{% endif %}
+            <th class="num">Visto</th>
+            <th>Prima</th>
+            <th>Ultima</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for a in rows %}
+        <tr>
+            <td class="mono">{{ a.email_address }}</td>
+            <td><small class="mono">{{ a.domain or '—' }}</small></td>
+            <td>
+                <form method="post" action="{{ url_for('addresses.address_set_codcli', kind=kind, addr_id=a.id) }}" style="display:inline-flex; gap:0.3rem;">
+                    <input type="text" name="codice_cliente" value="{{ a.codice_cliente or '' }}" style="width:90px; padding:0.2rem 0.4rem; font-size:0.82rem;">
+                    <button class="dr-btn" style="padding:0.2rem 0.5rem;" title="Salva"><i class="fas fa-save"></i></button>
+                </form>
+            </td>
+            {% if kind == 'from' %}
+            <td>
+                {% if a.codcli_source == 'manual' %}
+                <span class="dr-badge dr-badge-info">manuale</span>
+                {% elif a.codcli_source == 'auto' %}
+                <span class="dr-badge dr-badge-ok">auto</span>
+                {% else %}
+                <small style="color:#94a3b8;">—</small>
+                {% endif %}
+            </td>
+            {% endif %}
+            <td class="num">{{ a.seen_count }}</td>
+            <td><small>{{ a.first_seen_at }}</small></td>
+            <td><small>{{ a.last_seen_at }}</small></td>
+            <td style="white-space:nowrap;">
+                <a href="{{ url_for('rules.form_view') }}?prefill_from={{ a.email_address|urlencode }}"
+                   class="dr-btn" style="width:auto; padding:0.2rem 0.5rem;" title="Crea regola da questo indirizzo">
+                    <i class="fas fa-plus-circle"></i>
+                </a>
+                <form method="post" action="{{ url_for('addresses.address_delete', kind=kind, addr_id=a.id) }}" style="display:inline;"
+                      onsubmit="return confirm('Eliminare?');">
+                    <button class="dr-btn dr-btn-danger" style="width:auto; padding:0.2rem 0.5rem;" title="Elimina"><i class="fas fa-trash"></i></button>
+                </form>
+            </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="{% if kind=='from' %}8{% else %}7{% endif %}" class="dr-empty">Nessun indirizzo registrato. La lista si popola automaticamente quando il listener processa email.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endblock %}

@@ -1,0 +1,404 @@
+{% extends "admin/_base.html" %}
+{% block title %}{{ 'Nuovo figlio' if is_new else record.name }} — gruppo {{ parent.group_label }}{% endblock %}
+
+{% block extra_head %}
+<style>
+    .rc-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; max-width:1100px; }
+    .rc-card { background:#fff; border:1px solid #cbd5e1; border-radius:8px; overflow:hidden; }
+    .rc-card.full { grid-column:1 / -1; }
+    .rc-card > h3 { margin:0; padding:0.8rem 1.1rem; font-size:0.95rem; background:linear-gradient(180deg, #fafbfd 0%, #f4f6fa 100%); color:#0b2a4a; border-bottom:1px solid #cbd5e1; display:flex; align-items:center; gap:0.5rem; }
+    .rc-body { padding:1rem 1.1rem; }
+    .rc-row { display:grid; grid-template-columns:170px 1fr; gap:0.8rem; align-items:start; margin-bottom:0.7rem; }
+    .rc-row > label { font-weight:500; color:#0b2a4a; padding-top:0.4rem; font-size:0.88rem; }
+    .rc-row input[type="text"], .rc-row input[type="number"], .rc-row select, .rc-row textarea {
+        width:100%; padding:0.45rem 0.6rem; border:1px solid #cbd5e1; border-radius:5px; font-family:inherit; font-size:0.88rem;
+    }
+    .rc-row .help { font-size:0.78rem; color:#64748b; margin-top:0.2rem; }
+    .rc-action-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:0.5rem; }
+    .rc-action-card { border:1px solid #cbd5e1; border-radius:6px; padding:0.6rem; cursor:pointer; text-align:center; transition:all 0.12s; background:#fff; }
+    .rc-action-card:hover { border-color:#3b82f6; }
+    .rc-action-card.selected { border-color:#3b82f6; background:#dbeafe; box-shadow:0 0 0 2px rgba(59,130,246,0.18); }
+    .rc-action-card i { font-size:1.1rem; color:#3b82f6; display:block; margin-bottom:0.3rem; }
+    .rc-action-card .name { font-weight:600; font-size:0.82rem; }
+    .rc-action-fields { display:none; padding:0.7rem 0.9rem; background:#f8fafc; border-radius:6px; margin-top:0.5rem; border:1px solid #e2e8f0; }
+    .rc-action-fields.active { display:block; }
+    .inherited-block { background:#eff6ff; padding:0.5rem 0.7rem; border-radius:4px; font-size:0.82rem; }
+    .inherited-block code { background:#dbeafe; }
+    .effective-map { background:#0f172a; color:#e2e8f0; padding:0.7rem 0.9rem; border-radius:5px; font-family:ui-monospace, monospace; font-size:0.8rem; white-space:pre-wrap; }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="dr-section">
+    <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+        <a href="{{ url_for('rules.group_form_view', group_id=parent.id) }}" class="dr-btn">
+            <i class="fas fa-arrow-left"></i> Torna al gruppo
+        </a>
+        <h2 style="margin:0;">
+            {% if is_new %}<i class="fas fa-plus-circle"></i> Nuovo figlio
+            {% else %}<i class="fas fa-pen"></i> {{ record.name }}{% endif %}
+        </h2>
+        <span class="rule-badge-orphan" style="background:#fff; border:1px solid #cbd5e1;">in: <strong>{{ parent.group_label or parent.name }}</strong></span>
+    </div>
+
+    <div class="rule-inherit-banner" style="margin-top:0.7rem;">
+        <h4><i class="fas fa-link"></i> Ereditato dal gruppo padre (read-only)</h4>
+        <div style="display:flex; gap:1rem; flex-wrap:wrap; font-size:0.8rem;">
+            {% if parent.match_to_domain %}<span><strong>to_domain:</strong> <code>{{ parent.match_to_domain }}</code></span>{% endif %}
+            {% if parent.match_from_domain %}<span><strong>from_domain:</strong> <code>{{ parent.match_from_domain }}</code></span>{% endif %}
+            {% if parent.match_subject_regex %}<span><strong>subj:</strong> <code>{{ parent.match_subject_regex|truncate(40) }}</code></span>{% endif %}
+            {% if parent.match_in_service is not none %}<span><strong>in_service:</strong> <code>{{ 'sì' if parent.match_in_service else 'no' }}</code></span>{% endif %}
+            {% if parent.match_contract_active is not none %}<span><strong>contract:</strong> <code>{{ 'sì' if parent.match_contract_active else 'no' }}</code></span>{% endif %}
+            {% if parent.match_known_customer is not none %}<span><strong>known:</strong> <code>{{ 'sì' if parent.match_known_customer else 'no' }}</code></span>{% endif %}
+        </div>
+        {% if parent.action_map %}
+        <div style="margin-top:0.5rem; font-size:0.8rem;">
+            <strong>action_map defaults:</strong>
+            {% for k, v in parent.action_map.items() %}<code>{{ k }}={{ v }}</code> {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+</section>
+
+<form method="post">
+<div class="rc-grid">
+
+    <div class="rc-card">
+        <h3><i class="fas fa-id-card"></i> Identificazione</h3>
+        <div class="rc-body">
+            <div class="rc-row">
+                <label>Nome</label>
+                <input type="text" name="name" value="{{ record.name or '' }}" required placeholder="es. Auto-reply out_of_hours">
+            </div>
+            <div class="rc-row">
+                <label>Priority globale</label>
+                <div>
+                    <input type="number" name="priority" min="1" max="999999"
+                           value="{{ record.priority or (parent.priority + 10) }}" required>
+                    <div class="help">Deve essere &gt; <code>{{ parent.priority }}</code> (priority del padre).
+                        Suggerito gap di 10 fra figli.</div>
+                </div>
+            </div>
+            <div class="rc-row">
+                <label>Stato</label>
+                <label style="font-weight:normal;">
+                    <input type="checkbox" name="enabled" {% if record.enabled is not defined or record.enabled %}checked{% endif %}> Figlio attivo
+                </label>
+            </div>
+            <div class="rc-row">
+                <label>Continue in group</label>
+                <div>
+                    <label style="font-weight:normal;">
+                        <input type="checkbox" name="continue_in_group" {% if record.continue_in_group %}checked{% endif %}>
+                        Dopo match, valuta anche i fratelli successivi
+                    </label>
+                    <div class="help">Default OFF (STOP dopo il match). Tipico per eseguire più azioni in cascata nel gruppo.</div>
+                </div>
+            </div>
+            <div class="rc-row">
+                <label>Exit group + continue</label>
+                <div>
+                    <label style="font-weight:normal;">
+                        <input type="checkbox" name="exit_group_continue" {% if record.exit_group_continue %}checked{% endif %}>
+                        Continua nei fratelli e propaga ai top-level successivi
+                    </label>
+                    <div class="help">Si comporta come continue_in_group e forza l'ultimo figlio a propagare al top-level (utile per "esci dal blocco").</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="rc-card">
+        <h3><i class="fas fa-filter"></i> Match aggiuntivi (AND col padre)</h3>
+        <div class="rc-body">
+            <p class="help" style="margin-top:0;">Se vuoti, il figlio eredita esattamente i match del padre.
+                Valori incompatibili (es. <code>to_domain</code> diverso dal padre) vengono respinti dal validatore.</p>
+            <div class="rc-row">
+                <label>Subject regex</label>
+                <input type="text" name="match_subject_regex" value="{{ record.match_subject_regex or '' }}" placeholder="(?i)urgente|critico">
+            </div>
+            <div class="rc-row">
+                <label>From regex</label>
+                <input type="text" name="match_from_regex" value="{{ record.match_from_regex or '' }}">
+            </div>
+            <div class="rc-row">
+                <label>To regex</label>
+                <input type="text" name="match_to_regex" value="{{ record.match_to_regex or '' }}">
+            </div>
+            <div class="rc-row">
+                <label>Body regex</label>
+                <input type="text" name="match_body_regex" value="{{ record.match_body_regex or '' }}">
+            </div>
+            <div class="rc-row">
+                <label>From dominio</label>
+                <input type="text" name="match_from_domain" value="{{ record.match_from_domain or '' }}">
+            </div>
+            <div class="rc-row">
+                <label>To dominio</label>
+                <input type="text" name="match_to_domain" value="{{ record.match_to_domain or '' }}">
+            </div>
+            <div class="rc-row">
+                <label>Stato servizio</label>
+                <select name="match_in_service">
+                    <option value="" {% if record.match_in_service is none %}selected{% endif %}>indifferente</option>
+                    <option value="true" {% if record.match_in_service==1 %}selected{% endif %}>in orario</option>
+                    <option value="false" {% if record.match_in_service==0 %}selected{% endif %}>fuori orario</option>
+                </select>
+            </div>
+            <div class="rc-row">
+                <label>Contratto attivo</label>
+                <select name="match_contract_active">
+                    <option value="" {% if record.match_contract_active is none %}selected{% endif %}>indifferente</option>
+                    <option value="true" {% if record.match_contract_active==1 %}selected{% endif %}>con</option>
+                    <option value="false" {% if record.match_contract_active==0 %}selected{% endif %}>senza</option>
+                </select>
+            </div>
+            <div class="rc-row">
+                <label>Cliente noto</label>
+                <select name="match_known_customer">
+                    <option value="" {% if record.match_known_customer is none %}selected{% endif %}>indifferente</option>
+                    <option value="true" {% if record.match_known_customer==1 %}selected{% endif %}>censito</option>
+                    <option value="false" {% if record.match_known_customer==0 %}selected{% endif %}>non censito</option>
+                </select>
+            </div>
+            <div class="rc-row">
+                <label>Eccezione oggi</label>
+                <select name="match_has_exception_today">
+                    <option value="" {% if record.match_has_exception_today is none %}selected{% endif %}>indifferente</option>
+                    <option value="true" {% if record.match_has_exception_today==1 %}selected{% endif %}>solo se eccezione</option>
+                    <option value="false" {% if record.match_has_exception_today==0 %}selected{% endif %}>solo senza eccezione</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <div class="rc-card full">
+        <h3><i class="fas fa-bolt"></i> Azione</h3>
+        <div class="rc-body">
+            <input type="hidden" name="action" id="action-input" value="{{ record.action or 'auto_reply' }}">
+            <div class="rc-action-grid">
+                {% set actions = [
+                    ('auto_reply', 'Auto-reply', 'fa-reply'),
+                    ('create_ticket', 'Crea ticket', 'fa-ticket'),
+                    ('forward', 'Forward', 'fa-share'),
+                    ('redirect', 'Redirect', 'fa-arrow-right-arrow-left'),
+                    ('quarantine', 'Quarantena', 'fa-shield-virus'),
+                    ('flag_only', 'Flag only', 'fa-flag'),
+                    ('ignore', 'Ignora', 'fa-ban'),
+                    ('ai_classify', 'IA classifica', 'fa-robot'),
+                ] %}
+                {% for code, label, icon in actions %}
+                <div class="rc-action-card {% if (record.action or 'auto_reply') == code %}selected{% endif %}"
+                     data-action="{{ code }}" onclick="selectAction('{{ code }}')">
+                    <i class="fas {{ icon }}"></i>
+                    <div class="name">{{ label }}</div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <div class="rc-action-fields {% if (record.action or 'auto_reply') == 'auto_reply' %}active{% endif %}" data-action-fields="auto_reply">
+                <div class="rc-row">
+                    <label>Template</label>
+                    <select name="action_map_template_id">
+                        <option value="">— scegli —</option>
+                        {% for t in templates %}
+                        <option value="{{ t.id }}" {% if record.action_map and record.action_map.template_id == t.id %}selected{% endif %}>
+                            #{{ t.id }} — {{ t.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="rc-row">
+                    <label>Subject prefix</label>
+                    <input type="text" name="action_map_reply_subject_prefix"
+                           value="{{ record.action_map.reply_subject_prefix if record.action_map else '' }}"
+                           placeholder="Re: ">
+                </div>
+                <div class="rc-row">
+                    <label>Reply mode</label>
+                    <select name="action_map_reply_mode">
+                        <option value="">— eredita dal gruppo —</option>
+                        <option value="to_sender_only" {% if record.action_map and record.action_map.reply_mode=='to_sender_only' %}selected{% endif %}>to_sender_only</option>
+                        <option value="reply_all" {% if record.action_map and record.action_map.reply_mode=='reply_all' %}selected{% endif %}>reply_all</option>
+                        <option value="to_alias" {% if record.action_map and record.action_map.reply_mode=='to_alias' %}selected{% endif %}>to_alias</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="rc-action-fields {% if record.action == 'create_ticket' %}active{% endif %}" data-action-fields="create_ticket">
+                <div class="rc-row">
+                    <label>Settore</label>
+                    <input type="text" name="action_map_settore"
+                           value="{{ record.action_map.settore if record.action_map else '' }}"
+                           placeholder="assistenza">
+                </div>
+                <div class="rc-row">
+                    <label>Urgenza</label>
+                    <select name="action_map_urgenza">
+                        <option value="">—</option>
+                        <option value="BASSA" {% if record.action_map and record.action_map.urgenza=='BASSA' %}selected{% endif %}>BASSA</option>
+                        <option value="NORMALE" {% if record.action_map and record.action_map.urgenza=='NORMALE' %}selected{% endif %}>NORMALE</option>
+                        <option value="ALTA" {% if record.action_map and record.action_map.urgenza=='ALTA' %}selected{% endif %}>ALTA</option>
+                        <option value="CRITICA" {% if record.action_map and record.action_map.urgenza=='CRITICA' %}selected{% endif %}>CRITICA</option>
+                    </select>
+                </div>
+                <div class="rc-row">
+                    <label>Addetto</label>
+                    <input type="text" name="action_map_addetto_gestione"
+                           value="{{ record.action_map.addetto_gestione if record.action_map else '' }}">
+                </div>
+            </div>
+
+            <div class="rc-action-fields {% if record.action == 'forward' %}active{% endif %}" data-action-fields="forward">
+                <div class="rc-row">
+                    <label>Target</label>
+                    <input type="text" name="action_map_forward_target"
+                           value="{{ record.action_map.forward_target if record.action_map else '' }}"
+                           placeholder="smtp.partner.com">
+                </div>
+                <div class="rc-row">
+                    <label>Port</label>
+                    <input type="number" name="action_map_forward_port"
+                           value="{{ record.action_map.forward_port if record.action_map else '' }}">
+                </div>
+                <div class="rc-row">
+                    <label>TLS</label>
+                    <select name="action_map_forward_tls">
+                        <option value="opportunistic">opportunistic</option>
+                        <option value="strict" {% if record.action_map and record.action_map.forward_tls=='strict' %}selected{% endif %}>strict</option>
+                        <option value="none" {% if record.action_map and record.action_map.forward_tls=='none' %}selected{% endif %}>none</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="rc-action-fields {% if record.action == 'redirect' %}active{% endif %}" data-action-fields="redirect">
+                <div class="rc-row">
+                    <label>Redirect to</label>
+                    <input type="text" name="action_map_redirect_to"
+                           value="{{ record.action_map.redirect_to if record.action_map else '' }}"
+                           placeholder="ops@domarc.it">
+                </div>
+                <div class="rc-row">
+                    <label>Reason</label>
+                    <input type="text" name="action_map_reason"
+                           value="{{ record.action_map.reason if record.action_map else '' }}">
+                </div>
+            </div>
+
+            <div class="rc-action-fields {% if record.action == 'quarantine' %}active{% endif %}" data-action-fields="quarantine">
+                <div class="rc-row">
+                    <label>Reason</label>
+                    <input type="text" name="action_map_reason"
+                           value="{{ record.action_map.reason if record.action_map else '' }}">
+                </div>
+            </div>
+
+            {# ======================== AI CLASSIFY =========================== #}
+            <div class="rc-action-fields {% if record.action == 'ai_classify' %}active{% endif %}"
+                 data-action-fields="ai_classify"
+                 style="background:#f5f3ff; border:1px solid #c4b5fd;">
+                <div style="display:flex; gap:0.8rem; align-items:flex-start; margin-bottom:0.7rem;">
+                    <i class="fas fa-robot" style="font-size:1.6rem; color:#7c3aed;"></i>
+                    <div style="flex:1;">
+                        <h4 style="margin:0 0 0.2rem; color:#5b21b6; font-size:0.95rem;">L'IA classificherà ogni email che matcha questa regola</h4>
+                        <p style="margin:0; font-size:0.82rem; color:#6d28d9;">
+                            Job invocato: <code>classify_email</code>. Output: intent / urgenza / summary / suggested_action.
+                            In <strong>shadow mode</strong> la decisione è solo loggata.
+                        </p>
+                    </div>
+                </div>
+
+                <div style="background:#fff; border:1px solid #c4b5fd; border-radius:5px; padding:0.6rem 0.8rem; margin-bottom:0.6rem; font-size:0.85rem;">
+                    {% if ai_active_bindings and ai_active_bindings.get('classify_email') %}
+                    <strong>Binding attivo:</strong>
+                    {% for b in ai_active_bindings.get('classify_email') %}
+                    {% set p = ai_providers.get(b.provider_id) if ai_providers else None %}
+                    <span class="rule-status on">v{{ b.version }}</span>
+                    <strong>{{ p.name if p else '?' }}</strong> /
+                    <code>{{ b.model_id }}</code>
+                    {% if b.traffic_split != 100 %}<span class="rule-inherit-badge">{{ b.traffic_split }}%</span>{% endif %}
+                    <a href="{{ url_for('ai.model_form', binding_id=b.id) }}" style="font-size:0.78rem; margin-left:0.3rem;"><i class="fas fa-pen"></i></a>
+                    {% if not loop.last %}<br>{% endif %}
+                    {% endfor %}
+                    {% else %}
+                    <span style="color:#dc2626;">⚠ <strong>Nessun binding attivo</strong> per <code>classify_email</code> — fail-safe automatico.
+                        <a href="{{ url_for('ai.model_form') }}?job_code=classify_email">configura</a></span>
+                    {% endif %}
+                    {% if ai_global_status %}
+                    <div style="font-size:0.78rem; margin-top:0.4rem; color:#6b7280;">
+                        {% if ai_global_status.master_enabled %}<span class="rule-status on">AI master ON</span>{% else %}<span class="rule-status off">AI master OFF</span>{% endif %}
+                        {% if ai_global_status.shadow_mode %}<span class="rule-inherit-badge">SHADOW</span>{% else %}<span class="rule-status on">LIVE</span>{% endif %}
+                        — Costo oggi: ${{ '%.4f'|format(ai_global_status.spent_today or 0) }} / ${{ '%.2f'|format(ai_global_status.budget or 0) }}
+                    </div>
+                    {% endif %}
+                </div>
+
+                <div class="rc-row">
+                    <label>Timeout (ms)</label>
+                    <input type="number" name="action_map_timeout_ms"
+                           value="{{ record.action_map.timeout_ms if record.action_map and record.action_map.timeout_ms else 5000 }}"
+                           min="500" max="30000" step="500">
+                </div>
+                <div class="rc-row">
+                    <label>Tenant id</label>
+                    <input type="number" name="action_map_tenant_id"
+                           value="{{ record.action_map.tenant_id if record.action_map and record.action_map.tenant_id else 1 }}" min="1">
+                </div>
+
+                {% if ai_recent_decisions %}
+                <div style="margin-top:0.7rem;">
+                    <h5 style="margin:0 0 0.3rem; color:#5b21b6; font-size:0.85rem;">
+                        <i class="fas fa-history"></i> Ultime decisioni IA per questo figlio
+                    </h5>
+                    <table class="dr-table" style="background:#fff; font-size:0.8rem;">
+                        <thead><tr><th>Quando</th><th>Intent</th><th>Urgenza</th><th>Stato</th><th></th></tr></thead>
+                        <tbody>
+                        {% for d in ai_recent_decisions %}
+                        <tr>
+                            <td><small>{{ d.created_at }}</small></td>
+                            <td>{{ d.intent or '—' }}</td>
+                            <td>{{ d.urgenza_proposta or '—' }}</td>
+                            <td>{% if d.error %}<span class="rule-status off">err</span>
+                                {% elif d.shadow_mode %}<span class="rule-inherit-badge">shadow</span>
+                                {% else %}<span class="rule-status on">applied</span>{% endif %}</td>
+                            <td><a href="{{ url_for('ai.decision_detail', decision_id=d.id) }}">→</a></td>
+                        </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="rc-card full">
+        <h3><i class="fas fa-equals"></i> Anteprima action_map effettiva (read-only)</h3>
+        <div class="rc-body">
+            <p class="help" style="margin-top:0;">Risultato del merge tra defaults del gruppo padre e action_map del figlio. <strong>Le chiavi in azzurro sono ereditate dal padre.</strong></p>
+            <div class="effective-map">{
+{% for k, v in effective_action_map.items() -%}
+{%- set inherited = parent.action_map and parent.action_map.get(k) == v -%}
+  {% if inherited %}<span style="color:#7dd3fc">{% endif %}"{{ k }}": {{ v|tojson }}{% if not loop.last %},{% endif %}{% if inherited %}</span>{% endif %}
+{% endfor -%}
+}</div>
+        </div>
+    </div>
+</div>
+
+<div style="display:flex; gap:0.5rem; padding:1rem 0; max-width:1100px;">
+    <button type="submit" class="dr-btn dr-btn-primary" style="width:auto;">
+        <i class="fas fa-save"></i> {{ 'Crea figlio' if is_new else 'Salva' }}
+    </button>
+    <a href="{{ url_for('rules.group_form_view', group_id=parent.id) }}" class="dr-btn" style="width:auto;">Annulla</a>
+</div>
+</form>
+
+<script>
+function selectAction(code) {
+    document.querySelectorAll('.rc-action-card').forEach(el => el.classList.toggle('selected', el.dataset.action === code));
+    document.querySelectorAll('.rc-action-fields').forEach(el => el.classList.toggle('active', el.dataset.actionFields === code));
+    document.getElementById('action-input').value = code;
+}
+</script>
+{% endblock %}

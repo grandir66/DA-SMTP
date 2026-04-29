@@ -1,0 +1,135 @@
+{% extends "admin/_base.html" %}
+{% block title %}{{ 'Nuovo template' if is_new else record.name }}{% endblock %}
+
+{% block extra_head %}
+<style>
+    .tf-row { display:grid; grid-template-columns:160px 1fr; gap:0.8rem; align-items:start; margin-bottom:0.7rem; }
+    .tf-row label { font-weight:500; padding-top:0.4rem; color:#0b2a4a; font-size:0.88rem; }
+    .tf-row input[type=text], .tf-row textarea { width:100%; padding:0.45rem 0.6rem; border:1px solid #cbd5e1; border-radius:5px; font-family:inherit; font-size:0.88rem; }
+    .tf-row .help { font-size:0.78rem; color:#64748b; margin-top:0.2rem; }
+    textarea.html-editor { font-family:ui-monospace, Menlo, monospace; font-size:0.82rem; min-height:240px; }
+    .att-row { display:flex; align-items:center; gap:0.5rem; padding:0.4rem 0.6rem; border:1px solid #cbd5e1; border-radius:5px; margin-bottom:0.3rem; background:#fff; }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="dr-section">
+    <div style="display:flex; gap:0.5rem; align-items:center;">
+        <a href="{{ url_for('templates.list_view') }}" class="dr-btn"><i class="fas fa-arrow-left"></i> Lista</a>
+        <h2 style="margin:0;">
+            {% if is_new %}<i class="fas fa-plus-circle"></i> Nuovo template{% else %}<i class="fas fa-pen"></i> {{ record.name }}{% endif %}
+        </h2>
+    </div>
+</section>
+
+<form method="post" action="" style="max-width:900px;">
+<section class="dr-card">
+    <div class="tf-row">
+        <label>Nome *</label>
+        <input type="text" name="name" required maxlength="100" value="{{ record.name or '' }}" placeholder="es. out_of_hours_assistenza">
+    </div>
+    <div class="tf-row">
+        <label>Descrizione</label>
+        <input type="text" name="description" value="{{ record.description or '' }}">
+    </div>
+    <div class="tf-row">
+        <label>Oggetto *</label>
+        <input type="text" name="subject_tmpl" required value="{{ record.subject_tmpl or '' }}" placeholder="Re: {{ '{{subject}}' }} — risposta fuori orario">
+    </div>
+    <div class="tf-row">
+        <label>Corpo HTML *</label>
+        <div>
+            <textarea name="body_html_tmpl" class="html-editor" required>{{ record.body_html_tmpl or '' }}</textarea>
+            <div class="help">Jinja2 sandboxed. Variabili disponibili: <code>{{ '{{ from_address }}' }}</code>, <code>{{ '{{ codice_cliente }}' }}</code>, <code>{{ '{{ subject }}' }}</code>, <code>{{ '{{ auth_code }}' }}</code>.</div>
+        </div>
+    </div>
+    <div class="tf-row">
+        <label>Corpo testo</label>
+        <textarea name="body_text_tmpl" rows="4">{{ record.body_text_tmpl or '' }}</textarea>
+    </div>
+    <div class="tf-row">
+        <label>Mittente: nome</label>
+        <input type="text" name="reply_from_name" value="{{ record.reply_from_name or '' }}" placeholder="Assistenza Domarc">
+    </div>
+    <div class="tf-row">
+        <label>Mittente: email</label>
+        <input type="text" name="reply_from_email" value="{{ record.reply_from_email or '' }}" placeholder="lascia vuoto per default SMTP">
+    </div>
+    <div class="tf-row">
+        <label>Stato</label>
+        <div>
+            <label style="font-weight:400;">
+                <input type="checkbox" name="enabled" {% if record.enabled or is_new %}checked{% endif %}>
+                Attivo
+            </label>
+        </div>
+    </div>
+
+    {% if not is_new %}
+    <div class="tf-row">
+        <label>Allegati</label>
+        <div id="att-section">
+            <div id="att-list">
+                {% for a in record.attachment_paths or [] %}
+                <div class="att-row">
+                    <i class="fas fa-paperclip" style="color:#6b7280;"></i>
+                    <div style="flex:1;">
+                        <strong>{{ a.original_name or a.filename }}</strong>
+                        <small style="color:#6b7280;"> · {{ '%.1f'|format(a.size / 1024) if a.size else '?' }} KiB · {{ a.mimetype or '' }}</small>
+                    </div>
+                    <a href="{{ url_for('templates.attachment_handler', template_id=record.id, filename=a.filename) }}"
+                       class="dr-btn" target="_blank"><i class="fas fa-download"></i></a>
+                    <button type="button" class="dr-btn dr-btn-danger" style="width:auto;"
+                            onclick="deleteAtt('{{ a.filename }}')"><i class="fas fa-trash"></i></button>
+                </div>
+                {% else %}
+                <small style="color:#64748b;">Nessun allegato.</small>
+                {% endfor %}
+            </div>
+            <input type="file" id="att-file" style="display:none;" onchange="uploadAtt(this.files[0])">
+            <button type="button" class="dr-btn" style="width:auto; margin-top:0.4rem;" onclick="document.getElementById('att-file').click()">
+                <i class="fas fa-upload"></i> Aggiungi allegato
+            </button>
+            <small style="color:#64748b; margin-left:0.5rem;">Max 10 MiB · max 20 file</small>
+        </div>
+    </div>
+    {% else %}
+    <div class="tf-row">
+        <label>Allegati</label>
+        <small style="color:#64748b; padding-top:0.4rem;">Salva il template prima di aggiungere allegati.</small>
+    </div>
+    {% endif %}
+
+    <div style="display:flex; gap:0.5rem; padding-top:1rem; border-top:1px solid #e2e8f0;">
+        <a href="{{ url_for('templates.list_view') }}" class="dr-btn">Annulla</a>
+        <button type="submit" class="dr-btn dr-btn-primary" style="margin-left:auto; width:auto;">
+            <i class="fas fa-save"></i> {{ 'Crea template' if is_new else 'Salva modifiche' }}
+        </button>
+    </div>
+</section>
+</form>
+
+{% if not is_new %}
+<script>
+async function uploadAtt(file) {
+    if (!file) return;
+    var fd = new FormData(); fd.append('file', file);
+    try {
+        const r = await fetch('{{ url_for("templates.attachment_upload", template_id=record.id) }}', {method:'POST', body:fd});
+        const res = await r.json();
+        if (res.ok) location.reload();
+        else alert('Errore: ' + (res.error || ''));
+    } catch (e) { alert('Errore di rete: ' + e); }
+}
+async function deleteAtt(filename) {
+    if (!confirm('Eliminare l\'allegato?')) return;
+    try {
+        const r = await fetch('{{ url_for("templates.attachment_handler", template_id=record.id, filename="__FN__") }}'.replace('__FN__', encodeURIComponent(filename)), {method:'DELETE'});
+        const res = await r.json();
+        if (res.ok) location.reload();
+        else alert('Errore: ' + (res.error || ''));
+    } catch (e) { alert('Errore di rete: ' + e); }
+}
+</script>
+{% endif %}
+{% endblock %}

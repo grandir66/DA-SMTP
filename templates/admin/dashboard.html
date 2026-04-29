@@ -1,0 +1,177 @@
+{% extends "admin/_base.html" %}
+{% block title %}Dashboard — Domarc SMTP Relay{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+    .dr-kpi-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:0.8rem; margin-bottom:1.2rem; }
+    .dr-kpi { background:#fff; border:1px solid var(--dr-gray); border-left:4px solid var(--dr-blue); border-radius:8px; padding:0.9rem 1.1rem; }
+    .dr-kpi.success { border-left-color:#10b981; }
+    .dr-kpi.warning { border-left-color:#f59e0b; }
+    .dr-kpi.danger { border-left-color:#ef4444; }
+    .dr-kpi .label { font-size:0.78rem; color:var(--dr-gray-dark); text-transform:uppercase; letter-spacing:0.04em; margin-bottom:0.4rem; }
+    .dr-kpi .value { font-size:1.7rem; font-weight:600; color:var(--dr-primary); line-height:1.1; }
+    .dr-kpi .sub { font-size:0.78rem; color:var(--dr-gray-dark); margin-top:0.3rem; }
+    .dr-kpi a { color:inherit; text-decoration:none; display:block; }
+    .charts-grid { display:grid; grid-template-columns:repeat(2, 1fr); gap:1rem; margin-bottom:1.2rem; }
+    @media (max-width: 900px) { .charts-grid { grid-template-columns:1fr; } }
+    .chart-card { background:#fff; border:1px solid var(--dr-gray); border-radius:8px; padding:0.9rem 1.1rem; }
+    .chart-card h3 { margin:0 0 0.6rem 0; color:var(--dr-primary); font-size:0.95rem; display:flex; align-items:center; gap:0.4rem; }
+    .chart-canvas-wrap { position:relative; height:240px; }
+    .top-list .row { display:flex; justify-content:space-between; padding:0.4rem 0; border-bottom:1px solid #f1f5f9; font-size:0.85rem; }
+    .top-list .row:last-child { border-bottom:none; }
+    .top-list .name { font-family:ui-monospace,Menlo,monospace; font-size:0.78rem; max-width:75%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .top-list .count { font-weight:600; color:var(--dr-blue); }
+    .top-list .empty { color:var(--dr-gray-dark); font-size:0.85rem; font-style:italic; padding:0.4rem 0; }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="dr-section">
+    <h2><i class="fas fa-gauge-high"></i> Dashboard
+        {% if tenant_ctx and tenant_ctx.current_tenant %}
+        — <small>tenant <code>{{ tenant_ctx.current_tenant.codice }}</code> ({{ tenant_ctx.current_tenant.ragione_sociale }})</small>
+        {% endif %}
+    </h2>
+</section>
+
+<div class="dr-kpi-grid">
+    <div class="dr-kpi {% if kpi.events_24h > 0 %}success{% endif %}">
+        <a href="{{ url_for('events.list_view') }}">
+            <div class="label"><i class="fas fa-stream"></i> Eventi 24h</div>
+            <div class="value">{{ kpi.events_24h }}</div>
+            <div class="sub">totale: {{ kpi.events_total }}</div>
+        </a>
+    </div>
+    <div class="dr-kpi {% if kpi.rules > 0 %}success{% else %}warning{% endif %}">
+        <a href="{{ url_for('rules.list_view') }}">
+            <div class="label"><i class="fas fa-filter"></i> Regole attive</div>
+            <div class="value">{{ kpi.rules }}</div>
+        </a>
+    </div>
+    <div class="dr-kpi {% if kpi.templates > 0 %}success{% else %}warning{% endif %}">
+        <a href="{{ url_for('templates.list_view') }}">
+            <div class="label"><i class="fas fa-envelope-open-text"></i> Template</div>
+            <div class="value">{{ kpi.templates }}</div>
+        </a>
+    </div>
+    <div class="dr-kpi {% if kpi.occurrences_with_ticket > 0 %}danger{% elif kpi.occurrences_active > 0 %}warning{% endif %}">
+        <a href="{{ url_for('aggregations.occurrences_view') }}">
+            <div class="label"><i class="fas fa-layer-group"></i> Occ. attive</div>
+            <div class="value">{{ kpi.occurrences_active }}</div>
+            <div class="sub">{{ kpi.occurrences_with_ticket }} con ticket</div>
+        </a>
+    </div>
+    <div class="dr-kpi">
+        <a href="{{ url_for('auth_codes.list_view') }}">
+            <div class="label"><i class="fas fa-key"></i> Codici attivi</div>
+            <div class="value">{{ kpi.auth_codes_active }}</div>
+        </a>
+    </div>
+</div>
+
+<div class="charts-grid">
+    <div class="chart-card">
+        <h3><i class="fas fa-chart-line"></i> Eventi delle ultime 24 ore</h3>
+        <div class="chart-canvas-wrap"><canvas id="chartTimeline"></canvas></div>
+    </div>
+    <div class="chart-card">
+        <h3><i class="fas fa-chart-pie"></i> Azioni eseguite (24h)</h3>
+        <div class="chart-canvas-wrap"><canvas id="chartActions"></canvas></div>
+    </div>
+    <div class="chart-card">
+        <h3><i class="fas fa-paper-plane"></i> Top mittenti (24h)</h3>
+        <div class="top-list">
+            {% for addr, count in stats.top_senders %}
+            <div class="row"><span class="name" title="{{ addr }}">{{ addr }}</span><span class="count">{{ count }}</span></div>
+            {% else %}
+            <div class="empty">— nessun mittente —</div>
+            {% endfor %}
+        </div>
+    </div>
+    <div class="chart-card">
+        <h3><i class="fas fa-envelope-open"></i> Top destinatari (24h)</h3>
+        <div class="top-list">
+            {% for addr, count in stats.top_recipients %}
+            <div class="row"><span class="name" title="{{ addr }}">{{ addr }}</span><span class="count">{{ count }}</span></div>
+            {% else %}
+            <div class="empty">— nessun destinatario —</div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<div class="dr-grid" style="display:grid; grid-template-columns:repeat(3, 1fr); gap:1rem;">
+    <div class="dr-card">
+        <h3><i class="fas fa-database"></i> Storage</h3>
+        <dl>
+            <dt>Backend</dt><dd><code>{{ storage_health.backend }}</code></dd>
+            <dt>Schema</dt><dd>v{{ storage_health.schema_version }}</dd>
+            <dt>Tenants</dt><dd>{{ storage_health.tenants_count }}</dd>
+            <dt>Eventi totali</dt><dd>{{ storage_health.events_count }}</dd>
+        </dl>
+        {% if storage_health.ok %}<span class="dr-badge dr-badge-ok">attivo</span>{% else %}<span class="dr-badge dr-badge-error">{{ storage_health.error }}</span>{% endif %}
+    </div>
+    <div class="dr-card">
+        <h3><i class="fas fa-users"></i> Customer source</h3>
+        <dl>
+            <dt>Backend</dt><dd><code>{{ customer_source_health.backend }}</code></dd>
+            <dt>Clienti</dt><dd>{{ customer_source_health.count or 0 }}</dd>
+            {% if customer_source_health.last_error %}<dt>Errore</dt><dd style="color:#b91c1c;">{{ customer_source_health.last_error }}</dd>{% endif %}
+        </dl>
+    </div>
+    <div class="dr-card">
+        <h3><i class="fas fa-circle-info"></i> Stato</h3>
+        <dl>
+            <dt>Ultimo evento</dt><dd><small>{{ stats.last_event_seen or '— mai —' }}</small></dd>
+            <dt>Aggregazioni</dt><dd>{{ stats.aggregations_active }} attive</dd>
+        </dl>
+    </div>
+</div>
+
+<script>
+const hourlyData = {{ stats.hourly_series | tojson }};
+if (hourlyData.length > 0) {
+    const labels = hourlyData.map(d => {
+        try { const dt = new Date(d.hour); return String(dt.getHours()).padStart(2,'0') + ':00'; }
+        catch(e) { return ''; }
+    });
+    new Chart(document.getElementById('chartTimeline').getContext('2d'), {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [
+                { label:'Eventi totali', data:hourlyData.map(d=>d.total),
+                  borderColor:'#0ea5e9', backgroundColor:'rgba(14,165,233,0.15)',
+                  fill:true, tension:0.3, borderWidth:2 },
+                { label:'Con ticket', data:hourlyData.map(d=>d.tickets),
+                  borderColor:'#ef4444', backgroundColor:'rgba(239,68,68,0.1)',
+                  fill:false, tension:0.3, borderWidth:2 },
+            ],
+        },
+        options: { responsive:true, maintainAspectRatio:false,
+            scales:{y:{beginAtZero:true, ticks:{stepSize:1, precision:0}}},
+            plugins:{legend:{position:'bottom'}} },
+    });
+}
+
+const actionsData = {{ stats.actions_breakdown | tojson }};
+if (actionsData.length > 0) {
+    const colors = {
+        'create_ticket':'#2563eb','auto_reply':'#10b981','forward':'#f59e0b',
+        'redirect':'#a855f7','quarantine':'#ef4444','flag_only':'#94a3b8',
+        'ignore':'#cbd5e1','default_delivery':'#6b7280'
+    };
+    new Chart(document.getElementById('chartActions').getContext('2d'), {
+        type:'doughnut',
+        data:{labels:actionsData.map(a=>a[0]), datasets:[{
+            data:actionsData.map(a=>a[1]),
+            backgroundColor:actionsData.map(a=>colors[a[0]] || '#94a3b8'),
+            borderWidth:0,
+        }]},
+        options:{responsive:true, maintainAspectRatio:false,
+                 plugins:{legend:{position:'right'}}, cutout:'55%'},
+    });
+}
+</script>
+{% endblock %}

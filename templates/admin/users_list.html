@@ -1,0 +1,89 @@
+{% extends "admin/_base.html" %}
+{% block title %}Utenti{% endblock %}
+
+{% block extra_head %}
+<style>
+    .role-badge { display:inline-block; padding:0.18rem 0.5rem; border-radius:11px; font-size:0.74rem; font-weight:500; }
+    .role-badge.superadmin { background:#fee2e2; color:#b91c1c; }
+    .role-badge.admin      { background:#dbeafe; color:#1d4ed8; }
+    .role-badge.tech       { background:#d1fae5; color:#047857; }
+    .role-badge.readonly   { background:#f1f5f9; color:#475569; }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="dr-section">
+    <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+        <h2 style="margin:0;"><i class="fas fa-user-shield"></i> Utenti ({{ users|length }})</h2>
+        <a href="{{ url_for('users.form_view') }}" class="dr-btn dr-btn-primary" style="width:auto;">
+            <i class="fas fa-plus"></i> Nuovo utente
+        </a>
+    </div>
+    <p class="dr-hint">
+        {% if is_superadmin %}
+        Stai gestendo <strong>tutti</strong> gli utenti del sistema (sei superadmin).
+        Puoi creare utenti di qualsiasi ruolo e tenant.
+        {% else %}
+        Stai gestendo gli utenti del <strong>tuo tenant</strong>. Puoi creare admin/tech/readonly.
+        I superadmin sono visibili in lista ma non modificabili da te.
+        {% endif %}
+    </p>
+</section>
+
+<div class="dr-table-wrap">
+<table class="dr-table">
+    <thead>
+        <tr>
+            <th>Username</th>
+            <th>Nome completo</th>
+            <th>Email</th>
+            <th>Ruolo</th>
+            <th>Tenant</th>
+            <th>Stato</th>
+            <th>Ultimo login</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for u in users %}
+        <tr {% if not u.enabled %}style="opacity:0.55;"{% endif %}>
+            <td><strong>{{ u.username }}</strong>
+                {% if u.id == session.user_id %}<small style="color:#3b82f6;"> (tu)</small>{% endif %}
+            </td>
+            <td>{{ u.full_name or '—' }}</td>
+            <td><small>{{ u.email or '—' }}</small></td>
+            <td><span class="role-badge {{ u.role }}">{{ u.role }}</span></td>
+            <td>
+                {% if u.role == 'superadmin' %}
+                <small style="color:#b91c1c;">— globale —</small>
+                {% else %}
+                <code>{{ u.tenant_codice }}</code>
+                {% endif %}
+            </td>
+            <td>{% if u.enabled %}<span class="dr-badge dr-badge-ok">attivo</span>{% else %}<span class="dr-badge dr-badge-error">disabilitato</span>{% endif %}</td>
+            <td><small>{{ u.last_login_at or '—' }}</small></td>
+            <td style="white-space:nowrap;">
+                {% if is_superadmin or u.role != 'superadmin' %}
+                <a href="{{ url_for('users.form_view', user_id=u.id) }}" class="dr-btn" style="width:auto; padding:0.2rem 0.5rem;" title="Modifica">
+                    <i class="fas fa-pen"></i>
+                </a>
+                {% if u.id != session.user_id %}
+                <form method="post" action="{{ url_for('users.delete_view', user_id=u.id) }}" style="display:inline;"
+                      onsubmit="return confirm('Eliminare l\'utente {{ u.username }}?');">
+                    <button class="dr-btn dr-btn-danger" style="width:auto; padding:0.2rem 0.5rem;" title="Elimina">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </form>
+                {% endif %}
+                {% else %}
+                <small style="color:#94a3b8;">solo superadmin</small>
+                {% endif %}
+            </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" class="dr-empty">Nessun utente configurato. <a href="{{ url_for('users.form_view') }}">Creane uno</a>.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endblock %}

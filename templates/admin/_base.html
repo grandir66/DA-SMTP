@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Domarc SMTP Relay{% endblock %}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Signika:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    <header class="dr-header">
+        <div class="dr-brand">
+            <i class="fas fa-tower-broadcast"></i>
+            <strong>Domarc</strong>
+            <small>SMTP Relay Admin</small>
+            <a href="{{ url_for('manual.view') }}" title="Manuale auto-generato"
+               style="color:rgba(255,255,255,0.6); font-size:0.75rem; text-decoration:none; margin-left:0.5rem;">
+                v{{ session.get('app_version') or '0.2.0' }}
+            </a>
+        </div>
+        {% if session.get('username') %}
+        {% set ep = request.endpoint or '' %}
+        {% set in_ops = ep.startswith('dashboard') or ep.startswith('events') or ep.startswith('routes') %}
+        {% set in_rules = ep.startswith('rules') or ep.startswith('templates') or ep.startswith('aggregations') or ep.startswith('auth_codes') %}
+        {% set in_anag = ep.startswith('customers') or ep.startswith('addresses') or ep.startswith('domains') %}
+        {% set in_orari = ep.startswith('service_hours') or ep.startswith('profiles') %}
+        {% set in_config = ep.startswith('settings') or ep.startswith('connection') or ep.startswith('tenants') or ep.startswith('users') %}
+        <nav class="dr-mainnav">
+            <a href="{{ url_for('dashboard.index') }}" class="{% if ep.startswith('dashboard') %}active{% endif %}">
+                <i class="fas fa-gauge-high"></i> Dashboard
+            </a>
+            <div class="dr-nav-dropdown {% if in_ops %}active{% endif %}">
+                <button type="button" class="dr-nav-btn"><i class="fas fa-stream"></i> Operazioni <i class="fas fa-caret-down"></i></button>
+                <div class="dr-nav-menu">
+                    <a href="{{ url_for('events.list_view') }}" class="{% if ep.startswith('events') %}active{% endif %}"><i class="fas fa-stream"></i> Eventi</a>
+                    <a href="{{ url_for('routes.routes_list') }}" class="{% if ep.startswith('routes') %}active{% endif %}"><i class="fas fa-route"></i> Mail intercettate</a>
+                </div>
+            </div>
+            <div class="dr-nav-dropdown {% if in_rules %}active{% endif %}">
+                <button type="button" class="dr-nav-btn"><i class="fas fa-filter"></i> Regole <i class="fas fa-caret-down"></i></button>
+                <div class="dr-nav-menu">
+                    <a href="{{ url_for('rules.list_view') }}" class="{% if ep.startswith('rules') %}active{% endif %}"><i class="fas fa-filter"></i> Regole SMTP</a>
+                    <a href="{{ url_for('templates.list_view') }}" class="{% if ep.startswith('templates') %}active{% endif %}"><i class="fas fa-envelope-open-text"></i> Template</a>
+                    <a href="{{ url_for('aggregations.list_view') }}" class="{% if ep.startswith('aggregations') %}active{% endif %}"><i class="fas fa-layer-group"></i> Aggregazioni errori</a>
+                    <a href="{{ url_for('auth_codes.list_view') }}" class="{% if ep.startswith('auth_codes') %}active{% endif %}"><i class="fas fa-key"></i> Codici autorizzazione</a>
+                </div>
+            </div>
+            <div class="dr-nav-dropdown {% if in_anag %}active{% endif %}">
+                <button type="button" class="dr-nav-btn"><i class="fas fa-address-book"></i> Anagrafiche <i class="fas fa-caret-down"></i></button>
+                <div class="dr-nav-menu">
+                    <a href="{{ url_for('customers.list_view') }}" class="{% if ep.startswith('customers') %}active{% endif %}"><i class="fas fa-users"></i> Clienti</a>
+                    <a href="{{ url_for('addresses.from_list') }}" class="{% if ep == 'addresses.from_list' or ep == 'addresses.auto_match_codcli' %}active{% endif %}"><i class="fas fa-paper-plane"></i> Mittenti</a>
+                    <a href="{{ url_for('addresses.to_list') }}" class="{% if ep == 'addresses.to_list' %}active{% endif %}"><i class="fas fa-envelope-open"></i> Destinatari</a>
+                    <a href="{{ url_for('domains.domains_list') }}" class="{% if ep.startswith('domains') %}active{% endif %}"><i class="fas fa-globe"></i> Domini</a>
+                    {% if session.role in ('admin', 'superadmin') %}
+                    <a href="{{ url_for('privacy_bypass.index') }}" class="{% if ep.startswith('privacy_bypass') %}active{% endif %}" style="color:#dc2626;"><i class="fas fa-user-shield"></i> Privacy bypass</a>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="dr-nav-dropdown {% if in_orari %}active{% endif %}">
+                <button type="button" class="dr-nav-btn"><i class="fas fa-clock"></i> Orari <i class="fas fa-caret-down"></i></button>
+                <div class="dr-nav-menu">
+                    <a href="{{ url_for('service_hours.list_view') }}" class="{% if ep.startswith('service_hours') %}active{% endif %}"><i class="fas fa-clock"></i> Orari per cliente</a>
+                    <a href="{{ url_for('profiles.list_view') }}" class="{% if ep.startswith('profiles') %}active{% endif %}"><i class="fas fa-business-time"></i> Profili orari</a>
+                </div>
+            </div>
+            <div class="dr-nav-dropdown {% if in_config %}active{% endif %}">
+                <button type="button" class="dr-nav-btn"><i class="fas fa-gear"></i> Configurazione <i class="fas fa-caret-down"></i></button>
+                <div class="dr-nav-menu">
+                    {% if session.role in ('admin', 'superadmin') %}
+                    <a href="{{ url_for('users.list_view') }}" class="{% if ep.startswith('users') %}active{% endif %}"><i class="fas fa-user-shield"></i> Utenti</a>
+                    <a href="{{ url_for('ai.dashboard') }}" class="{% if ep.startswith('ai.') %}active{% endif %}" style="color:#7c3aed;"><i class="fas fa-robot"></i> AI Assistant</a>
+                    {% endif %}
+                    <a href="{{ url_for('settings.settings_view') }}" class="{% if ep.startswith('settings') %}active{% endif %}"><i class="fas fa-sliders"></i> Settings</a>
+                    {% if session.role in ('admin', 'superadmin') %}
+                    <a href="{{ url_for('secrets_modules.api_keys_list') }}" class="{% if ep.startswith('secrets_modules.api') %}active{% endif %}"><i class="fas fa-key"></i> Chiavi API</a>
+                    <a href="{{ url_for('secrets_modules.modules_list') }}" class="{% if ep.startswith('secrets_modules.module') %}active{% endif %}"><i class="fas fa-cube"></i> Moduli Python</a>
+                    {% endif %}
+                    <a href="{{ url_for('connection.connection_view') }}" class="{% if ep.startswith('connection') %}active{% endif %}"><i class="fas fa-plug"></i> Connessione &amp; API</a>
+                    {% if session.role == 'superadmin' %}
+                    <a href="{{ url_for('tenants.list_view') }}" class="{% if ep.startswith('tenants') %}active{% endif %}"><i class="fas fa-users-rectangle"></i> Tenant</a>
+                    {% endif %}
+                </div>
+            </div>
+        </nav>
+        <div class="dr-user">
+            {% if tenant_ctx and tenant_ctx.can_switch_tenant and tenant_ctx.tenants_count > 1 %}
+            <form method="get" action="" class="dr-tenant-switcher" title="Switch tenant (superadmin)">
+                <select name="tenant_id" onchange="this.form.submit()">
+                    {% for t in tenant_ctx.tenants %}
+                    <option value="{{ t.id }}" {% if t.id == tenant_ctx.current_tenant_id %}selected{% endif %}>
+                        {{ t.codice }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </form>
+            {% elif tenant_ctx and tenant_ctx.current_tenant %}
+            <span class="dr-tenant-label" title="Tenant del tuo account">
+                <i class="fas fa-user-tie"></i> {{ tenant_ctx.current_tenant.codice }}
+            </span>
+            {% endif %}
+            <span><i class="fas fa-user"></i> {{ session.username }} <small>({{ session.role or 'viewer' }})</small></span>
+            <a href="{{ url_for('auth.logout') }}" class="dr-logout">
+                <i class="fas fa-sign-out-alt"></i> Esci
+            </a>
+        </div>
+        {% endif %}
+    </header>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <div class="dr-flashes">
+        {% for category, msg in messages %}
+        <div class="dr-flash dr-flash-{{ category }}">{{ msg }}</div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% endwith %}
+    <main class="dr-main">
+        {% block content %}{% endblock %}
+    </main>
+    <footer class="dr-footer">
+        Domarc SMTP Relay Admin v{{ DOMARC_RELAY_VERSION }} · open core (MIT)
+    </footer>
+</body>
+</html>

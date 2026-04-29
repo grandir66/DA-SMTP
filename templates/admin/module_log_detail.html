@@ -1,0 +1,28 @@
+{% extends "admin/_base.html" %}
+{% block title %}Log #{{ entry.id }}{% endblock %}
+{% block content %}
+<section class="dr-section">
+    <a href="{{ url_for('secrets_modules.modules_list') }}" class="dr-btn"><i class="fas fa-arrow-left"></i> Moduli</a>
+    <h2 style="margin:0.5rem 0;"><i class="fas fa-file-lines"></i> Log #{{ entry.id }} — {{ entry.module_code }}</h2>
+</section>
+
+<div class="dr-card" style="background:#fff; border:1px solid #cbd5e1; border-radius:8px; padding:1rem; max-width:1100px;">
+    <div class="dr-form-row"><label>Modulo</label><div><code>{{ entry.module_code }}</code></div></div>
+    <div class="dr-form-row"><label>Operazione</label><div>{{ entry.operation }}</div></div>
+    <div class="dr-form-row"><label>Stato</label><div>
+        {% if entry.status == 'success' %}<span class="rule-status on">success</span>
+        {% elif entry.status == 'failed' %}<span class="rule-status off">failed</span>
+        {% else %}<small>{{ entry.status }}</small>{% endif %}
+    </div></div>
+    <div class="dr-form-row"><label>Return code</label><div>{{ entry.return_code }}</div></div>
+    <div class="dr-form-row"><label>Durata</label><div>{{ entry.duration_ms }}ms</div></div>
+    <div class="dr-form-row"><label>Operatore</label><div>{{ entry.actor or '—' }}</div></div>
+    <div class="dr-form-row"><label>Started</label><div>{{ entry.started_at }}</div></div>
+    <div class="dr-form-row"><label>Finished</label><div>{{ entry.finished_at or '—' }}</div></div>
+</div>
+
+<div class="dr-card" style="background:#fff; border:1px solid #cbd5e1; border-radius:8px; padding:1rem; margin-top:1rem; max-width:1100px;">
+    <h3 style="margin:0 0 0.5rem; color:var(--dr-primary);">Output</h3>
+    <pre style="background:#0f172a; color:#e2e8f0; padding:1rem; border-radius:5px; overflow:auto; max-height:500px; font-size:0.78rem;">{{ entry.output or '— nessun output —' }}</pre>
+</div>
+{% endblock %}

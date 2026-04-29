@@ -1,0 +1,55 @@
+{% extends "admin/_base.html" %}
+{% block title %}{{ 'Nuova chiave API' if is_new else record.name }}{% endblock %}
+{% block content %}
+<section class="dr-section">
+    <a href="{{ url_for('secrets_modules.api_keys_list') }}" class="dr-btn"><i class="fas fa-arrow-left"></i> Lista chiavi</a>
+    <h2 style="margin:0.5rem 0;">
+        {% if is_new %}<i class="fas fa-plus-circle"></i> Nuova chiave API
+        {% else %}<i class="fas fa-pen"></i> {{ record.name }}{% endif %}
+    </h2>
+</section>
+
+<form method="post" style="background:#fff; border:1px solid #cbd5e1; border-radius:8px; padding:1.2rem; max-width:700px;">
+    <div class="dr-form-row">
+        <label>Nome</label>
+        <div>
+            <input type="text" name="name" value="{{ record.name or '' }}" required placeholder="Claude API production">
+            <div class="help">Etichetta umana per identificare la chiave.</div>
+        </div>
+    </div>
+    <div class="dr-form-row">
+        <label>Env var</label>
+        <div>
+            <input type="text" name="env_var_name" value="{{ record.env_var_name or 'ANTHROPIC_API_KEY' }}" required>
+            <div class="help">Nome della variabile d'ambiente che il provider leggerà (es. <code>ANTHROPIC_API_KEY</code>).</div>
+        </div>
+    </div>
+    <div class="dr-form-row">
+        <label>Valore</label>
+        <div>
+            {% if is_new %}
+            <input type="password" name="value" required autocomplete="new-password" placeholder="sk-ant-api03-...">
+            <div class="help">La chiave viene cifrata Fernet prima di essere salvata. Solo l'app può decifrarla.</div>
+            {% else %}
+            <div style="margin-bottom:0.4rem;">Attuale: <code>{{ record.masked_preview or '***' }}</code></div>
+            <input type="password" name="value" autocomplete="new-password" placeholder="Lasciare vuoto per non modificare">
+            <div class="help">Compila per ruotare la chiave; lascia vuoto per modificare solo gli altri campi.</div>
+            {% endif %}
+        </div>
+    </div>
+    <div class="dr-form-row">
+        <label>Descrizione</label>
+        <input type="text" name="description" value="{{ record.description or '' }}" placeholder="Production tier, $ budget condiviso">
+    </div>
+    <div class="dr-form-row">
+        <label>Stato</label>
+        <label style="font-weight:normal;">
+            <input type="checkbox" name="enabled" {% if record.enabled is not defined or record.enabled %}checked{% endif %}> Chiave attiva (iniettata in env all'avvio)
+        </label>
+    </div>
+    <div style="display:flex; gap:0.5rem; padding-top:0.7rem;">
+        <button type="submit" class="dr-btn dr-btn-primary" style="width:auto;"><i class="fas fa-save"></i> Salva</button>
+        <a href="{{ url_for('secrets_modules.api_keys_list') }}" class="dr-btn" style="width:auto;">Annulla</a>
+    </div>
+</form>
+{% endblock %}

@@ -1,0 +1,34 @@
+{% extends "admin/_base.html" %}
+{% block title %}Domini gestiti{% endblock %}
+{% block content %}
+<section class="dr-section">
+    <h2><i class="fas fa-globe"></i> Domini gestiti ({{ domains|length }})</h2>
+    <p class="dr-hint">Per ogni dominio: smarthost di default usato quando non c'è una <em>route alias-specifica</em>.</p>
+    <a href="{{ url_for('domains.domain_form') }}" class="dr-btn dr-btn-primary" style="width:auto;"><i class="fas fa-plus"></i> Nuovo dominio</a>
+</section>
+<div class="dr-table-wrap">
+<table class="dr-table">
+    <thead><tr><th>Dominio</th><th>Smarthost</th><th>Porta</th><th>TLS</th><th>Apply rules</th><th>Stato</th><th></th></tr></thead>
+    <tbody>
+        {% for d in domains %}
+        <tr>
+            <td class="mono"><a href="{{ url_for('domains.domain_form', domain_id=d.id) }}"><strong>{{ d.domain }}</strong></a></td>
+            <td class="mono"><small>{{ d.smarthost_host or '— (default)' }}</small></td>
+            <td>{{ d.smarthost_port }}</td>
+            <td><code>{{ d.smarthost_tls }}</code></td>
+            <td>{% if d.apply_rules %}<i class="fas fa-check" style="color:#10b981;"></i>{% else %}<span style="color:var(--dr-gray);">bypass</span>{% endif %}</td>
+            <td>{% if d.enabled %}<span class="dr-badge dr-badge-ok">attivo</span>{% else %}<span class="dr-badge dr-badge-error">spento</span>{% endif %}</td>
+            <td>
+                <a href="{{ url_for('domains.domain_form', domain_id=d.id) }}" class="dr-btn"><i class="fas fa-pen"></i></a>
+                <form method="post" action="{{ url_for('domains.domain_delete', domain_id=d.id) }}" style="display:inline;" onsubmit="return confirm('Eliminare {{ d.domain }}?');">
+                    <button class="dr-btn dr-btn-danger"><i class="fas fa-trash"></i></button>
+                </form>
+            </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="dr-empty">Nessun dominio configurato.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endblock %}

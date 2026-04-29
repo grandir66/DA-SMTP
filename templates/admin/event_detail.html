@@ -1,0 +1,268 @@
+{% extends "admin/_base.html" %}
+{% block title %}Evento #{{ event.id }}{% endblock %}
+
+{% block extra_head %}
+<style>
+    .ed-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1rem; }
+    @media (max-width: 900px) { .ed-grid { grid-template-columns:1fr; } }
+    .ed-card { background:#fff; border:1px solid #cbd5e1; border-radius:8px; padding:0; overflow:hidden; }
+    .ed-card.full { grid-column:1 / -1; }
+    .ed-card > h3 { margin:0; padding:0.7rem 1rem; background:linear-gradient(180deg, #fafbfd 0%, #f4f6fa 100%); color:#0b2a4a; border-bottom:1px solid #cbd5e1; font-size:0.95rem; display:flex; align-items:center; gap:0.5rem; }
+    .ed-body { padding:0.9rem 1rem; }
+    .ed-body dl { margin:0; display:grid; grid-template-columns:140px 1fr; gap:0.4rem 0.8rem; }
+    .ed-body dt { color:#64748b; font-size:0.82rem; padding-top:0.2rem; }
+    .ed-body dd { margin:0; word-break:break-all; font-size:0.9rem; }
+    .mono { font-family:ui-monospace, Menlo, monospace; font-size:0.82rem; }
+    .ed-action-pill { display:inline-flex; align-items:center; gap:0.3rem; padding:0.2rem 0.55rem; border-radius:11px; font-size:0.8rem; font-weight:500; }
+    .ed-action-pill.create_ticket { background:#dbeafe; color:#1d4ed8; }
+    .ed-action-pill.auto_reply    { background:#d1fae5; color:#047857; }
+    .ed-action-pill.forward       { background:#fef3c7; color:#b45309; }
+    .ed-action-pill.redirect      { background:#f3e8ff; color:#7e22ce; }
+    .ed-action-pill.quarantine    { background:#fee2e2; color:#b91c1c; }
+    .ed-action-pill.flag_only     { background:#f1f5f9; color:#475569; }
+    .ed-action-pill.ignore        { background:#f8fafc; color:#94a3b8; }
+    pre.json-block { background:#0f172a; color:#e2e8f0; padding:0.9rem 1rem; border-radius:6px; overflow:auto; font-size:0.78rem; line-height:1.4; max-height:380px; }
+    .diag-banner { background:#fff8e1; border-left:3px solid #f6c23e; padding:0.7rem 0.9rem; border-radius:0 5px 5px 0; font-size:0.85rem; margin-bottom:0.8rem; }
+    .diag-banner.ok { background:#e6f7ed; border-left-color:#10b981; color:#0e7c3a; }
+    .diag-banner.warn { background:#fef3c7; border-left-color:#f59e0b; color:#7a4500; }
+    .quick-actions { display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center; }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="dr-section">
+    <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+        <a href="{{ url_for('events.list_view') }}" class="dr-btn"><i class="fas fa-arrow-left"></i> Lista eventi</a>
+        <h2 style="margin:0;"><i class="fas fa-envelope-circle-check"></i> Evento #{{ event.id }}</h2>
+        {% if event.action_taken %}
+        <span class="ed-action-pill {{ event.action_taken }}" style="margin-left:0.4rem;">{{ event.action_taken }}</span>
+        {% endif %}
+        {% if event.ticket_id %}
+        <span class="dr-badge dr-badge-info"><i class="fas fa-ticket"></i> {{ event.ticket_id }}</span>
+        {% endif %}
+        <div class="quick-actions" style="margin-left:auto;">
+            <a href="{{ url_for('rules.form_view') }}?prefill_from={{ (event.from_address or '')|urlencode }}&prefill_subject={{ (event.subject or '')|urlencode }}"
+               class="dr-btn dr-btn-primary" style="width:auto;" title="Crea regola precompilata">
+                <i class="fas fa-plus"></i> Crea regola da evento
+            </a>
+        </div>
+    </div>
+</section>
+
+{% if not event.codice_cliente and domain_diagnostic and domain_diagnostic.domain %}
+<section class="dr-section" style="padding:0;">
+    <div class="diag-banner {% if domain_diagnostic.is_mapped %}ok{% else %}warn{% endif %}">
+        {% if domain_diagnostic.is_mapped %}
+        <strong><i class="fas fa-check"></i> Dominio mittente <code>{{ domain_diagnostic.domain }}</code> mappato a:</strong>
+        {% for m in domain_diagnostic.matches %}
+            <code>{{ m.codice_cliente }}</code>{% if not loop.last %},{% endif %}
+        {% endfor %}
+        — la prossima mail sarà risolta automaticamente.
+        {% else %}
+        <strong><i class="fas fa-circle-exclamation"></i> Dominio <code>{{ domain_diagnostic.domain }}</code> non mappato</strong> a nessun cliente. Aggiungilo all'<a href="{{ url_for('addresses.from_list') }}">anagrafica mittenti</a> con codcli per risolvere automaticamente le prossime mail.
+        {% endif %}
+    </div>
+</section>
+{% endif %}
+
+<div class="ed-grid">
+    <div class="ed-card">
+        <h3><i class="fas fa-paper-plane"></i> Mittente / Destinatario</h3>
+        <div class="ed-body">
+            <dl>
+                <dt>From</dt><dd><span class="mono">{{ event.from_address or '—' }}</span></dd>
+                <dt>To</dt><dd><span class="mono">{{ event.to_address or '—' }}</span></dd>
+                <dt>Subject</dt><dd>{{ event.subject or '—' }}</dd>
+                <dt>Message-ID</dt><dd><span class="mono">{{ event.message_id or '—' }}</span></dd>
+            </dl>
+        </div>
+    </div>
+
+    <div class="ed-card">
+        <h3><i class="fas fa-flag"></i> Azione e routing</h3>
+        <div class="ed-body">
+            <dl>
+                <dt>Azione</dt>
+                <dd>
+                    {% if event.action_taken %}
+                    <span class="ed-action-pill {{ event.action_taken }}">{{ event.action_taken }}</span>
+                    {% else %}—{% endif %}
+                </dd>
+                <dt>Regola matchata</dt>
+                <dd>
+                    {% if matched_rule %}
+                    <a href="{{ url_for('rules.form_view', rule_id=matched_rule.id) }}">
+                        <strong>#{{ matched_rule.id }} — {{ matched_rule.name }}</strong>
+                    </a>
+                    <br><small style="color:#64748b;">priority {{ matched_rule.priority }} · action {{ matched_rule.action }} · {{ 'attiva' if matched_rule.enabled else 'disabilitata' }}</small>
+                    {% elif event.rule_id %}
+                    <em>regola id={{ event.rule_id }} non trovata</em>
+                    {% else %}
+                    <span style="color:#94a3b8;">nessuna regola applicata</span>
+                    {% endif %}
+                </dd>
+                <dt>Ticket aperto</dt><dd>{{ event.ticket_id or '—' }}</dd>
+                <dt>Codice cliente</dt>
+                <dd>
+                    {% if event.codice_cliente %}<strong>{{ event.codice_cliente }}</strong>
+                    {% else %}<span style="color:#94a3b8;">non risolto</span>{% endif %}
+                </dd>
+            </dl>
+        </div>
+    </div>
+
+    <div class="ed-card">
+        <h3><i class="fas fa-clock"></i> Timing</h3>
+        <div class="ed-body">
+            <dl>
+                <dt>Ricevuto</dt><dd><span class="mono">{{ event.received_at }}</span></dd>
+                <dt>Body scade</dt><dd><span class="mono">{{ event.body_expires_at or '—' }}</span></dd>
+                <dt>UUID relay</dt><dd><span class="mono" style="font-size:0.78rem;">{{ event.relay_event_uuid or '—' }}</span></dd>
+            </dl>
+        </div>
+    </div>
+
+    <div class="ed-card">
+        <h3><i class="fas fa-magnifying-glass"></i> Risoluzione dominio</h3>
+        <div class="ed-body">
+            {% if domain_diagnostic and domain_diagnostic.domain %}
+            <dl>
+                <dt>Dominio</dt><dd><span class="mono">{{ domain_diagnostic.domain }}</span></dd>
+                <dt>Mappato</dt>
+                <dd>
+                    {% if domain_diagnostic.is_mapped %}
+                    <i class="fas fa-check" style="color:#10b981;"></i> Sì ({{ domain_diagnostic.matches|length }} match)
+                    {% else %}
+                    <i class="fas fa-xmark" style="color:#ef4444;"></i> No
+                    {% endif %}
+                </dd>
+                {% if domain_diagnostic.matches %}
+                <dt>Match</dt>
+                <dd>
+                    {% for m in domain_diagnostic.matches %}
+                    <code>{{ m.codice_cliente }}</code> <small style="color:#64748b;">({{ m.sorgente or 'auto' }})</small><br>
+                    {% endfor %}
+                </dd>
+                {% endif %}
+            </dl>
+            {% else %}
+            <p style="color:#64748b; margin:0;">Mittente senza dominio.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{% set has_body = event.body_text or event.body_html %}
+<div class="ed-card full">
+    <h3>
+        <i class="fas fa-envelope-open-text"></i> Contenuto email
+        {% if has_body and event.body_expires_at %}
+        <span class="dr-badge" style="background:#fef3c7; color:#7a4500; margin-left:auto;">
+            <i class="fas fa-clock"></i> scade {{ event.body_expires_at }}
+        </span>
+        {% elif not has_body %}
+        <span class="dr-badge" style="background:#f1f5f9; color:#475569; margin-left:auto;">non disponibile</span>
+        {% endif %}
+    </h3>
+    <div class="ed-body">
+        {% if has_body %}
+        <div style="display:flex; gap:0.5rem; margin-bottom:0.7rem; flex-wrap:wrap;">
+            {% if event.body_html %}
+            <button type="button" onclick="showBodyTab('html')" id="btn-html" class="dr-btn">HTML</button>
+            {% endif %}
+            {% if event.body_text %}
+            <button type="button" onclick="showBodyTab('text')" id="btn-text" class="dr-btn">Plain text</button>
+            {% endif %}
+            <button type="button" onclick="reEvaluate()" class="dr-btn dr-btn-primary" style="margin-left:auto; width:auto;">
+                <i class="fas fa-vial"></i> Ri-valuta regole
+            </button>
+        </div>
+        {% if event.body_html %}
+        <div id="body-html-pane">
+            <iframe src="{{ url_for('events.body_html_view', event_id=event.id) }}"
+                    sandbox="allow-same-origin"
+                    style="width:100%; min-height:380px; border:1px solid #cbd5e1; border-radius:5px; background:#fff;"
+                    title="Contenuto HTML"></iframe>
+        </div>
+        {% endif %}
+        {% if event.body_text %}
+        <div id="body-text-pane" {% if event.body_html %}style="display:none;"{% endif %}>
+            <pre style="background:#fafbfd; padding:0.9rem; border:1px solid #cbd5e1; border-radius:5px; max-height:380px; overflow:auto; font-size:0.82rem; white-space:pre-wrap; word-break:break-word;">{{ event.body_text }}</pre>
+        </div>
+        {% endif %}
+        {% else %}
+        <p style="color:#64748b; margin:0;">
+            <i class="fas fa-circle-info"></i>
+            Body non disponibile (scaduto o non salvato). Retention: <code>body_retention_hours</code> in <a href="{{ url_for('settings.settings_view') }}">Settings</a>.
+        </p>
+        <button type="button" onclick="reEvaluate()" class="dr-btn" style="width:auto; margin-top:0.6rem;">
+            <i class="fas fa-vial"></i> Ri-valuta regole (senza body)
+        </button>
+        {% endif %}
+        <div id="re-eval-result" style="margin-top:0.8rem; display:none;"></div>
+    </div>
+</div>
+
+<div class="ed-card full">
+    <h3><i class="fas fa-code"></i> Payload metadata (JSON dal relay)</h3>
+    <div class="ed-body">
+        {% if event.payload_metadata %}
+        <pre class="json-block">{{ event.payload_metadata | tojson(indent=2) }}</pre>
+        {% else %}
+        <p style="color:#64748b; margin:0;">Nessun payload aggiuntivo trasmesso dal relay.</p>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+function showBodyTab(which) {
+    const html = document.getElementById('body-html-pane');
+    const text = document.getElementById('body-text-pane');
+    if (html) html.style.display = (which === 'html') ? '' : 'none';
+    if (text) text.style.display = (which === 'text') ? '' : 'none';
+    const bh = document.getElementById('btn-html'), bt = document.getElementById('btn-text');
+    if (bh) bh.classList.toggle('dr-btn-primary', which === 'html');
+    if (bt) bt.classList.toggle('dr-btn-primary', which === 'text');
+}
+
+async function reEvaluate() {
+    const out = document.getElementById('re-eval-result');
+    out.style.display = 'block';
+    out.innerHTML = '<small style="color:#64748b;"><i class="fas fa-spinner fa-spin"></i> Ri-valutazione regole in corso...</small>';
+    try {
+        const resp = await fetch('{{ url_for("events.re_evaluate", event_id=event.id) }}', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+        });
+        const data = await resp.json();
+        if (!data.ok) { out.innerHTML = '<div style="color:#b91c1c;">Errore: ' + (data.error || '') + '</div>'; return; }
+
+        let html = '<div style="background:#f8fafc; padding:0.8rem 1rem; border-radius:5px; border:1px solid #cbd5e1;">';
+        html += '<strong>' + data.rules_evaluated + ' regole valutate</strong><br><br>';
+        if (data.matched_rules && data.matched_rules.length > 0) {
+            html += '<div style="background:#d1fae5; padding:0.6rem 0.9rem; border-radius:5px; margin-bottom:0.5rem;">';
+            html += '<i class="fas fa-check" style="color:#047857;"></i> <strong>Regole matchate</strong>: ';
+            html += data.matched_rules.map(rid => '<a href="/rules/' + rid + '">#' + rid + '</a>').join(', ');
+            html += ' · azione finale: <code>' + (data.final_action || '—') + '</code></div>';
+        } else {
+            html += '<div style="background:#fef3c7; padding:0.6rem 0.9rem; border-radius:5px; margin-bottom:0.5rem;">';
+            html += '<i class="fas fa-circle-info"></i> <strong>Nessuna regola matcha</strong> questo evento.</div>';
+        }
+        html += '<details style="margin-top:0.5rem;"><summary style="cursor:pointer; color:#64748b; font-size:0.85rem;">Dettaglio catena (' + data.chain.length + ' step)</summary>';
+        html += '<table style="margin-top:0.4rem; width:100%; font-size:0.82rem;"><thead><tr style="background:#eef2f7;"><th style="padding:0.3rem 0.5rem; text-align:left;">#</th><th style="padding:0.3rem 0.5rem; text-align:left;">Regola</th><th style="padding:0.3rem 0.5rem;">Match</th><th style="padding:0.3rem 0.5rem; text-align:left;">Campi</th></tr></thead><tbody>';
+        data.chain.forEach((c) => {
+            html += '<tr style="border-bottom:1px solid #f1f5f9;">';
+            html += '<td style="padding:0.3rem 0.5rem;">#' + c.rule_id + '</td>';
+            html += '<td style="padding:0.3rem 0.5rem;">' + c.name + '</td>';
+            html += '<td style="padding:0.3rem 0.5rem; text-align:center;">' + (c.matched ? '<i class="fas fa-check" style="color:#047857;"></i>' : '<i class="fas fa-xmark" style="color:#94a3b8;"></i>') + '</td>';
+            const reasons = (c.matches || []).map(m => m.field + (m.ok ? ' ✓' : ' ✗') + (m.match ? ' "' + m.match + '"' : '')).join(' · ');
+            html += '<td style="padding:0.3rem 0.5rem; color:#64748b; font-size:0.78rem;">' + reasons + '</td>';
+            html += '</tr>';
+        });
+        html += '</tbody></table></details></div>';
+        out.innerHTML = html;
+    } catch (err) {
+        out.innerHTML = '<div style="color:#b91c1c;">Errore di rete: ' + err + '</div>';
+    }
+}
+</script>
+{% endblock %}

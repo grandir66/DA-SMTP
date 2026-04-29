@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "domarc-smtp-relay-admin"
+version = "0.2.0"
+description = "Domarc SMTP Relay — web admin (Flask) standalone, multi-tenant, SQLite/Postgres"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+    { name = "Domarc S.r.l." },
+]
+keywords = ["smtp", "relay", "email", "antispam", "msp"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Web Environment",
+    "Framework :: Flask",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Communications :: Email",
+]
+
+# Dipendenze CORE (open core): minimo necessario per girare con SQLite + adapter base.
+# PostgreSQL e altre opzioni sono in [project.optional-dependencies].
+dependencies = [
+    "Flask>=3.0,<4.0",
+    "Jinja2>=3.1",
+    "bcrypt>=4.0",
+    "PyYAML>=6.0",
+    "httpx>=0.27",                 # adapter REST + Stormshield
+]
+
+[project.optional-dependencies]
+postgres = [
+    "psycopg2-binary>=2.9",         # backend PostgreSQL (alternativo a SQLite)
+]
+prod = [
+    "gunicorn>=21.2",               # WSGI server consigliato per produzione
+]
+dev = [
+    "pytest>=7.4",
+    "pytest-flask>=1.3",
+]
+
+[project.scripts]
+domarc-smtp-relay-admin = "domarc_relay_admin.cli:main"
+domarc-smtp-relay-migrate-to-pg = "domarc_relay_admin.cli:migrate_to_pg"
+
+[tool.setuptools.packages.find]
+include = ["domarc_relay_admin*"]

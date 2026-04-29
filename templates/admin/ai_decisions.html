@@ -1,0 +1,54 @@
+{% extends "admin/_base.html" %}
+{% block title %}AI Decisions{% endblock %}
+{% block content %}
+<section class="dr-section">
+    <div style="display:flex; gap:0.5rem; align-items:center;">
+        <a href="{{ url_for('ai.dashboard') }}" class="dr-btn"><i class="fas fa-arrow-left"></i> AI Dashboard</a>
+        <h2 style="margin:0;"><i class="fas fa-list-check"></i> Decisioni IA</h2>
+        <form method="get" class="dr-filters" style="margin-left:auto;">
+            <select name="hours">
+                <option value="1" {% if hours==1 %}selected{% endif %}>1h</option>
+                <option value="24" {% if hours==24 %}selected{% endif %}>24h</option>
+                <option value="168" {% if hours==168 %}selected{% endif %}>7gg</option>
+            </select>
+            <input type="text" name="job" value="{{ job_filter or '' }}" placeholder="filtra per job_code">
+            <button class="dr-btn"><i class="fas fa-filter"></i></button>
+        </form>
+    </div>
+</section>
+
+<div class="dr-table-wrap">
+<table class="dr-table">
+    <thead>
+        <tr>
+            <th>Quando</th><th>Job</th><th>Modello</th><th>Intent</th><th>Urgenza</th>
+            <th>Summary</th><th class="num">Latency</th><th class="num">Cost</th>
+            <th>Mode</th><th></th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for d in decisions %}
+    <tr {% if d.error %}style="background:#fef2f2;"{% endif %}>
+        <td><small>{{ d.created_at }}</small></td>
+        <td><code>{{ d.job_code }}</code></td>
+        <td><small>{{ d.provider }}<br>{{ d.model }}</small></td>
+        <td>{% if d.intent %}<span class="rule-inherit-badge">{{ d.intent }}</span>{% endif %}</td>
+        <td>{% if d.urgenza_proposta %}<span class="dr-action-pill {% if d.urgenza_proposta in ('ALTA','CRITICA') %}quarantine{% else %}flag_only{% endif %}">{{ d.urgenza_proposta }}</span>{% endif %}</td>
+        <td><small>{{ d.summary|truncate(60) if d.summary else '—' }}</small></td>
+        <td class="num">{{ d.latency_ms or '—' }}ms</td>
+        <td class="num">{% if d.cost_usd %}${{ '%.5f'|format(d.cost_usd) }}{% else %}—{% endif %}</td>
+        <td>
+            {% if d.error %}<span class="rule-status off">ERR</span>
+            {% elif d.shadow_mode %}<span class="rule-inherit-badge">shadow</span>
+            {% elif d.applied %}<span class="rule-status on">applied</span>
+            {% else %}<span class="rule-inherit-badge">logged</span>{% endif %}
+        </td>
+        <td><a href="{{ url_for('ai.decision_detail', decision_id=d.id) }}" class="dr-btn" style="width:auto; padding:0.2rem 0.5rem;"><i class="fas fa-eye"></i></a></td>
+    </tr>
+    {% else %}
+    <tr><td colspan="10" class="dr-empty">Nessuna decisione IA registrata.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endblock %}

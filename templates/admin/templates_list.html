@@ -1,0 +1,59 @@
+{% extends "admin/_base.html" %}
+{% block title %}Template — Domarc SMTP Relay{% endblock %}
+{% block content %}
+<section class="dr-section">
+    <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+        <h2 style="margin:0;"><i class="fas fa-envelope-open-text"></i> Template auto-reply ({{ templates|length }})</h2>
+        <a href="{{ url_for('templates.form_view') }}" class="dr-btn dr-btn-primary" style="width:auto;">
+            <i class="fas fa-plus"></i> Nuovo
+        </a>
+        <a href="{{ url_for('templates.export_view', fmt='csv') }}" class="dr-btn" style="width:auto;" title="Export CSV">
+            <i class="fas fa-file-csv"></i> CSV
+        </a>
+        <a href="{{ url_for('templates.export_view', fmt='json') }}" class="dr-btn" style="width:auto;" title="Export JSON">
+            <i class="fas fa-file-code"></i> JSON
+        </a>
+    </div>
+</section>
+<div class="dr-table-wrap">
+<table class="dr-table">
+    <thead>
+        <tr>
+            <th>Nome</th>
+            <th>Descrizione</th>
+            <th>Mittente</th>
+            <th class="num">Allegati</th>
+            <th>Stato</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for t in templates %}
+        <tr>
+            <td><a href="{{ url_for('templates.form_view', template_id=t.id) }}"><strong>{{ t.name }}</strong></a></td>
+            <td><small>{{ t.description|truncate(100) if t.description else '—' }}</small></td>
+            <td><small>{{ t.reply_from_email or 'default' }}</small></td>
+            <td class="num">
+                {% set att_count = (t.attachment_paths|length) if t.attachment_paths else 0 %}
+                {% if att_count > 0 %}
+                    <span class="dr-badge dr-badge-info"><i class="fas fa-paperclip"></i> {{ att_count }}</span>
+                {% else %}
+                    <small style="color:#94a3b8;">—</small>
+                {% endif %}
+            </td>
+            <td>{% if t.enabled %}<span class="dr-badge dr-badge-ok">attivo</span>{% else %}<span class="dr-badge dr-badge-error">disabilitato</span>{% endif %}</td>
+            <td style="white-space:nowrap;">
+                <a href="{{ url_for('templates.form_view', template_id=t.id) }}" class="dr-btn" style="width:auto; padding:0.2rem 0.5rem;" title="Modifica"><i class="fas fa-pen"></i></a>
+                <form method="post" action="{{ url_for('templates.delete_view', template_id=t.id) }}" style="display:inline;"
+                      onsubmit="return confirm('Eliminare {{ t.name }}?');">
+                    <button class="dr-btn dr-btn-danger" style="width:auto; padding:0.2rem 0.5rem;" title="Elimina"><i class="fas fa-trash"></i></button>
+                </form>
+            </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="dr-empty">Nessun template. <a href="{{ url_for('templates.form_view') }}">Crea il primo</a>.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endblock %}

@@ -1,0 +1,57 @@
+{% extends "admin/_base.html" %}
+{% block title %}Aggregazioni errori{% endblock %}
+{% block content %}
+<section class="dr-section">
+    <h2><i class="fas fa-layer-group"></i> Aggregazioni errori ({{ aggregations|length }})</h2>
+    <a href="{{ url_for('aggregations.form_view') }}" class="dr-btn dr-btn-primary" style="width:auto;"><i class="fas fa-plus"></i> Nuova</a>
+    <a href="{{ url_for('aggregations.occurrences_view') }}" class="dr-btn" style="width:auto;"><i class="fas fa-stream"></i> Occurrences</a>
+    <form method="get" class="dr-filters" style="margin-left:auto;">
+        <select name="state" onchange="this.form.submit()">
+            <option value="all" {% if filter_state=='all' %}selected{% endif %}>Tutte</option>
+            <option value="enabled" {% if filter_state=='enabled' %}selected{% endif %}>Attive</option>
+            <option value="disabled" {% if filter_state=='disabled' %}selected{% endif %}>Disabilitate</option>
+        </select>
+    </form>
+</section>
+<div class="dr-table-wrap">
+<table class="dr-table">
+    <thead><tr><th>Nome</th><th>Match</th><th>Soglia</th><th>Reset</th><th class="num">Occ.</th><th>Stato</th><th></th></tr></thead>
+    <tbody>
+        {% for a in aggregations %}
+        <tr>
+            <td><a href="{{ url_for('aggregations.form_view', agg_id=a.id) }}"><strong>{{ a.name }}</strong></a>
+                {% if a.description %}<br><small>{{ a.description|truncate(60) }}</small>{% endif %}</td>
+            <td class="mono" style="max-width:280px;"><small>
+                {% if a.match_subject_regex %}subj: {{ a.match_subject_regex|truncate(40) }}{% endif %}
+                {% if a.match_from_regex %}<br>from: {{ a.match_from_regex|truncate(40) }}{% endif %}
+            </small></td>
+            <td><strong>{{ a.threshold }}</strong> {% if a.consecutive_only %}<small>cons.</small>{% else %}<small>in {{ a.window_hours }}h</small>{% endif %}</td>
+            <td class="mono"><small>{{ (a.reset_subject_regex or '')|truncate(35) }}</small></td>
+            <td class="num">{{ a.active_occurrences or 0 }}{% if a.occurrences_with_ticket %} <i class="fas fa-ticket" style="color:var(--dr-blue);"></i>{% endif %}</td>
+            <td>{% if a.enabled %}<span class="dr-badge dr-badge-ok">attiva</span>{% else %}<span class="dr-badge dr-badge-error">spenta</span>{% endif %}</td>
+            <td style="white-space:nowrap;">
+                <a href="{{ url_for('aggregations.form_view', agg_id=a.id) }}" class="dr-btn" style="width:auto; padding:0.2rem 0.5rem;" title="Modifica"><i class="fas fa-pen"></i></a>
+                <form method="post" action="{{ url_for('aggregations.toggle_view', agg_id=a.id) }}" style="display:inline;">
+                    <button class="dr-btn" style="width:auto; padding:0.2rem 0.5rem;" title="{% if a.enabled %}Disabilita{% else %}Attiva{% endif %}">
+                        <i class="fas fa-{% if a.enabled %}toggle-on{% else %}toggle-off{% endif %}"></i>
+                    </button>
+                </form>
+                <form method="post" action="{{ url_for('aggregations.duplicate_view', agg_id=a.id) }}" style="display:inline;">
+                    <button class="dr-btn" style="width:auto; padding:0.2rem 0.5rem;" title="Duplica"><i class="fas fa-clone"></i></button>
+                </form>
+                <a href="{{ url_for('aggregations.occurrences_view') }}?aggregation_id={{ a.id }}" class="dr-btn" style="width:auto; padding:0.2rem 0.5rem;" title="Occurrences di questa regola">
+                    <i class="fas fa-stream"></i>
+                </a>
+                <form method="post" action="{{ url_for('aggregations.delete_view', agg_id=a.id) }}" style="display:inline;"
+                      onsubmit="return confirm('Eliminare {{ a.name }}? Le occurrences associate saranno cancellate.');">
+                    <button class="dr-btn dr-btn-danger" style="width:auto; padding:0.2rem 0.5rem;" title="Elimina"><i class="fas fa-trash"></i></button>
+                </form>
+            </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="dr-empty">Nessuna aggregation. <a href="{{ url_for('aggregations.form_view') }}">Crea la prima</a>.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endblock %}

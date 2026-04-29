@@ -1,0 +1,91 @@
+{% extends "admin/_base.html" %}
+{% block title %}Occurrences{% endblock %}
+{% block content %}
+<section class="dr-section">
+    <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+        <a href="{{ url_for('aggregations.list_view') }}" class="dr-btn"><i class="fas fa-arrow-left"></i> Aggregazioni</a>
+        <h2 style="margin:0;"><i class="fas fa-stream"></i> Occurrences ({{ occurrences|length }})</h2>
+        <form method="get" class="dr-filters" style="margin-left:auto; display:flex; gap:0.4rem;">
+            <select name="aggregation_id" onchange="this.form.submit()">
+                <option value="">— tutte le regole —</option>
+                {% for a in aggregations %}
+                <option value="{{ a.id }}" {% if filter_aggregation_id == a.id %}selected{% endif %}>{{ a.name }}</option>
+                {% endfor %}
+            </select>
+            <select name="state" onchange="this.form.submit()">
+                <option value="active" {% if filter_state=='active' %}selected{% endif %}>In conteggio</option>
+                <option value="above" {% if filter_state=='above' %}selected{% endif %}>Sopra soglia</option>
+                <option value="with_ticket" {% if filter_state=='with_ticket' %}selected{% endif %}>Con ticket</option>
+                <option value="recent_reset" {% if filter_state=='recent_reset' %}selected{% endif %}>Reset ultime 24h</option>
+                <option value="all" {% if filter_state=='all' %}selected{% endif %}>Tutte</option>
+            </select>
+        </form>
+        <form method="post" action="{{ url_for('aggregations.occurrences_reset_all') }}"
+              onsubmit="return confirm('Resettare TUTTE le occurrences{% if filter_aggregation_id %} di questa regola{% endif %}?');">
+            {% if filter_aggregation_id %}
+            <input type="hidden" name="aggregation_id" value="{{ filter_aggregation_id }}">
+            {% endif %}
+            <button class="dr-btn dr-btn-danger" style="width:auto;" title="Azzera counter di tutte le occurrences mostrate">
+                <i class="fas fa-rotate-left"></i> Reset tutte
+            </button>
+        </form>
+    </div>
+</section>
+
+<div class="dr-table-wrap">
+<table class="dr-table">
+    <thead>
+        <tr>
+            <th>Aggregation</th>
+            <th>Fingerprint</th>
+            <th>Mittente</th>
+            <th class="num">Counter</th>
+            <th>Prima</th>
+            <th>Ultima</th>
+            <th class="num">Reset</th>
+            <th>Ticket</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for o in occurrences %}
+        <tr>
+            <td>
+                <a href="{{ url_for('aggregations.form_view', agg_id=o.aggregation_id) }}">
+                    {{ o.aggregation_name }}
+                </a>
+            </td>
+            <td class="mono" style="max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ o.fingerprint }}">{{ o.fingerprint }}</td>
+            <td>{{ o.sample_from or '—' }}</td>
+            <td class="num">
+                <strong style="{% if o.current_count >= o.aggregation_threshold %}color:#b91c1c;{% endif %}">
+                    {{ o.current_count }}/{{ o.aggregation_threshold }}
+                </strong>
+                {% if o.ticket_id %}<i class="fas fa-thumbtack" style="color:var(--dr-blue);" title="ticket aperto"></i>{% endif %}
+            </td>
+            <td><small>{{ o.first_seen }}</small></td>
+            <td><small>{{ o.last_seen }}</small></td>
+            <td class="num">{{ o.total_resets or 0 }}</td>
+            <td class="mono"><small>{{ o.ticket_id or '—' }}</small></td>
+            <td style="white-space:nowrap;">
+                <form method="post" action="{{ url_for('aggregations.occurrence_reset', occ_id=o.id) }}" style="display:inline;"
+                      onsubmit="return confirm('Resettare counter?');">
+                    <button class="dr-btn" style="width:auto; padding:0.2rem 0.5rem;" title="Reset counter">
+                        <i class="fas fa-rotate-left"></i>
+                    </button>
+                </form>
+                <form method="post" action="{{ url_for('aggregations.occurrence_delete', occ_id=o.id) }}" style="display:inline;"
+                      onsubmit="return confirm('Eliminare la riga?');">
+                    <button class="dr-btn dr-btn-danger" style="width:auto; padding:0.2rem 0.5rem;" title="Elimina">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </form>
+            </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="9" class="dr-empty">Nessuna occurrence.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endblock %}

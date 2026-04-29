@@ -1,0 +1,248 @@
+{% extends "admin/_base.html" %}
+{% block title %}{{ 'Nuova aggregation' if is_new else record.name }}{% endblock %}
+
+{% block extra_head %}
+<style>
+    .agg-card { background:#fff; border:1px solid #cbd5e1; border-radius:8px; margin-bottom:1rem; overflow:hidden; max-width:1100px; }
+    .agg-card summary { padding:0.9rem 1.2rem; background:linear-gradient(180deg, #fafbfd 0%, #f4f6fa 100%); cursor:pointer; font-weight:600; color:#0b2a4a; display:flex; align-items:center; gap:0.5rem; user-select:none; }
+    .agg-card summary::-webkit-details-marker { display:none; }
+    .agg-card summary::before { content:"▶"; font-size:0.7rem; transition:transform 0.15s; color:#64748b; }
+    .agg-card[open] > summary::before { transform:rotate(90deg); }
+    .agg-card summary small { font-weight:400; color:#64748b; margin-left:auto; }
+    .agg-card-body { padding:1.2rem 1.4rem; }
+    .agg-row { display:grid; grid-template-columns:200px 1fr; gap:1rem; align-items:start; margin-bottom:0.9rem; }
+    .agg-row > label { font-weight:500; color:#0b2a4a; padding-top:0.4rem; }
+    .agg-row .field-help { font-size:0.82rem; color:#64748b; margin-top:0.3rem; }
+    .agg-row input[type="text"], .agg-row input[type="number"], .agg-row textarea, .agg-row select {
+        width:100%; padding:0.5rem 0.65rem; border:1px solid #cbd5e1; border-radius:5px; font-family:inherit; font-size:0.9rem;
+    }
+    .agg-row .inline-test { display:flex; gap:0.5rem; align-items:center; }
+    .agg-row .inline-test input { flex:1; }
+    .test-result { margin-top:0.4rem; padding:0.5rem 0.7rem; border-radius:4px; font-size:0.85rem; display:none; }
+    .test-result.ok { background:#d1fae5; color:#047857; }
+    .test-result.fail { background:#fee2e2; color:#b91c1c; }
+    .test-result.error { background:#fef3c7; color:#92400e; }
+    .agg-checkbox-row { display:flex; align-items:center; gap:0.5rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="dr-section">
+    <div style="display:flex; gap:0.5rem; align-items:center;">
+        <a href="{{ url_for('aggregations.list_view') }}" class="dr-btn"><i class="fas fa-arrow-left"></i> Lista</a>
+        <h2 style="margin:0;">
+            <i class="fas fa-{{ 'plus-circle' if is_new else 'pen' }}"></i>
+            {{ 'Nuova regola errori cumulati' if is_new else record.name }}
+        </h2>
+    </div>
+    <p class="dr-hint">
+        Compila in ordine: Identificazione → Match → Soglia → Reset → Ticket.
+    </p>
+</section>
+
+<form method="post" action="" id="aggForm">
+
+<details class="agg-card" open>
+    <summary><i class="fas fa-tag"></i> 1. Identificazione <small>nome, descrizione, stato</small></summary>
+    <div class="agg-card-body">
+        <div class="agg-row">
+            <label>Nome *</label>
+            <input type="text" name="name" required maxlength="200"
+                   placeholder="Es. Backup notturno fallito" value="{{ record.name or '' }}">
+        </div>
+        <div class="agg-row">
+            <label>Descrizione</label>
+            <textarea name="description" rows="2">{{ record.description or '' }}</textarea>
+        </div>
+        <div class="agg-row">
+            <label>Stato</label>
+            <div class="agg-checkbox-row">
+                <input type="checkbox" id="enabled" name="enabled" {% if record.enabled or is_new %}checked{% endif %}>
+                <label for="enabled" style="font-weight:400;">Attiva</label>
+            </div>
+        </div>
+        <div class="agg-row">
+            <label>Priorità</label>
+            <div>
+                <input type="number" name="priority" min="1" max="999" value="{{ record.priority or 100 }}" style="width:120px;">
+                <div class="field-help">Più basso = valutata prima.</div>
+            </div>
+        </div>
+    </div>
+</details>
+
+<details class="agg-card" open>
+    <summary><i class="fas fa-magnifying-glass"></i> 2. Match (cosa cattura) <small>AND tra le regex compilate</small></summary>
+    <div class="agg-card-body">
+        <div class="agg-row">
+            <label>Subject regex</label>
+            <div>
+                <div class="inline-test">
+                    <input type="text" id="match_subject_regex" name="match_subject_regex"
+                           placeholder="(?i)backup.*(fail|error)" value="{{ record.match_subject_regex or '' }}">
+                    <button type="button" class="dr-btn" style="width:auto;" onclick="testRegex('match_subject_regex','tr_subject')">
+                        <i class="fas fa-vial"></i> Test
+                    </button>
+                </div>
+                <div id="tr_subject" class="test-result"></div>
+                <div class="field-help">Pattern Python con <code>(?i)</code> implicito.</div>
+            </div>
+        </div>
+        <div class="agg-row">
+            <label>From regex</label>
+            <div>
+                <div class="inline-test">
+                    <input type="text" id="match_from_regex" name="match_from_regex"
+                           placeholder="(?i)^(monitoring|backup|alerts)@" value="{{ record.match_from_regex or '' }}">
+                    <button type="button" class="dr-btn" style="width:auto;" onclick="testRegex('match_from_regex','tr_from')">
+                        <i class="fas fa-vial"></i> Test
+                    </button>
+                </div>
+                <div id="tr_from" class="test-result"></div>
+            </div>
+        </div>
+        <div class="agg-row">
+            <label>Body regex</label>
+            <div>
+                <div class="inline-test">
+                    <input type="text" id="match_body_regex" name="match_body_regex"
+                           placeholder="opzionale, body troncato a 16 KB" value="{{ record.match_body_regex or '' }}">
+                    <button type="button" class="dr-btn" style="width:auto;" onclick="testRegex('match_body_regex','tr_body')">
+                        <i class="fas fa-vial"></i> Test
+                    </button>
+                </div>
+                <div id="tr_body" class="test-result"></div>
+            </div>
+        </div>
+    </div>
+</details>
+
+<details class="agg-card" open>
+    <summary><i class="fas fa-gauge"></i> 3. Soglia e fingerprint <small>quando aprire un ticket</small></summary>
+    <div class="agg-card-body">
+        <div class="agg-row">
+            <label>Soglia *</label>
+            <div>
+                <input type="number" name="threshold" min="1" max="100" value="{{ record.threshold or 2 }}" style="width:120px;">
+                <div class="field-help">Numero di occorrenze per aprire un ticket.</div>
+            </div>
+        </div>
+        <div class="agg-row">
+            <label>Conteggio</label>
+            <div class="agg-checkbox-row">
+                <input type="checkbox" id="consecutive_only" name="consecutive_only" {% if record.consecutive_only %}checked{% endif %}>
+                <label for="consecutive_only" style="font-weight:400;">Solo errori consecutivi (reset azzera counter)</label>
+            </div>
+        </div>
+        <div class="agg-row">
+            <label>Finestra (h)</label>
+            <div>
+                <input type="number" name="window_hours" min="1" max="720" value="{{ record.window_hours or 24 }}" style="width:120px;">
+                <div class="field-help">Dopo questo intervallo dalla prima occorrenza, counter ricomincia.</div>
+            </div>
+        </div>
+        <div class="agg-row">
+            <label>Fingerprint template</label>
+            <div>
+                <div class="inline-test">
+                    <input type="text" id="fingerprint_template" name="fingerprint_template"
+                           value="{{ record.fingerprint_template or '${from}|${subject_normalized}' }}">
+                    <button type="button" class="dr-btn" style="width:auto;" onclick="testFingerprint()">
+                        <i class="fas fa-eye"></i> Anteprima
+                    </button>
+                </div>
+                <div id="tr_fingerprint" class="test-result"></div>
+                <div class="field-help">Variabili: <code>${from}</code>, <code>${subject}</code>, <code>${subject_normalized}</code></div>
+            </div>
+        </div>
+    </div>
+</details>
+
+<details class="agg-card">
+    <summary><i class="fas fa-rotate-left"></i> 4. Reset <small>quali mail azzerano il counter (opzionale)</small></summary>
+    <div class="agg-card-body">
+        <div class="agg-row">
+            <label>Reset subject regex</label>
+            <input type="text" name="reset_subject_regex" placeholder="(?i)backup.*(success|completed)" value="{{ record.reset_subject_regex or '' }}">
+        </div>
+        <div class="agg-row">
+            <label>Reset from regex</label>
+            <input type="text" name="reset_from_regex" value="{{ record.reset_from_regex or '' }}">
+        </div>
+    </div>
+</details>
+
+<details class="agg-card" open>
+    <summary><i class="fas fa-ticket"></i> 5. Ticket <small>cosa aprire alla soglia</small></summary>
+    <div class="agg-card-body">
+        <div class="agg-row">
+            <label>Settore *</label>
+            <input type="text" name="ticket_settore" maxlength="50" value="{{ record.ticket_settore or '' }}" placeholder="T">
+        </div>
+        <div class="agg-row">
+            <label>Urgenza *</label>
+            <select name="ticket_urgenza">
+                <option value="">— scegli —</option>
+                {% for u in ['BASSA','NORMALE','ALTA','CRITICA'] %}
+                <option value="{{ u }}" {% if record.ticket_urgenza==u %}selected{% endif %}>{{ u|title }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="agg-row">
+            <label>Codcli forzato</label>
+            <div>
+                <input type="text" name="ticket_codice_cliente" value="{{ record.ticket_codice_cliente or '' }}" placeholder="vuoto = derivato dal mittente">
+                <div class="field-help">Se valorizzato, ignora la risoluzione automatica via dominio.</div>
+            </div>
+        </div>
+    </div>
+</details>
+
+<div style="display:flex; gap:0.5rem; padding:1rem 0; max-width:1100px;">
+    <a href="{{ url_for('aggregations.list_view') }}" class="dr-btn">Annulla</a>
+    <button type="submit" class="dr-btn dr-btn-primary" style="margin-left:auto; width:auto;">
+        <i class="fas fa-save"></i> {{ 'Crea' if is_new else 'Salva' }}
+    </button>
+</div>
+</form>
+
+<script>
+async function testRegex(inputId, resultId) {
+    const pattern = document.getElementById(inputId).value;
+    if (!pattern) return;
+    const sample = prompt('Subject / from / body di esempio:', '');
+    if (sample === null) return;
+    const box = document.getElementById(resultId);
+    box.style.display = 'block'; box.className = 'test-result'; box.textContent = 'Test in corso...';
+    try {
+        const resp = await fetch('{{ url_for("aggregations.test_regex") }}', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({pattern, sample}),
+        });
+        const data = await resp.json();
+        if (!data.ok) { box.classList.add('error'); box.textContent = 'Errore: ' + data.error; return; }
+        if (!data.matched) { box.classList.add('fail'); box.textContent = '✗ Nessun match'; return; }
+        box.classList.add('ok'); box.textContent = '✓ Match: «' + data.match + '»';
+    } catch (err) { box.classList.add('error'); box.textContent = 'Errore: ' + err; }
+}
+
+async function testFingerprint() {
+    const template = document.getElementById('fingerprint_template').value;
+    const from_addr = prompt('From mittente di esempio:', 'monitoring@example.com');
+    if (from_addr === null) return;
+    const subject = prompt('Subject di esempio:', 'Backup failed at 03:42 on host srv01');
+    if (subject === null) return;
+    const box = document.getElementById('tr_fingerprint');
+    box.style.display = 'block'; box.className = 'test-result'; box.textContent = 'Calcolo...';
+    try {
+        const resp = await fetch('{{ url_for("aggregations.test_fingerprint") }}', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({template, sample:{from:from_addr, subject}}),
+        });
+        const data = await resp.json();
+        if (!data.ok) { box.classList.add('error'); box.textContent = 'Errore'; return; }
+        box.classList.add('ok'); box.innerHTML = 'Fingerprint: <code>' + data.fingerprint + '</code>';
+    } catch (err) { box.classList.add('error'); box.textContent = 'Errore: ' + err; }
+}
+</script>
+{% endblock %}

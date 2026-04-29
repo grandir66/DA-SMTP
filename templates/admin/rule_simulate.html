@@ -1,0 +1,85 @@
+{% extends "admin/_base.html" %}
+{% block title %}Simulazione regole{% endblock %}
+
+{% block content %}
+<section class="dr-section">
+    <div style="display:flex; gap:0.5rem; align-items:center;">
+        <a href="{{ url_for('rules.list_view') }}" class="dr-btn"><i class="fas fa-arrow-left"></i> Lista</a>
+        <h2 style="margin:0;"><i class="fas fa-vial"></i> Simulazione evento</h2>
+    </div>
+    <p style="color:var(--dr-gray-dark); font-size:0.85rem;">
+        Esegue la valutazione gerarchica (<code>evaluate_v2</code>) su un evento sintetico. Mostra il path completo
+        gruppo → figlio con match per match, action_map ereditata e azioni eseguite.
+    </p>
+</section>
+
+<div style="display:grid; grid-template-columns:1fr 1.2fr; gap:1rem; max-width:1100px;">
+    <form method="post" class="dr-card" style="background:#fff; border:1px solid #cbd5e1; border-radius:8px; padding:1rem;">
+        <h3 style="margin:0 0 0.7rem; color:var(--dr-primary);">Evento</h3>
+        <div class="dr-form-row">
+            <label>From</label>
+            <input type="text" name="from_address" value="{{ event.from_address }}">
+        </div>
+        <div class="dr-form-row">
+            <label>To</label>
+            <input type="text" name="to_address" value="{{ event.to_address }}">
+        </div>
+        <div class="dr-form-row">
+            <label>To dominio</label>
+            <input type="text" name="to_domain" value="{{ event.to_domain }}">
+        </div>
+        <div class="dr-form-row">
+            <label>Subject</label>
+            <input type="text" name="subject" value="{{ event.subject }}">
+        </div>
+        <div class="dr-form-row">
+            <label>Body</label>
+            <textarea name="body_text" rows="3">{{ event.body_text }}</textarea>
+        </div>
+        <h3 style="margin:0.8rem 0 0.5rem; color:var(--dr-primary);">Contesto</h3>
+        <div class="dr-form-row">
+            <label>In service</label>
+            <select name="in_service">
+                <option value="true" {% if context.in_service is true %}selected{% endif %}>in orario</option>
+                <option value="false" {% if context.in_service is false %}selected{% endif %}>fuori orario</option>
+                <option value="null" {% if context.in_service is none %}selected{% endif %}>cliente non identificato</option>
+            </select>
+        </div>
+        <div class="dr-form-row">
+            <label>Sector</label>
+            <input type="text" name="sector" value="{{ context.sector or '' }}">
+        </div>
+        <button type="submit" class="dr-btn dr-btn-primary"><i class="fas fa-play"></i> Esegui simulazione</button>
+    </form>
+
+    <div>
+        {% if outcome %}
+        <h3 style="margin:0 0 0.5rem; color:var(--dr-primary);">Risultato</h3>
+        <div class="rule-simulate-output">Eseguite: {{ outcome.winners|length }} azione/i.
+
+{% for step in outcome.chain -%}
+{%- set indent = '  ' if step.kind == 'child' else '' -%}
+{{ indent }}
+{%- if step.kind == 'group' %}<span class="{{ 'matched' if step.matched else 'skipped' }}">{% if step.matched %}✓{% else %}✗{% endif %}</span> [GRUPPO #{{ step.rule_id }}] prio={{ step.priority }} — {{ step.rule_name or '' }}
+{%- elif step.kind == 'child' %}<span class="{{ 'matched' if step.matched else 'skipped' }}">{% if step.matched %}✓{% else %}✗{% endif %}</span> └─ figlio #{{ step.rule_id }} prio={{ step.priority }} — {{ step.rule_name or '' }}
+{%- else %}<span class="{{ 'matched' if step.matched else 'skipped' }}">{% if step.matched %}✓{% else %}✗{% endif %}</span> orfana #{{ step.rule_id }} prio={{ step.priority }} — {{ step.rule_name or '' }}{% endif %}
+{% if step.reasons %}{{ indent }}     {{ step.reasons|join(', ') }}
+{% endif %}
+{% if step.matched and step.kind == 'child' and step.effective_action_map %}{{ indent }}     action_map effettiva: {{ step.effective_action_map|tojson }}
+{% endif %}
+{% endfor -%}
+
+{% if outcome.winners %}
+<span class="matched">→ azioni eseguite ({{ outcome.winners|length }}):</span>
+{% for w in outcome.winners -%}
+  • #{{ w.id }} {{ w.name }} → action={{ w.action }}{% if w.action_map %} action_map={{ w.action_map|tojson }}{% endif %}
+{% endfor -%}
+{% else %}
+<span class="stop">⊘ Nessuna regola ha matchato — default delivery</span>
+{% endif %}</div>
+        {% else %}
+        <div class="dr-empty">Compila l'evento e premi "Esegui simulazione".</div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

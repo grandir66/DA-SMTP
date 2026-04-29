@@ -1,0 +1,57 @@
+{% extends "admin/_base.html" %}
+{% block title %}{{ 'Nuovo provider' if is_new else record.name }}{% endblock %}
+{% block content %}
+<section class="dr-section">
+    <a href="{{ url_for('ai.providers_list') }}" class="dr-btn"><i class="fas fa-arrow-left"></i> Lista provider</a>
+    <h2 style="margin:0.5rem 0;">
+        {% if is_new %}<i class="fas fa-plus-circle"></i> Nuovo provider{% else %}<i class="fas fa-pen"></i> {{ record.name }}{% endif %}
+    </h2>
+</section>
+
+<form method="post" style="background:#fff; border:1px solid #cbd5e1; border-radius:8px; padding:1.2rem; max-width:700px;">
+    <div class="dr-form-row">
+        <label>Nome</label>
+        <input type="text" name="name" value="{{ record.name or '' }}" required placeholder="Claude API">
+    </div>
+    <div class="dr-form-row">
+        <label>Kind</label>
+        <select name="kind">
+            <option value="claude" {% if record.kind=='claude' %}selected{% endif %}>claude (Anthropic)</option>
+            <option value="openai_compat" {% if record.kind=='openai_compat' %}selected{% endif %}>openai_compat (OpenAI-compatible)</option>
+            <option value="local_http" {% if record.kind=='local_http' %}selected{% endif %}>local_http (DGX/Ollama/vLLM)</option>
+        </select>
+    </div>
+    <div class="dr-form-row">
+        <label>Endpoint</label>
+        <div>
+            <input type="text" name="endpoint" value="{{ record.endpoint or '' }}" placeholder="https://api.anthropic.com (vuoto = default Anthropic)">
+            <div class="help">Per Claude API lasciare vuoto. Per DGX/locale: <code>http://192.168.4.X:8000/v1</code></div>
+        </div>
+    </div>
+    <div class="dr-form-row">
+        <label>API key env</label>
+        <div>
+            <input type="text" name="api_key_env" value="{{ record.api_key_env or 'ANTHROPIC_API_KEY' }}">
+            <div class="help">Nome della variabile d'ambiente che contiene la chiave (in <code>/etc/domarc-smtp-relay-admin/secrets.env</code>).</div>
+        </div>
+    </div>
+    <div class="dr-form-row">
+        <label>Default model</label>
+        <input type="text" name="default_model" value="{{ record.default_model or 'claude-haiku-4-5' }}">
+    </div>
+    <div class="dr-form-row">
+        <label>Stato</label>
+        <label style="font-weight:normal;">
+            <input type="checkbox" name="enabled" {% if record.enabled is not defined or record.enabled %}checked{% endif %}> Attivo
+        </label>
+    </div>
+    <div class="dr-form-row">
+        <label>Note</label>
+        <textarea name="notes" rows="2">{{ record.notes or '' }}</textarea>
+    </div>
+    <div style="display:flex; gap:0.5rem; padding-top:0.7rem;">
+        <button type="submit" class="dr-btn dr-btn-primary" style="width:auto;"><i class="fas fa-save"></i> Salva</button>
+        <a href="{{ url_for('ai.providers_list') }}" class="dr-btn" style="width:auto;">Annulla</a>
+    </div>
+</form>
+{% endblock %}

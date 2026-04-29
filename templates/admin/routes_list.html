@@ -1,0 +1,39 @@
+{% extends "admin/_base.html" %}
+{% block title %}Mail intercettate (smarthost){% endblock %}
+{% block content %}
+<section class="dr-section">
+    <h2><i class="fas fa-route"></i> Mail intercettate ({{ routes|length }})</h2>
+    <p class="dr-hint">
+        Alias che il relay <strong>accetta</strong> e instrada a uno smarthost specifico
+        (forward) o ad altro destinatario (redirect). Destinatari non listati sono rifiutati con
+        <code>550 5.7.1 Relaying denied</code>.
+    </p>
+    <a href="{{ url_for('routes.route_form') }}" class="dr-btn dr-btn-primary" style="width:auto;"><i class="fas fa-plus"></i> Nuovo alias</a>
+</section>
+<div class="dr-table-wrap">
+<table class="dr-table">
+    <thead><tr><th>Alias</th><th>Cliente</th><th>Forward target</th><th>Redirect target</th><th>Apply rules</th><th>Stato</th><th></th></tr></thead>
+    <tbody>
+        {% for r in routes %}
+        <tr>
+            <td class="mono"><a href="{{ url_for('routes.route_form', route_id=r.id) }}"><strong>{{ r.local_part }}@{{ r.domain }}</strong></a></td>
+            <td>{{ r.codice_cliente or '—' }}</td>
+            <td class="mono"><small>{% if r.forward_target %}{{ r.forward_target }}:{{ r.forward_port }} <code>[{{ r.forward_tls }}]</code>{% else %}—{% endif %}</small></td>
+            <td class="mono"><small>{{ r.redirect_target or '—' }}</small></td>
+            <td>{% if r.apply_rules %}<i class="fas fa-check" style="color:#10b981;"></i>{% else %}<span style="color:var(--dr-gray);">bypass</span>{% endif %}</td>
+            <td>{% if r.enabled %}<span class="dr-badge dr-badge-ok">attivo</span>{% else %}<span class="dr-badge dr-badge-error">spento</span>{% endif %}</td>
+            <td>
+                <a href="{{ url_for('routes.route_form', route_id=r.id) }}" class="dr-btn"><i class="fas fa-pen"></i></a>
+                <form method="post" action="{{ url_for('routes.route_delete', route_id=r.id) }}" style="display:inline;"
+                      onsubmit="return confirm('Eliminare {{ r.local_part }}@{{ r.domain }}?');">
+                    <button class="dr-btn dr-btn-danger"><i class="fas fa-trash"></i></button>
+                </form>
+            </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="dr-empty">Nessun alias. Il relay rifiuterà tutte le mail finché non ne configuri almeno uno.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endblock %}

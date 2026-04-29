@@ -1,0 +1,55 @@
+{% extends "admin/_base.html" %}
+{% block title %}AI Providers{% endblock %}
+{% block content %}
+<section class="dr-section">
+    <div style="display:flex; gap:0.5rem; align-items:center;">
+        <a href="{{ url_for('ai.dashboard') }}" class="dr-btn"><i class="fas fa-arrow-left"></i> AI Dashboard</a>
+        <h2 style="margin:0;"><i class="fas fa-server"></i> Provider IA</h2>
+        <a href="{{ url_for('ai.provider_form') }}" class="dr-btn dr-btn-primary" style="width:auto;">
+            <i class="fas fa-plus"></i> Nuovo provider
+        </a>
+    </div>
+    <p style="color:var(--dr-gray-dark); font-size:0.85rem;">
+        Provider IA configurati: Claude API (Anthropic) e/o endpoint OpenAI-compatible (DGX Spark, Ollama, vLLM).
+        L'API key vive in env var (default <code>ANTHROPIC_API_KEY</code> per Claude).
+    </p>
+</section>
+
+<div class="dr-table-wrap">
+<table class="dr-table">
+    <thead>
+        <tr><th>Nome</th><th>Kind</th><th>Endpoint</th><th>API key env</th><th>Default model</th><th>Stato</th><th></th></tr>
+    </thead>
+    <tbody>
+    {% for p in providers %}
+    <tr>
+        <td><a href="{{ url_for('ai.provider_form', provider_id=p.id) }}"><strong>{{ p.name }}</strong></a></td>
+        <td><span class="rule-inherit-badge">{{ p.kind }}</span></td>
+        <td class="mono"><small>{{ p.endpoint or '— (default)' }}</small></td>
+        <td><code>{{ p.api_key_env or '—' }}</code></td>
+        <td><code>{{ p.default_model or '—' }}</code></td>
+        <td><span class="rule-status {{ 'on' if p.enabled else 'off' }}">{{ 'attivo' if p.enabled else 'disattivo' }}</span></td>
+        <td style="white-space:nowrap;">
+            <a href="{{ url_for('ai.provider_test', provider_id=p.id) }}" class="dr-btn" style="width:auto; padding:0.2rem 0.5rem;" title="Test connettività">
+                <i class="fas fa-vial"></i>
+            </a>
+            <a href="{{ url_for('ai.provider_form', provider_id=p.id) }}" class="dr-btn" style="width:auto; padding:0.2rem 0.5rem;">
+                <i class="fas fa-pen"></i>
+            </a>
+            {% if session.role == 'superadmin' %}
+            <form method="post" action="{{ url_for('ai.provider_delete', provider_id=p.id) }}" style="display:inline;"
+                  onsubmit="return confirm('Eliminare il provider {{ p.name }}?');">
+                <button class="dr-btn dr-btn-danger" style="width:auto; padding:0.2rem 0.5rem;">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </form>
+            {% endif %}
+        </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="7" class="dr-empty">Nessun provider configurato. <a href="{{ url_for('ai.provider_form') }}">Aggiungine uno</a>.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endblock %}

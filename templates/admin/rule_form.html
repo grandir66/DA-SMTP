@@ -1,0 +1,695 @@
+{% extends "admin/_base.html" %}
+{% block title %}{{ 'Nuova regola' if is_new else record.name }}{% endblock %}
+
+{% block extra_head %}
+<style>
+    .rf-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; max-width:1100px; }
+    .rf-card { background:#fff; border:1px solid #cbd5e1; border-radius:8px; overflow:hidden; }
+    .rf-card.full { grid-column:1 / -1; }
+    .rf-card > h3 { margin:0; padding:0.8rem 1.1rem; font-size:0.95rem; background:linear-gradient(180deg, #fafbfd 0%, #f4f6fa 100%); color:#0b2a4a; border-bottom:1px solid #cbd5e1; display:flex; align-items:center; gap:0.5rem; }
+    .rf-body { padding:1rem 1.1rem; }
+    .rf-row { display:grid; grid-template-columns:140px 1fr; gap:0.8rem; align-items:start; margin-bottom:0.7rem; }
+    .rf-row > label { font-weight:500; color:#0b2a4a; padding-top:0.4rem; font-size:0.88rem; }
+    .rf-row input[type="text"], .rf-row input[type="number"], .rf-row textarea, .rf-row select {
+        width:100%; padding:0.45rem 0.6rem; border:1px solid #cbd5e1; border-radius:5px; font-family:inherit; font-size:0.88rem;
+    }
+    .rf-row .help { font-size:0.78rem; color:#64748b; margin-top:0.2rem; }
+    .rf-row .inline-test { display:flex; gap:0.3rem; align-items:center; }
+    .rf-row .inline-test input { flex:1; }
+    .rf-row .test-result { margin-top:0.3rem; padding:0.4rem 0.6rem; border-radius:4px; font-size:0.82rem; display:none; }
+    .rf-row .test-result.ok { background:#d1fae5; color:#047857; }
+    .rf-row .test-result.fail { background:#fee2e2; color:#b91c1c; }
+    .rf-row .test-result.error { background:#fef3c7; color:#92400e; }
+    .rf-action-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:0.5rem; }
+    .rf-action-card { border:1px solid #cbd5e1; border-radius:6px; padding:0.7rem; cursor:pointer; text-align:center; transition:all 0.12s; background:#fff; }
+    .rf-action-card:hover { border-color:#3b82f6; }
+    .rf-action-card.selected { border-color:#3b82f6; background:#dbeafe; box-shadow:0 0 0 2px rgba(59,130,246,0.18); }
+    .rf-action-card i { font-size:1.2rem; color:#3b82f6; display:block; margin-bottom:0.3rem; }
+    .rf-action-card .name { font-weight:600; font-size:0.85rem; }
+    .rf-action-fields { display:none; padding:0.8rem 1rem; background:#f8fafc; border-radius:6px; margin-top:0.6rem; border:1px solid #e2e8f0; }
+    .rf-action-fields.active { display:block; }
+    .rf-footer { display:flex; gap:0.5rem; padding:1rem 0; max-width:1100px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="dr-section">
+    <div style="display:flex; gap:0.5rem; align-items:center;">
+        <a href="{{ url_for('rules.list_view') }}" class="dr-btn"><i class="fas fa-arrow-left"></i> Lista regole</a>
+        <h2 style="margin:0;">
+            {% if is_new %}<i class="fas fa-plus-circle"></i> Nuova regola SMTP{% else %}<i class="fas fa-pen"></i> {{ record.name }}{% endif %}
+        </h2>
+    </div>
+    {% if from_event_id %}
+    <div style="background:#eff6ff; border-left:3px solid #3b82f6; padding:0.7rem 0.9rem; border-radius:0 5px 5px 0; font-size:0.88rem; margin-top:0.6rem; color:#1e40af;">
+        <i class="fas fa-magic"></i>
+        <strong>Regola precompilata dall'evento <a href="{{ url_for('events.detail_view', event_id=from_event_id) }}">#{{ from_event_id }}</a></strong> —
+        i campi <em>From</em>, <em>To</em>, <em>Subject</em> contengono regex esatti dell'evento.
+        <strong>Editali liberamente</strong> per allargare il match.
+    </div>
+    {% endif %}
+
+    {% if is_new and not from_event_id %}
+    <details style="margin-top:0.7rem; background:#f0fdf4; border-left:3px solid #10b981; padding:0.7rem 0.9rem; border-radius:0 5px 5px 0; font-size:0.85rem;">
+        <summary style="cursor:pointer; font-weight:600; color:#065f46;">
+            <i class="fas fa-lightbulb"></i> Scenari tipici (combinazioni di match consigliate)
+        </summary>
+        <ul style="margin:0.5rem 0 0 1.2rem; padding:0; color:#065f46;">
+            <li><strong>Fuori orario / festività clienti con contratto</strong> →
+                Cliente noto = <em>sì</em>, Contratto = <em>con contratto</em>, Stato servizio = <em>fuori servizio</em>;
+                action <code>auto_reply</code> + template "fuori_orario" + <code>create_ticket</code> in cascata.</li>
+            <li><strong>Cliente censito senza contratto</strong> →
+                Cliente noto = <em>sì</em>, Contratto = <em>senza contratto</em>;
+                action <code>auto_reply</code> + template "no_contract".</li>
+            <li><strong>Mittente sconosciuto / catch-all</strong> →
+                Cliente noto = <em>non censito</em>; action <code>auto_reply</code> + template "unknown" o <code>quarantine</code>.</li>
+            <li><strong>Eccezione attiva (es. ponte, evento)</strong> →
+                Eccezione oggi = <em>sì</em>; action <code>auto_reply</code> con template specifico — si applica
+                a prescindere dal contratto.</li>
+            <li><strong>Notifiche automatiche da monitoring</strong> →
+                From dominio + Subject regex con keyword (alert/error/down) → <code>create_ticket</code>
+                con urgenza <code>ALTA</code>.</li>
+        </ul>
+    </details>
+    {% endif %}
+</section>
+
+<form method="post" action="">
+<div class="rf-grid">
+
+    <div class="rf-card">
+        <h3><i class="fas fa-tag"></i> Identificazione</h3>
+        <div class="rf-body">
+            <div class="rf-row">
+                <label>Nome *</label>
+                <input type="text" name="name" required maxlength="200" value="{{ record.name or '' }}">
+            </div>
+            <div class="rf-row">
+                <label>Priorità</label>
+                <div>
+                    <input type="number" name="priority" min="1" max="999" value="{{ record.priority or 100 }}" style="width:120px;">
+                    <div class="help">Numero più basso = valutata prima nello stesso scope.</div>
+                </div>
+            </div>
+            <div class="rf-row">
+                <label>Stato</label>
+                <div><label style="font-weight:400;"><input type="checkbox" name="enabled" {% if record.enabled or is_new %}checked{% endif %}> Attiva</label></div>
+            </div>
+            <div class="rf-row">
+                <label>Cascata</label>
+                <div><label style="font-weight:400;"><input type="checkbox" name="continue_after_match" {% if record.continue_after_match %}checked{% endif %}> Continua a valutare regole successive dopo il match</label></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="rf-card">
+        <h3><i class="fas fa-bullseye"></i> Scope</h3>
+        <div class="rf-body">
+            <div class="rf-row">
+                <label>Tipo</label>
+                <select name="scope_type">
+                    <option value="global"      {% if record.scope_type == 'global' or not record.scope_type %}selected{% endif %}>Globale</option>
+                    <option value="mailbox"     {% if record.scope_type == 'mailbox' %}selected{% endif %}>Mailbox specifica</option>
+                    <option value="sector_pack" {% if record.scope_type == 'sector_pack' %}selected{% endif %}>Settore</option>
+                </select>
+            </div>
+            <div class="rf-row">
+                <label>Riferimento</label>
+                <div>
+                    <input type="text" name="scope_ref" value="{{ record.scope_ref or '' }}" placeholder="es. id mailbox o nome settore">
+                    <div class="help">Vuoto se scope = global.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="rf-card full">
+        <h3><i class="fas fa-magnifying-glass"></i> Match (AND tra i campi compilati)</h3>
+        <div class="rf-body">
+            <div class="rf-row">
+                <label>Subject regex</label>
+                <div>
+                    <div class="inline-test">
+                        <input type="text" id="match_subject_regex" name="match_subject_regex" value="{{ record.match_subject_regex or '' }}" placeholder="(?i)urgente|critico">
+                        <button type="button" class="dr-btn" style="width:auto;" onclick="testRegex('match_subject_regex','tr_subject')"><i class="fas fa-vial"></i> Test</button>
+                    </div>
+                    <div id="tr_subject" class="test-result"></div>
+                </div>
+            </div>
+            <div class="rf-row">
+                <label>From dominio</label>
+                <div>
+                    <input type="text" name="match_from_domain" id="match_from_domain"
+                           list="known_domains_list"
+                           value="{{ record.match_from_domain or '' }}"
+                           placeholder="es. cliente.com (autocomplete dai domini noti)" maxlength="255"
+                           style="text-transform:lowercase;"
+                           oninput="lookupDomain()">
+                    <datalist id="known_domains_list">
+                        {% for d in known_domains %}
+                        <option value="{{ d }}"></option>
+                        {% endfor %}
+                    </datalist>
+                    <div class="help">
+                        Match esatto (case-insensitive) sul dominio del mittente. Autocomplete dai domini
+                        noti dei clienti ({{ known_domains|length }} censiti). Se valorizzato insieme
+                        a <em>From regex</em>, sono in AND.
+                    </div>
+                    <div id="domain_lookup_result" style="margin-top:0.4rem; font-size:0.85rem;"></div>
+                </div>
+            </div>
+            <div class="rf-row">
+                <label>From regex</label>
+                <div>
+                    <div class="inline-test">
+                        <input type="text" id="match_from_regex" name="match_from_regex" value="{{ record.match_from_regex or '' }}" placeholder="(?i)^noreply@cliente\.com$">
+                        <button type="button" class="dr-btn" style="width:auto;" onclick="testRegex('match_from_regex','tr_from')"><i class="fas fa-vial"></i> Test</button>
+                    </div>
+                    <div id="tr_from" class="test-result"></div>
+                    <div class="help">Regex sull'indirizzo mittente completo (es. per filtrare specifici local-part).</div>
+                </div>
+            </div>
+            <div class="rf-row">
+                <label>To regex</label>
+                <div>
+                    <div class="inline-test">
+                        <input type="text" id="match_to_regex" name="match_to_regex" value="{{ record.match_to_regex or '' }}" placeholder="(?i)^supporto@">
+                        <button type="button" class="dr-btn" style="width:auto;" onclick="testRegex('match_to_regex','tr_to')"><i class="fas fa-vial"></i> Test</button>
+                    </div>
+                    <div id="tr_to" class="test-result"></div>
+                </div>
+            </div>
+            <div class="rf-row">
+                <label>Body regex</label>
+                <div>
+                    <div class="inline-test">
+                        <input type="text" id="match_body_regex" name="match_body_regex" value="{{ record.match_body_regex or '' }}" placeholder="opzionale, body troncato a 16 KB">
+                        <button type="button" class="dr-btn" style="width:auto;" onclick="testRegex('match_body_regex','tr_body')"><i class="fas fa-vial"></i> Test</button>
+                    </div>
+                    <div id="tr_body" class="test-result"></div>
+                </div>
+            </div>
+            <div class="rf-row">
+                <label>To domain</label>
+                <input type="text" name="match_to_domain" value="{{ record.match_to_domain or '' }}" placeholder="es. domarc.it">
+            </div>
+            <div style="grid-column: 1 / -1; margin-top:0.5rem; padding:0.7rem 0.9rem; background:#f0fdf4; border-left:3px solid #10b981; border-radius:0 6px 6px 0;">
+                <h4 style="margin:0 0 0.4rem 0; color:#065f46; font-size:0.92rem;">
+                    <i class="fas fa-clock"></i> Match temporale (rispetto al profilo orari del cliente)
+                </h4>
+                <p style="margin:0 0 0.5rem 0; font-size:0.82rem; color:#065f46;">
+                    Il rule engine valuta la regola in funzione dell'orario corrente confrontato con
+                    il profilo orario assegnato al codcli del mittente (STD/EXT/H24/NO o profilo custom).
+                    Le festività del profilo (con flag <code>exclude_holidays</code>) sono trattate
+                    come "fuori servizio".
+                </p>
+            </div>
+            <div class="rf-row">
+                <label>Stato servizio</label>
+                <div>
+                    <select name="match_in_service">
+                        <option value="">Indifferente — applica sempre</option>
+                        <option value="true"  {% if record.match_in_service == 1 or record.match_in_service is sameas true %}selected{% endif %}>Solo in servizio (dentro la finestra del profilo)</option>
+                        <option value="false" {% if record.match_in_service == 0 or record.match_in_service is sameas false %}selected{% endif %}>Solo fuori servizio (notte/weekend/festività)</option>
+                    </select>
+                    <div class="help">
+                        <code>in servizio</code> = orario corrente ricade in uno slot del profilo orari del cliente
+                        e non è una festività. <code>fuori servizio</code> = il contrario, oppure il profilo è
+                        <code>NO</code> (nessuna copertura).
+                    </div>
+                </div>
+            </div>
+            <div class="rf-row">
+                <label>Override slot orario</label>
+                <div>
+                    <input type="text" name="match_at_hours" value="{{ record.match_at_hours or '' }}"
+                           placeholder="es. 22:00-06:00, oppure mon=00:00-08:00;sat=*">
+                    <div class="help">
+                        Override sul profilo cliente: se valorizzato, ignora il profilo e applica solo se
+                        l'orario corrente cade in questo slot. Sintassi: <code>HH:MM-HH:MM</code> (singolo slot)
+                        o <code>day=HH:MM-HH:MM;day=*</code> per più giorni. Lascia vuoto per usare il profilo.
+                    </div>
+                </div>
+            </div>
+            <div class="rf-row">
+                <label>Cliente noto</label>
+                <div>
+                    <select name="match_known_customer">
+                        <option value="">Indifferente</option>
+                        <option value="true"  {% if record.match_known_customer == 1 or record.match_known_customer is sameas true %}selected{% endif %}>Solo se mittente è in <code>client_domains</code></option>
+                        <option value="false" {% if record.match_known_customer == 0 or record.match_known_customer is sameas false %}selected{% endif %}>Solo se mittente NON è censito</option>
+                    </select>
+                    <div class="help">
+                        Il rule engine risolve <code>codcli</code> dal dominio del mittente.
+                        Usa "non censito" per regole catch-all su mittenti sconosciuti
+                        (es. auto-reply standard "non sei un cliente").
+                    </div>
+                </div>
+            </div>
+            <div class="rf-row">
+                <label>Contratto cliente</label>
+                <div>
+                    <select name="match_contract_active">
+                        <option value="">Indifferente</option>
+                        <option value="true"  {% if record.match_contract_active == 1 or record.match_contract_active is sameas true %}selected{% endif %}>Solo clienti CON contratto attivo</option>
+                        <option value="false" {% if record.match_contract_active == 0 or record.match_contract_active is sameas false %}selected{% endif %}>Solo clienti SENZA contratto attivo (ma censiti)</option>
+                    </select>
+                    <div class="help">
+                        Esempio "senza contratto + cliente noto": clienti attivi ma senza contratto formale →
+                        auto-reply con template specifico "Per supporto stipulare contratto".
+                    </div>
+                </div>
+            </div>
+            <div class="rf-row">
+                <label>Eccezione oggi</label>
+                <div>
+                    <select name="match_has_exception_today">
+                        <option value="">Indifferente</option>
+                        <option value="true"  {% if record.match_has_exception_today == 1 or record.match_has_exception_today is sameas true %}selected{% endif %}>Solo se cliente ha eccezione oggi</option>
+                        <option value="false" {% if record.match_has_exception_today == 0 or record.match_has_exception_today is sameas false %}selected{% endif %}>Solo se nessuna eccezione</option>
+                    </select>
+                    <div class="help">
+                        Eccezione = override schedule per data specifica configurato in
+                        <a href="{{ url_for('service_hours.list_view') }}">Orari per cliente</a>
+                        (es. apertura straordinaria, chiusura per ponte, festività locale).
+                        Si applica <strong>a prescindere dal contratto</strong>.
+                    </div>
+                </div>
+            </div>
+            <div class="rf-row">
+                <label>Match tag</label>
+                <input type="text" name="match_tag" value="{{ record.match_tag or '' }}" placeholder="es. priority/spam">
+            </div>
+        </div>
+    </div>
+
+    <div class="rf-card full">
+        <h3><i class="fas fa-bolt"></i> Azione</h3>
+        <div class="rf-body">
+            <div class="rf-action-grid">
+                {% set actions = [
+                    ('ignore', 'Ignora', 'fa-ban'),
+                    ('flag_only', 'Solo flag', 'fa-flag'),
+                    ('auto_reply', 'Auto reply', 'fa-reply'),
+                    ('create_ticket', 'Crea ticket', 'fa-ticket'),
+                    ('forward', 'Forward', 'fa-share'),
+                    ('redirect', 'Redirect', 'fa-arrow-right-arrow-left'),
+                    ('quarantine', 'Quarantine', 'fa-shield-virus'),
+                    ('ai_classify', 'IA classifica', 'fa-robot'),
+                ] %}
+                {% for code, label, icon in actions %}
+                <div class="rf-action-card {% if record.action == code %}selected{% endif %}" data-action="{{ code }}" onclick="selectAction('{{ code }}')">
+                    <i class="fas {{ icon }}"></i>
+                    <div class="name">{{ label }}</div>
+                </div>
+                {% endfor %}
+            </div>
+            <input type="hidden" id="action" name="action" value="{{ record.action or '' }}" required>
+
+            <div class="rf-action-fields" id="amf_create_ticket" data-for="create_ticket">
+                <div class="rf-row">
+                    <label>Settore ticket</label>
+                    <input type="text" name="action_map_settore" value="{{ record.action_map.settore if record.action_map else '' }}" placeholder="T">
+                </div>
+                <div class="rf-row">
+                    <label>Urgenza</label>
+                    <select name="action_map_urgenza">
+                        <option value="">— default —</option>
+                        {% for u in ['BASSA','NORMALE','ALTA','CRITICA'] %}
+                        <option value="{{ u }}" {% if record.action_map and record.action_map.urgenza == u %}selected{% endif %}>{{ u|title }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="rf-action-fields" id="amf_auto_reply" data-for="auto_reply">
+                <div class="rf-row">
+                    <label>Template</label>
+                    <select name="action_map_template_id">
+                        <option value="">— scegli —</option>
+                        {% for t in templates %}
+                        <option value="{{ t.id }}" {% if record.action_map and record.action_map.template_id == t.id %}selected{% endif %}>{{ t.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="rf-row">
+                    <label>Modalità reply</label>
+                    <div>
+                        <select name="action_map_reply_mode">
+                            <option value="to_sender_only" {% if not record.action_map or (record.action_map.reply_mode in (None,'','to_sender_only')) %}selected{% endif %}>Solo al mittente (To: sender)</option>
+                            <option value="reply_all"     {% if record.action_map and record.action_map.reply_mode == 'reply_all' %}selected{% endif %}>Rispondi a tutti (sender + To/Cc originali)</option>
+                            <option value="to_alias"      {% if record.action_map and record.action_map.reply_mode == 'to_alias' %}selected{% endif %}>Rispondi dall'alias intercept (From = destinatario originale)</option>
+                        </select>
+                        <div class="help">
+                            Definisce a chi va indirizzata la risposta automatica e con quale identità mittente.
+                        </div>
+                    </div>
+                </div>
+                <div class="rf-row">
+                    <label>Subject reply</label>
+                    <div>
+                        <input type="text" name="action_map_reply_subject_prefix"
+                               value="{{ record.action_map.reply_subject_prefix if record.action_map and record.action_map.reply_subject_prefix else 'Re: ' }}"
+                               placeholder="Re: " maxlength="32" style="width:120px;">
+                        <div class="help">Prefisso aggiunto al subject originale (default <code>Re: </code>; lascia vuoto per usare il subject del template).</div>
+                    </div>
+                </div>
+                <div class="rf-row">
+                    <label>Quote originale</label>
+                    <div>
+                        <label style="font-weight:400; display:block;">
+                            <input type="checkbox" name="action_map_reply_quote_original" {% if record.action_map and record.action_map.reply_quote_original %}checked{% endif %}>
+                            Includi il messaggio originale citato nel body della reply
+                        </label>
+                        <label style="font-weight:400; display:block;">
+                            <input type="checkbox" name="action_map_reply_attach_original" {% if record.action_map and record.action_map.reply_attach_original %}checked{% endif %}>
+                            Allega il messaggio originale come <code>.eml</code>
+                        </label>
+                    </div>
+                </div>
+                <div class="rf-row">
+                    <label>Reply-To</label>
+                    <input type="text" name="action_map_reply_to"
+                           value="{{ record.action_map.reply_to if record.action_map and record.action_map.reply_to else '' }}"
+                           placeholder="opzionale, es. assistenza@domarc.it (sovrascrive header Reply-To)">
+                </div>
+                <div class="rf-row">
+                    <label>Codice autorizzazione</label>
+                    <div>
+                        <label style="font-weight:400;">
+                            <input type="checkbox" name="action_map_generate_auth_code" {% if record.action_map and record.action_map.generate_auth_code %}checked{% endif %}>
+                            Genera codice e includilo nel template (variabile <code>{{ '{{ auth_code }}' }}</code>)
+                        </label>
+                    </div>
+                </div>
+                <div class="rf-row">
+                    <label>TTL codice (h)</label>
+                    <input type="number" name="action_map_auth_code_ttl_hours" min="1" max="720"
+                           value="{{ record.action_map.auth_code_ttl_hours if record.action_map and record.action_map.auth_code_ttl_hours else 48 }}" style="width:120px;">
+                </div>
+            </div>
+
+            <div class="rf-action-fields" id="amf_forward" data-for="forward">
+                <div class="rf-row">
+                    <label>Forward target</label>
+                    <input type="text" name="action_map_forward_target"
+                           value="{{ record.action_map.forward_target if record.action_map else '' }}" placeholder="acme.mail.protection.outlook.com">
+                </div>
+                <div class="rf-row">
+                    <label>Porta</label>
+                    <input type="number" name="action_map_forward_port"
+                           value="{{ record.action_map.forward_port if record.action_map and record.action_map.forward_port else 25 }}" style="width:120px;">
+                </div>
+                <div class="rf-row">
+                    <label>TLS</label>
+                    <select name="action_map_forward_tls">
+                        <option value="opportunistic" {% if record.action_map and record.action_map.forward_tls == 'opportunistic' %}selected{% endif %}>opportunistic</option>
+                        <option value="strict"        {% if record.action_map and record.action_map.forward_tls == 'strict' %}selected{% endif %}>strict</option>
+                        <option value="none"          {% if record.action_map and record.action_map.forward_tls == 'none' %}selected{% endif %}>none</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="rf-action-fields" id="amf_redirect" data-for="redirect">
+                <div class="rf-row">
+                    <label>Redirect target</label>
+                    <input type="text" name="action_map_redirect_to"
+                           value="{{ record.action_map.redirect_to if record.action_map else '' }}" placeholder="r.grandi@domarc.it">
+                </div>
+                <div class="rf-row">
+                    <label>Motivo (header)</label>
+                    <input type="text" name="action_map_reason"
+                           value="{{ record.action_map.reason if record.action_map else '' }}" placeholder="finisce in X-Domarc-Redirect-Reason">
+                </div>
+            </div>
+
+            <div class="rf-action-fields" id="amf_quarantine" data-for="quarantine">
+                <div class="rf-row">
+                    <label>Motivo</label>
+                    <input type="text" name="action_map_reason"
+                           value="{{ record.action_map.reason if record.action_map else '' }}" placeholder="es. mittente sconosciuto">
+                </div>
+            </div>
+
+            {# ============================ AI CLASSIFY ============================ #}
+            <div class="rf-action-fields" id="amf_ai_classify" data-for="ai_classify"
+                 style="background:#f5f3ff; border-color:#c4b5fd;">
+                <div style="display:flex; gap:0.8rem; align-items:flex-start; margin-bottom:0.8rem;">
+                    <i class="fas fa-robot" style="font-size:2rem; color:#7c3aed;"></i>
+                    <div style="flex:1;">
+                        <h4 style="margin:0 0 0.3rem; color:#5b21b6;">L'IA classificherà ogni email che matcha questa regola</h4>
+                        <p style="margin:0; font-size:0.85rem; color:#6d28d9;">
+                            Il listener invocherà l'admin via <code>POST /api/v1/relay/ai/classify</code> (timeout 5s).
+                            L'IA produce: <strong>intent</strong>, <strong>urgenza</strong>, <strong>summary</strong>, <strong>suggested_action</strong>.
+                            In <strong>shadow mode</strong> (default) la decisione viene solo loggata; in <strong>live mode</strong> viene applicata
+                            (<code>create_ticket</code>, <code>forward</code>, ecc.).
+                        </p>
+                    </div>
+                </div>
+
+                <div style="background:#fff; border:1px solid #c4b5fd; border-radius:6px; padding:0.8rem 1rem; margin-bottom:0.8rem;">
+                    <h5 style="margin:0 0 0.4rem; color:#5b21b6; font-size:0.88rem;">
+                        <i class="fas fa-route"></i> Job &amp; binding che verrà invocato
+                    </h5>
+                    <div style="font-size:0.85rem;">
+                        <strong>Job:</strong> <code>classify_email</code>
+                        <span style="color:#6b7280;">→ il job IA che la regola richiama (1:1 con action=ai_classify).</span>
+                    </div>
+                    {% if ai_active_bindings and ai_active_bindings.get('classify_email') %}
+                    <div style="font-size:0.85rem; margin-top:0.3rem;">
+                        <strong>Binding attivo:</strong>
+                        {% for b in ai_active_bindings.get('classify_email') %}
+                        {% set p = ai_providers.get(b.provider_id) if ai_providers else None %}
+                        <span class="rule-status on">v{{ b.version }}</span>
+                        <strong>{{ p.name if p else '?' }}</strong> /
+                        <code>{{ b.model_id }}</code>
+                        {% if b.traffic_split != 100 %}<span class="rule-inherit-badge">{{ b.traffic_split }}%</span>{% endif %}
+                        <a href="{{ url_for('ai.model_form', binding_id=b.id) }}"
+                           onclick="event.stopPropagation();"
+                           style="margin-left:0.4rem; font-size:0.8rem;">
+                            <i class="fas fa-pen"></i> modifica
+                        </a>
+                        {% if not loop.last %}<br>{% endif %}
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div style="margin-top:0.4rem; padding:0.5rem 0.8rem; background:#fef2f2; border-left:3px solid #dc2626; border-radius:0 4px 4px 0; font-size:0.85rem;">
+                        <strong style="color:#991b1b;">⚠ Nessun binding attivo per <code>classify_email</code></strong><br>
+                        <span style="color:#7f1d1d;">
+                            La regola scatta ma il listener entrerà in fail-safe (forward + ticket ALTA con <code>ai_unavailable=true</code>).
+                            <a href="{{ url_for('ai.model_form') }}?job_code=classify_email" style="color:#dc2626;"><strong>Configura un binding ora →</strong></a>
+                        </span>
+                    </div>
+                    {% endif %}
+
+                    {% if ai_global_status %}
+                    <div style="font-size:0.78rem; margin-top:0.5rem; color:#6b7280;">
+                        Stato globale:
+                        {% if ai_global_status.master_enabled %}<span class="rule-status on">AI master ON</span>{% else %}<span class="rule-status off">AI master OFF (Settings)</span>{% endif %}
+                        {% if ai_global_status.shadow_mode %}<span class="rule-inherit-badge">SHADOW</span>{% else %}<span class="rule-status on">LIVE</span>{% endif %}
+                        — Costo oggi: ${{ '%.4f'|format(ai_global_status.spent_today or 0) }} / ${{ '%.2f'|format(ai_global_status.budget or 0) }}
+                    </div>
+                    {% endif %}
+                </div>
+
+                <div class="rf-row">
+                    <label>Timeout (ms)</label>
+                    <div>
+                        <input type="number" name="action_map_timeout_ms"
+                               value="{{ record.action_map.timeout_ms if record.action_map and record.action_map.timeout_ms else 5000 }}"
+                               min="500" max="30000" step="500">
+                        <div class="help">Timeout sync per la chiamata all'IA (default 5000ms). Su timeout/errore: fail-safe forward + ticket ALTA.</div>
+                    </div>
+                </div>
+                <div class="rf-row">
+                    <label>Tenant id</label>
+                    <div>
+                        <input type="number" name="action_map_tenant_id"
+                               value="{{ record.action_map.tenant_id if record.action_map and record.action_map.tenant_id else 1 }}" min="1">
+                        <div class="help">Tenant per cui invocare il routing IA (default 1 = DOMARC).</div>
+                    </div>
+                </div>
+                <div style="background:#dbeafe; border-left:3px solid #3b82f6; padding:0.6rem 0.8rem; border-radius:0 4px 4px 0; margin-top:0.5rem; font-size:0.85rem; color:#1e3a8a;">
+                    <strong><i class="fas fa-info-circle"></i> Suggerimento:</strong>
+                    abilita <strong>"Mantieni consegna originale"</strong> nelle Delivery extra qui sotto:
+                    in shadow mode è essenziale per non perdere la mail (il listener lo forza comunque, ma è bene rendere il comportamento esplicito).
+                </div>
+
+                {# Mini-tabella decisioni IA recenti per QUESTA regola #}
+                {% if ai_recent_decisions %}
+                <div style="margin-top:1rem;">
+                    <h5 style="margin:0 0 0.4rem; color:#5b21b6; font-size:0.88rem;">
+                        <i class="fas fa-history"></i> Ultime decisioni IA invocate da questa regola
+                        <a href="{{ url_for('ai.decisions_list') }}" style="font-size:0.78rem; font-weight:normal;">vedi tutte →</a>
+                    </h5>
+                    <table class="dr-table" style="background:#fff;">
+                        <thead><tr><th>Quando</th><th>Intent</th><th>Urgenza</th><th>Summary</th><th>Stato</th><th></th></tr></thead>
+                        <tbody>
+                        {% for d in ai_recent_decisions %}
+                        <tr>
+                            <td><small>{{ d.created_at }}</small></td>
+                            <td>{{ d.intent or '—' }}</td>
+                            <td>{{ d.urgenza_proposta or '—' }}</td>
+                            <td><small>{{ d.summary|truncate(50) if d.summary else '—' }}</small></td>
+                            <td>
+                                {% if d.error %}<span class="rule-status off">err</span>
+                                {% elif d.shadow_mode %}<span class="rule-inherit-badge">shadow</span>
+                                {% else %}<span class="rule-status on">applied</span>{% endif %}
+                            </td>
+                            <td><a href="{{ url_for('ai.decision_detail', decision_id=d.id) }}" style="font-size:0.78rem;">→</a></td>
+                        </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div style="margin-top:0.8rem; padding:0.6rem 0.8rem; background:#f9fafb; border-radius:4px; font-size:0.82rem; color:#6b7280;">
+                    <i class="fas fa-info-circle"></i> Nessuna decisione IA ancora registrata per questa regola.
+                    Manda una mail di test che matchi questa regola per vedere l'IA in azione.
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Delivery extra: globale, applicabile a tutte le azioni -->
+            <div style="margin-top:1.2rem; padding:0.9rem 1rem; background:#fffbeb; border-left:3px solid #f6c23e; border-radius:0 6px 6px 0;">
+                <h4 style="margin:0 0 0.5rem 0; color:#78350f; font-size:0.92rem;">
+                    <i class="fas fa-share-nodes"></i> Delivery extra (oltre all'azione principale)
+                </h4>
+                <div class="rf-row">
+                    <label>Mantieni originale</label>
+                    <div>
+                        <label style="font-weight:400;">
+                            <input type="checkbox" name="action_map_keep_original_delivery" {% if record.action_map and record.action_map.keep_original_delivery %}checked{% endif %}>
+                            <strong>Consegna anche al destinatario originale</strong>
+                            (oltre a forward/redirect/quarantine/auto_reply)
+                        </label>
+                        <div class="help">
+                            Quando l'azione altera il routing (forward, redirect, quarantine), questa opzione ricostruisce
+                            la consegna ordinaria al destinatario originale via smarthost del dominio. Se OFF, l'email
+                            si ferma all'azione (pipeline conclusa).
+                        </div>
+                    </div>
+                </div>
+                <div class="rf-row">
+                    <label>Copia a (Cc)</label>
+                    <div>
+                        <input type="text" name="action_map_also_deliver_to"
+                               value="{{ record.action_map.also_deliver_to if record.action_map else '' }}"
+                               placeholder="r.grandi@datia.it, r.grandi@domarc.it">
+                        <div class="help">
+                            Lista CSV di destinatari aggiuntivi (Cc). Indipendente dal flag "Mantieni originale".
+                            Applicabile a tutte le azioni.
+                        </div>
+                    </div>
+                </div>
+                <div class="rf-row">
+                    <label>Bypass regole</label>
+                    <div>
+                        <label style="font-weight:400;">
+                            <input type="checkbox" name="action_map_apply_rules" {% if record.action_map and record.action_map.apply_rules %}checked{% endif %}>
+                            La consegna originale (se attivata) passa di nuovo per le regole
+                        </label>
+                        <div class="help">Default OFF — evita loop di valutazione regole sulla copia originale.</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="rf-row">
+                <label>Severity</label>
+                <select name="severity">
+                    <option value="">— default —</option>
+                    {% for sv in ['debug','info','notice','warn','error','critical'] %}
+                    <option value="{{ sv }}" {% if record.severity == sv %}selected{% endif %}>{{ sv }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="rf-footer">
+    <a href="{{ url_for('rules.list_view') }}" class="dr-btn">Annulla</a>
+    <button type="submit" class="dr-btn dr-btn-primary" style="margin-left:auto; width:auto;">
+        <i class="fas fa-save"></i> {{ 'Crea regola' if is_new else 'Salva modifiche' }}
+    </button>
+</div>
+</form>
+
+<script>
+function selectAction(code) {
+    document.getElementById('action').value = code;
+    document.querySelectorAll('.rf-action-card').forEach(c => c.classList.toggle('selected', c.dataset.action === code));
+    document.querySelectorAll('.rf-action-fields').forEach(f => f.classList.toggle('active', f.dataset.for === code));
+}
+{% if record.action %}selectAction("{{ record.action }}");{% endif %}
+
+let _domainLookupTimer = null;
+async function lookupDomain() {
+    clearTimeout(_domainLookupTimer);
+    _domainLookupTimer = setTimeout(_doLookupDomain, 350);
+}
+async function _doLookupDomain() {
+    const domain = document.getElementById('match_from_domain').value.trim().toLowerCase();
+    const out = document.getElementById('domain_lookup_result');
+    if (!domain || domain.length < 3) { out.innerHTML = ''; return; }
+    try {
+        const resp = await fetch('{{ url_for("rules.lookup_domain") }}?domain=' + encodeURIComponent(domain));
+        const d = await resp.json();
+        if (!d.ok) { out.innerHTML = '<small style="color:#b91c1c;">'+ (d.error || 'errore') +'</small>'; return; }
+        if (!d.is_known) {
+            out.innerHTML = '<div style="background:#fef3c7; padding:0.4rem 0.7rem; border-radius:4px; color:#7a4500;">'
+                + '<i class="fas fa-circle-exclamation"></i> Dominio <code>'+domain+'</code> <strong>non censito</strong> — '
+                + 'la regola si applicherebbe solo se hai messo <em>Cliente noto = non censito</em>.</div>';
+            return;
+        }
+        let html = '<div style="background:#d1fae5; padding:0.5rem 0.7rem; border-radius:4px; color:#065f46;">';
+        html += '<i class="fas fa-check"></i> <strong>'+ d.matches.length +' cliente(i) censiti</strong> con questo dominio:<ul style="margin:0.3rem 0 0 1.1rem; padding:0;">';
+        d.matches.forEach(m => {
+            const profile = m.profile_code ? '<code>'+m.profile_code+'</code>' : '—';
+            const contract = m.contract_type ? ' · '+m.contract_type : '';
+            const active = m.is_active ? '<span class="dr-badge dr-badge-ok">attivo</span>' : '<span class="dr-badge dr-badge-error">non attivo</span>';
+            html += '<li><strong>'+m.codice_cliente+'</strong> — '+(m.ragione_sociale || '—')+' · profilo '+profile+contract+' '+active+'</li>';
+        });
+        html += '</ul>';
+        if (d.exceptions_today && d.exceptions_today.length) {
+            html += '<div style="margin-top:0.4rem; padding-top:0.4rem; border-top:1px solid #a7f3d0;">';
+            html += '<i class="fas fa-calendar-day"></i> <strong>Eccezione oggi ('+d.today+')</strong>: ';
+            html += d.exceptions_today.map(e => (e.note || 'override schedule')).join(', ');
+            html += '</div>';
+        }
+        html += '</div>';
+        out.innerHTML = html;
+    } catch (err) {
+        out.innerHTML = '<small style="color:#b91c1c;">errore lookup: '+err+'</small>';
+    }
+}
+// Esegui lookup all'apertura form se il campo è già compilato
+if (document.getElementById('match_from_domain').value.trim()) lookupDomain();
+
+async function testRegex(inputId, resultId) {
+    const pattern = document.getElementById(inputId).value;
+    if (!pattern) {
+        const box = document.getElementById(resultId);
+        box.style.display = 'block'; box.className = 'test-result error';
+        box.textContent = 'Inserisci un pattern prima di testarlo.';
+        return;
+    }
+    const sample = prompt('Subject / from / body di esempio:', '');
+    if (sample === null) return;
+    const box = document.getElementById(resultId);
+    box.style.display = 'block';
+    box.className = 'test-result';
+    box.textContent = 'Test in corso...';
+    try {
+        const resp = await fetch('{{ url_for("rules.test_regex") }}', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({pattern, sample}),
+        });
+        const data = await resp.json();
+        if (!data.ok) { box.classList.add('error'); box.textContent = 'Errore: ' + data.error; return; }
+        if (!data.matched) { box.classList.add('fail'); box.textContent = '✗ Nessun match'; return; }
+        box.classList.add('ok'); box.textContent = '✓ Match: «' + data.match + '»';
+    } catch (err) { box.classList.add('error'); box.textContent = 'Errore: ' + err; }
+}
+</script>
+{% endblock %}

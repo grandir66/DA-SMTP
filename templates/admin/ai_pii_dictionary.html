@@ -1,0 +1,47 @@
+{% extends "admin/_base.html" %}
+{% block title %}PII dictionary{% endblock %}
+{% block content %}
+<section class="dr-section">
+    <a href="{{ url_for('ai.dashboard') }}" class="dr-btn"><i class="fas fa-arrow-left"></i> AI Dashboard</a>
+    <h2 style="margin:0.5rem 0;"><i class="fas fa-user-shield"></i> PII dictionary</h2>
+    <p style="color:var(--dr-gray-dark); font-size:0.85rem;">
+        Dizionario PII custom: nomi, aziende, prodotti che il redactor sostituirà nel testo PRIMA di inviarlo a Claude.
+        Affianca regex (IBAN/CF/telefono) e spaCy NER (nomi propri italiani).
+    </p>
+</section>
+
+<div class="dr-card" style="background:#fff; border:1px solid #cbd5e1; border-radius:8px; padding:1rem; max-width:900px;">
+    <h3 style="margin:0 0 0.5rem; color:var(--dr-primary);">Aggiungi voce</h3>
+    <form method="post" style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+        <select name="kind" style="padding:0.4rem 0.6rem; border:1px solid #cbd5e1; border-radius:5px;">
+            <option value="person">person</option>
+            <option value="org">org</option>
+            <option value="product">product</option>
+            <option value="other">other</option>
+        </select>
+        <input type="text" name="value" placeholder="Mario Rossi" required style="padding:0.4rem 0.6rem; border:1px solid #cbd5e1; border-radius:5px; min-width:200px;">
+        <input type="text" name="replacement" placeholder="[PER_RUSSO]" required style="padding:0.4rem 0.6rem; border:1px solid #cbd5e1; border-radius:5px;">
+        <button type="submit" class="dr-btn dr-btn-primary" style="width:auto;"><i class="fas fa-plus"></i> Aggiungi</button>
+    </form>
+</div>
+
+<div class="dr-table-wrap" style="margin-top:1rem;">
+<table class="dr-table">
+    <thead><tr><th>Kind</th><th>Valore</th><th>Sostituto</th><th>Sorgente</th><th class="num">Occ.</th><th>Ultimo uso</th></tr></thead>
+    <tbody>
+    {% for e in entries %}
+    <tr>
+        <td><span class="rule-inherit-badge">{{ e.kind }}</span></td>
+        <td><code>{{ e.value }}</code></td>
+        <td><code>{{ e.replacement }}</code></td>
+        <td><small>{{ e.source }}</small></td>
+        <td class="num">{{ e.occurrences }}</td>
+        <td><small>{{ e.last_seen_at or '—' }}</small></td>
+    </tr>
+    {% else %}
+    <tr><td colspan="6" class="dr-empty">Nessuna voce. Aggiungile manualmente o saranno popolate automaticamente da NER nel tempo.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endblock %}

@@ -1,0 +1,138 @@
+{% extends "admin/_base.html" %}
+{% block title %}Regole IA — overview{% endblock %}
+{% block content %}
+<section class="dr-section">
+    <div style="display:flex; gap:0.5rem; align-items:center;">
+        <a href="{{ url_for('ai.dashboard') }}" class="dr-btn"><i class="fas fa-arrow-left"></i> AI Dashboard</a>
+        <h2 style="margin:0;"><i class="fas fa-robot"></i> Regole con IA — overview</h2>
+        <a href="{{ url_for('rules.list_view') }}" class="dr-btn" style="width:auto;"><i class="fas fa-list"></i> Albero regole</a>
+    </div>
+    <p style="color:var(--dr-gray-dark); font-size:0.85rem;">
+        Tutte le regole con <code>action='ai_classify'</code> o <code>action='ai_critical_check'</code> + binding attivo per ciascun job + statistiche delle ultime 24h.
+        Cliccando una regola torni alla sua pagina di edit.
+    </p>
+
+    <div style="display:flex; gap:0.5rem; margin-top:0.7rem; flex-wrap:wrap;">
+        {% if ai_enabled %}
+        <span class="rule-status on"><i class="fas fa-check"></i> AI master ON</span>
+        {% else %}
+        <span class="rule-status off"><i class="fas fa-times"></i> AI master OFF — abilita in Settings</span>
+        {% endif %}
+        {% if shadow_mode %}
+        <span class="rule-inherit-badge"><i class="fas fa-eye-slash"></i> SHADOW MODE — decisioni loggate ma non applicate</span>
+        {% else %}
+        <span class="rule-status on"><i class="fas fa-bolt"></i> LIVE — decisioni applicate</span>
+        {% endif %}
+        <span class="rule-inherit-badge">
+            <i class="fas fa-coins"></i> Costo oggi: ${{ '%.4f'|format(spent_today) }} / ${{ '%.2f'|format(budget) }}
+        </span>
+    </div>
+</section>
+
+{% if not ai_rules %}
+<div class="dr-empty" style="margin-top:1rem;">
+    <i class="fas fa-robot"></i><br>
+    <strong>Nessuna regola IA configurata.</strong><br>
+    Per usare l'IA: vai in <a href="{{ url_for('rules.list_view') }}">Regole</a>, crea una nuova regola con
+    <code>action='ai_classify'</code> e <code>keep_original_delivery=true</code> nell'action_map.
+</div>
+{% else %}
+
+<div class="dr-table-wrap" style="margin-top:0.5rem;">
+<table class="dr-table">
+    <thead>
+        <tr>
+            <th class="num">Pri</th>
+            <th>Regola</th>
+            <th>Match</th>
+            <th>Job_code</th>
+            <th>Binding attivo</th>
+            <th>Stato regola</th>
+            <th class="num" title="Decisioni IA delle ultime 24h originate da questa regola">Dec. 24h</th>
+            <th title="Distribuzione: applied / shadow / errori / fail-safe">Distribuzione</th>
+            <th class="num">Costo 24h</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for r in ai_rules %}
+    {% set job = job_for_action(r.action) %}
+    {% set bindings = bindings_by_job.get(job, []) %}
+    {% set stats = stats_by_rule.get(r.id, {}) %}
+    <tr {% if not r.enabled %}style="opacity:0.55;"{% endif %}>
+        <td class="num"><code>{{ r.priority }}</code></td>
+        <td>
+            {% if r.parent_id %}
+            <small style="color:var(--dr-gray-dark);">↳ figlio del gruppo #{{ r.parent_id }}</small><br>
+            <a href="{{ url_for('rules.child_form_view', group_id=r.parent_id, child_id=r.id) }}"><strong>{{ r.name }}</strong></a>
+            {% elif r.is_group %}
+            <small style="color:var(--dr-gray-dark);">▾ gruppo</small><br>
+            <a href="{{ url_for('rules.group_form_view', group_id=r.id) }}"><strong>{{ r.group_label or r.name }}</strong></a>
+            {% else %}
+            <a href="{{ url_for('rules.form_view', rule_id=r.id) }}"><strong>{{ r.name }}</strong></a>
+            <span class="rule-badge-orphan">orfana</span>
+            {% endif %}
+        </td>
+        <td class="mono" style="max-width:220px; font-size:0.78rem;">
+            {% if r.match_to_domain %}<div>to_dom: <strong>{{ r.match_to_domain }}</strong></div>{% endif %}
+            {% if r.match_from_domain %}<div>from_dom: {{ r.match_from_domain }}</div>{% endif %}
+            {% if r.match_subject_regex %}<div>subj: <small>{{ r.match_subject_regex|truncate(30) }}</small></div>{% endif %}
+            {% if r.match_in_service is not none %}<div>in_svc: {{ 'sì' if r.match_in_service else 'no' }}</div>{% endif %}
+            {% if r.match_contract_active is not none %}<div>contr: {{ 'sì' if r.match_contract_active else 'no' }}</div>{% endif %}
+        </td>
+        <td><code>{{ job }}</code></td>
+        <td>
+            {% if bindings %}
+            {% for b in bindings %}
+            {% set p = providers.get(b.provider_id) %}
+            <div>
+                <span class="rule-status on">v{{ b.version }}</span>
+                <strong>{{ p.name if p else '?' }}</strong> / <code>{{ b.model_id }}</code>
+                {% if b.traffic_split != 100 %}<span class="rule-inherit-badge">{{ b.traffic_split }}%</span>{% endif %}
+                <a href="{{ url_for('ai.model_form', binding_id=b.id) }}" style="margin-left:0.3rem;">
+                    <i class="fas fa-pen"></i>
+                </a>
+            </div>
+            {% endfor %}
+            {% else %}
+            <span class="rule-status off">⚠ NESSUN BINDING</span>
+            <br><small style="color:var(--dr-error);">la regola scatta ma fallisce → fail-safe</small>
+            <br><a href="{{ url_for('ai.model_form') }}?job_code={{ job }}" class="dr-btn" style="width:auto; padding:0.1rem 0.4rem; font-size:0.75rem;">+ crea</a>
+            {% endif %}
+        </td>
+        <td>
+            <span class="rule-status {{ 'on' if r.enabled else 'off' }}">{{ 'attiva' if r.enabled else 'disattivata' }}</span>
+        </td>
+        <td class="num"><strong>{{ stats.decisions_count or 0 }}</strong></td>
+        <td>
+            {% if stats.decisions_count or stats.failsafe_count %}
+            {% if stats.applied_count %}<span class="rule-status on" title="applied">✓{{ stats.applied_count }}</span>{% endif %}
+            {% if stats.shadow_count %}<span class="rule-inherit-badge" title="shadow">⊙{{ stats.shadow_count }}</span>{% endif %}
+            {% if stats.error_count %}<span class="rule-status off" title="error">✗{{ stats.error_count }}</span>{% endif %}
+            {% if stats.failsafe_count %}<span style="display:inline-block; padding:0.05rem 0.4rem; border-radius:9px; font-size:0.7rem; background:#fee2e2; color:#dc2626;" title="fail-safe">⚡{{ stats.failsafe_count }}</span>{% endif %}
+            {% else %}<small style="color:var(--dr-gray-dark);">— nessuna —</small>{% endif %}
+        </td>
+        <td class="num">${{ '%.4f'|format(stats.cost_usd or 0) }}</td>
+        <td>
+            <a href="{{ url_for('ai.decisions_list') }}?hours=24" class="dr-btn" style="width:auto; padding:0.2rem 0.5rem;" title="Decisioni IA recenti">
+                <i class="fas fa-list-check"></i>
+            </a>
+        </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+
+<div style="margin-top:1.5rem; max-width:1100px; background:#f8fafc; border:1px solid #cbd5e1; border-radius:8px; padding:1rem; font-size:0.85rem;">
+    <h3 style="margin:0 0 0.5rem; color:var(--dr-primary);"><i class="fas fa-info-circle"></i> Legenda distribuzione</h3>
+    <div style="display:flex; gap:1.5rem; flex-wrap:wrap;">
+        <div><span class="rule-status on">✓N</span> = decisioni applied (live mode)</div>
+        <div><span class="rule-inherit-badge">⊙N</span> = decisioni shadow (loggate, non applicate)</div>
+        <div><span class="rule-status off">✗N</span> = decisioni con errore (provider risposta invalida, ecc.)</div>
+        <div><span style="display:inline-block; padding:0.05rem 0.4rem; border-radius:9px; font-size:0.7rem; background:#fee2e2; color:#dc2626;">⚡N</span> = fail-safe attivati (timeout / IA down)</div>
+    </div>
+</div>
+
+{% endif %}
+{% endblock %}

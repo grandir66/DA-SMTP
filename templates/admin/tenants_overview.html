@@ -1,0 +1,57 @@
+{% extends "admin/_base.html" %}
+{% block title %}Tenants — Overview{% endblock %}
+{% block content %}
+<section class="dr-section">
+    <div style="display:flex; gap:0.5rem; align-items:center;">
+        <a href="{{ url_for('tenants.list_view') }}" class="dr-btn"><i class="fas fa-arrow-left"></i> Lista</a>
+        <h2 style="margin:0;"><i class="fas fa-chart-bar"></i> Tenants — overview ({{ overview|length }})</h2>
+    </div>
+    <p class="dr-hint">
+        KPI riepilogativi per ogni tenant: regole, template, eventi delle ultime 24h, codici autorizzazione attivi.
+        Click sul codice tenant per fare switch del contesto attivo.
+    </p>
+</section>
+
+<div class="dr-table-wrap">
+<table class="dr-table">
+    <thead>
+        <tr>
+            <th>Codice</th>
+            <th>Ragione sociale</th>
+            <th>Stato</th>
+            <th class="num">Regole (att/tot)</th>
+            <th class="num">Template</th>
+            <th class="num">Eventi 24h</th>
+            <th class="num">Codici attivi</th>
+            <th>Switch</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for t in overview %}
+        <tr>
+            <td><strong>{{ t.codice }}</strong></td>
+            <td>{{ t.ragione_sociale or '—' }}</td>
+            <td>
+                {% if t.enabled %}<span class="dr-badge dr-badge-ok">attivo</span>{% else %}<span class="dr-badge dr-badge-error">disabilitato</span>{% endif %}
+                {% if t.contract_active %}<span class="dr-badge dr-badge-info">contratto</span>{% endif %}
+            </td>
+            <td class="num">{{ t.rules_enabled }} / {{ t.rules_count }}</td>
+            <td class="num">{{ t.templates_count }}</td>
+            <td class="num">{{ t.events_24h }}</td>
+            <td class="num">{{ t.auth_codes_active }}</td>
+            <td>
+                <a href="{{ url_for('tenants.switch_view', tenant_id=t.id) }}" class="dr-btn" style="width:auto; padding:0.2rem 0.5rem;">
+                    <i class="fas fa-exchange-alt"></i> Attiva
+                </a>
+                <a href="{{ url_for('tenants.form_view', tenant_id=t.id) }}" class="dr-btn" style="width:auto; padding:0.2rem 0.5rem;">
+                    <i class="fas fa-pen"></i>
+                </a>
+            </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" class="dr-empty">Nessun tenant configurato.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endblock %}

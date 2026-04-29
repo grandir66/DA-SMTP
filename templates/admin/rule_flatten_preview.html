@@ -1,0 +1,66 @@
+{% extends "admin/_base.html" %}
+{% block title %}Anteprima flatten — Domarc SMTP Relay{% endblock %}
+
+{% block content %}
+<section class="dr-section">
+    <div style="display:flex; gap:0.5rem; align-items:center;">
+        <a href="{{ url_for('rules.list_view') }}" class="dr-btn"><i class="fas fa-arrow-left"></i> Lista</a>
+        <h2 style="margin:0;"><i class="fas fa-list-ol"></i> Anteprima regole flat verso il listener</h2>
+    </div>
+    <p style="color:var(--dr-gray-dark); font-size:0.85rem;">
+        Output esatto di <code>flatten_rules_for_listener()</code> — le stesse {{ flat|length }} regole
+        servite dall'endpoint <code>GET /api/v1/relay/rules/active</code>.
+        Le regole derivate da gruppi mostrano <code>_source_group_id</code> per audit.
+    </p>
+</section>
+
+<div class="dr-table-wrap">
+<table class="dr-table">
+    <thead>
+        <tr>
+            <th class="num" style="width:40px;">#</th>
+            <th class="num" style="width:80px;">Pri</th>
+            <th>Origine</th>
+            <th>Nome</th>
+            <th>Azione</th>
+            <th>Match merged</th>
+            <th>action_map ereditata + own</th>
+            <th>cont</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for r in flat %}
+        <tr>
+            <td class="num">{{ loop.index }}</td>
+            <td class="num"><code>{{ r.priority }}</code></td>
+            <td>
+                {% if r._source_group_id %}
+                <span class="rule-inherit-badge"><i class="fas fa-folder"></i> da gruppo #{{ r._source_group_id }}</span>
+                {% else %}
+                <span class="rule-badge-orphan">orfana</span>
+                {% endif %}
+            </td>
+            <td>{{ r.name }}</td>
+            <td><span class="dr-action-pill {{ r.action }}">{{ r.action }}</span></td>
+            <td class="mono" style="max-width:250px;">
+                {% if r.match_to_domain %}<div><small>to_dom:</small> {{ r.match_to_domain }}</div>{% endif %}
+                {% if r.match_subject_regex %}<div><small>subj:</small> {{ r.match_subject_regex|truncate(35) }}</div>{% endif %}
+                {% if r.match_from_regex %}<div><small>from:</small> {{ r.match_from_regex|truncate(35) }}</div>{% endif %}
+                {% if r.match_in_service is not none %}<div><small>in_svc:</small> {{ 'sì' if r.match_in_service else 'no' }}</div>{% endif %}
+                {% if r.match_contract_active is not none %}<div><small>contr:</small> {{ 'sì' if r.match_contract_active else 'no' }}</div>{% endif %}
+                {% if r.match_known_customer is not none %}<div><small>noto:</small> {{ 'sì' if r.match_known_customer else 'no' }}</div>{% endif %}
+            </td>
+            <td class="mono" style="max-width:300px; font-size:0.78rem;">
+                {% for k, v in (r.action_map or {}).items() %}
+                <div><code>{{ k }}</code>={{ v }}</div>
+                {% endfor %}
+            </td>
+            <td class="num">{{ '✓' if r.continue_after_match else '✗' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" class="dr-empty">Nessuna regola attiva.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endblock %}

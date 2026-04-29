@@ -1,0 +1,155 @@
+{% extends "admin/_base.html" %}
+{% block title %}AI shadow ↔ live{% endblock %}
+{% block content %}
+<section class="dr-section">
+    <div style="display:flex; gap:0.5rem; align-items:center;">
+        <a href="{{ url_for('ai.dashboard') }}" class="dr-btn"><i class="fas fa-arrow-left"></i> AI Dashboard</a>
+        <h2 style="margin:0;"><i class="fas fa-toggle-on"></i> Shadow ↔ Live mode</h2>
+    </div>
+    <p style="color:var(--dr-gray-dark); font-size:0.85rem;">
+        Switch atomico fra <strong>shadow mode</strong> (decisioni solo loggate) e <strong>live mode</strong>
+        (decisioni IA applicate concretamente sulla pipeline).
+    </p>
+
+    <div style="margin-top:0.7rem;">
+        {% if is_shadow %}
+        <span style="display:inline-block; padding:0.4rem 1rem; background:#fef3c7; color:#92400e; border-radius:6px; font-weight:700; font-size:1rem;">
+            <i class="fas fa-eye-slash"></i> Stato attuale: SHADOW MODE
+        </span>
+        {% else %}
+        <span style="display:inline-block; padding:0.4rem 1rem; background:#d1fae5; color:#047857; border-radius:6px; font-weight:700; font-size:1rem;">
+            <i class="fas fa-bolt"></i> Stato attuale: LIVE MODE
+        </span>
+        {% endif %}
+    </div>
+</section>
+
+<div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; max-width:1100px;">
+    {# ============================== STATS PRE-FLIGHT ============================== #}
+    <div class="dr-card" style="background:#fff; border:1px solid #cbd5e1; border-radius:8px; padding:1rem;">
+        <h3 style="margin:0 0 0.7rem; color:var(--dr-primary);"><i class="fas fa-chart-bar"></i> Statistiche 7 giorni</h3>
+        <div style="display:flex; flex-direction:column; gap:0.5rem;">
+            <div>
+                <div style="font-size:0.78rem; color:var(--dr-gray-dark); text-transform:uppercase;">Decisioni totali</div>
+                <div style="font-size:1.5rem; font-weight:700;">
+                    {{ decisions_count }} / {{ min_decisions }} richieste
+                    {% if decisions_count >= min_decisions %}<span style="color:#10b981;">✓</span>
+                    {% else %}<span style="color:#dc2626;">⚠</span>{% endif %}
+                </div>
+            </div>
+            <div>
+                <div style="font-size:0.78rem; color:var(--dr-gray-dark); text-transform:uppercase;">Confidence media</div>
+                <div style="font-size:1.5rem; font-weight:700;">
+                    {{ '%.2f'|format(avg_conf) }}
+                    {% if avg_conf >= min_conf %}<span style="color:#10b981;">✓</span>
+                    {% else %}<span style="color:#f59e0b;">⚠ sotto soglia ({{ '%.2f'|format(min_conf) }})</span>{% endif %}
+                </div>
+            </div>
+            <div>
+                <div style="font-size:0.78rem; color:var(--dr-gray-dark); text-transform:uppercase;">Decisioni ad alta confidence</div>
+                <div style="font-size:1.2rem; font-weight:600;">
+                    {{ high_conf_count }} / {{ valid_decisions_count }}
+                    ({% if valid_decisions_count %}{{ '%.0f'|format(100 * high_conf_count / valid_decisions_count) }}%{% else %}—{% endif %})
+                </div>
+            </div>
+            <div>
+                <div style="font-size:0.78rem; color:var(--dr-gray-dark); text-transform:uppercase;">Errori IA</div>
+                <div style="font-size:1.2rem; font-weight:600;">
+                    {{ error_count }}
+                    {% if decisions_count and error_count / decisions_count > 0.05 %}
+                    <span style="color:#dc2626;">⚠ {{ '%.0f'|format(100 * error_count / decisions_count) }}%</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# ============================== AZIONE SWITCH ============================== #}
+    <div class="dr-card" style="background:#fff; border:1px solid #cbd5e1; border-radius:8px; padding:1rem;">
+        {% if is_shadow %}
+        <h3 style="margin:0 0 0.7rem; color:#047857;"><i class="fas fa-bolt"></i> Passa a LIVE mode</h3>
+        <p style="font-size:0.85rem;">
+            Le decisioni IA con confidence ≥ <strong>{{ '%.2f'|format(min_conf) }}</strong> e suggested_action valido
+            verranno <strong>applicate</strong> dal listener (create_ticket, ignore, ecc.). Le decisioni con confidence
+            inferiore restano in shadow per safety.
+        </p>
+        {% if not ready_to_go_live %}
+        <div style="background:#fef2f2; border-left:3px solid #dc2626; padding:0.7rem 0.9rem; border-radius:0 6px 6px 0; margin-bottom:0.7rem; font-size:0.85rem; color:#991b1b;">
+            <strong>⚠ Pre-flight check fallito:</strong> servono almeno {{ min_decisions }} decisioni shadow osservate
+            prima di passare in live ({{ decisions_count }} attuali).
+            <br>Continua ad osservare, oppure abbassa la soglia in
+            <a href="{{ url_for('settings.settings_view') }}">Settings → ai_shadow_min_decisions_before_live</a>.
+        </div>
+        {% endif %}
+        <form method="post" {% if not ready_to_go_live %}style="opacity:0.55;"{% endif %}
+              onsubmit="return confirm('Confermi il passaggio a LIVE mode? Le mail saranno gestite dall\\'IA in produzione.');">
+            <input type="hidden" name="target" value="live">
+            <div class="dr-form-row">
+                <label>Note (opzionale)</label>
+                <input type="text" name="notes" placeholder="es. dopo 2 settimane di osservazione, qualità ok">
+            </div>
+            <div class="dr-form-row">
+                <label>Conferma</label>
+                <input type="text" name="confirm" placeholder="Scrivi CONFERMO per procedere" required pattern="CONFERMO">
+            </div>
+            <button type="submit" class="dr-btn dr-btn-primary" style="width:auto; background:#047857;"
+                    {% if not ready_to_go_live %}disabled{% endif %}>
+                <i class="fas fa-bolt"></i> Attiva LIVE mode
+            </button>
+        </form>
+        {% else %}
+        <h3 style="margin:0 0 0.7rem; color:#92400e;"><i class="fas fa-eye-slash"></i> Rientra in SHADOW mode</h3>
+        <p style="font-size:0.85rem;">
+            Le decisioni IA torneranno ad essere <strong>solo loggate</strong>, niente azioni applicate.
+            Utile in caso di anomalie o per re-osservare dopo aggiornamenti del prompt template.
+        </p>
+        <form method="post" onsubmit="return confirm('Rientrare in SHADOW mode? Le decisioni IA non saranno più applicate.');">
+            <input type="hidden" name="target" value="shadow">
+            <div class="dr-form-row">
+                <label>Motivo</label>
+                <input type="text" name="notes" placeholder="es. anomalie su classificazione spam" required>
+            </div>
+            <div class="dr-form-row">
+                <label>Conferma</label>
+                <input type="text" name="confirm" placeholder="Scrivi CONFERMO" required pattern="CONFERMO">
+            </div>
+            <button type="submit" class="dr-btn dr-btn-danger" style="width:auto;">
+                <i class="fas fa-eye-slash"></i> Rientra in SHADOW
+            </button>
+        </form>
+        {% endif %}
+    </div>
+</div>
+
+{# ============================== AUDIT LOG ============================== #}
+<div class="dr-card" style="background:#fff; border:1px solid #cbd5e1; border-radius:8px; padding:1rem; margin-top:1rem; max-width:1100px;">
+    <h3 style="margin:0 0 0.5rem; color:var(--dr-primary);"><i class="fas fa-clipboard-list"></i> Audit log transizioni</h3>
+    {% if audit %}
+    <table class="dr-table">
+        <thead>
+            <tr><th>Quando</th><th>Transizione</th><th>Operatore</th><th class="num">Decisioni viste</th><th class="num">Conf. media</th><th>Note</th></tr>
+        </thead>
+        <tbody>
+        {% for a in audit %}
+        <tr>
+            <td><small>{{ a.at }}</small></td>
+            <td>
+                {% if a.transition == 'shadow_to_live' %}
+                <span class="rule-status on"><i class="fas fa-arrow-right"></i> SHADOW → LIVE</span>
+                {% else %}
+                <span class="rule-status off"><i class="fas fa-arrow-right"></i> LIVE → SHADOW</span>
+                {% endif %}
+            </td>
+            <td><small>{{ a.actor or '—' }}</small></td>
+            <td class="num">{{ a.decisions_seen }}</td>
+            <td class="num">{% if a.avg_confidence %}{{ '%.2f'|format(a.avg_confidence) }}{% else %}—{% endif %}</td>
+            <td><small>{{ a.notes or '—' }}</small></td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="dr-empty">Nessuna transizione registrata. Il sistema è ancora nello stato di default (shadow).</div>
+    {% endif %}
+</div>
+{% endblock %}

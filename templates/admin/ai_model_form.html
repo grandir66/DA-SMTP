@@ -1,0 +1,100 @@
+{% extends "admin/_base.html" %}
+{% block title %}{{ 'Nuovo binding' if is_new else 'Edit binding' }}{% endblock %}
+{% block content %}
+<section class="dr-section">
+    <a href="{{ url_for('ai.models_list') }}" class="dr-btn"><i class="fas fa-arrow-left"></i> Routing</a>
+    <h2 style="margin:0.5rem 0;">
+        {% if is_new %}<i class="fas fa-plus-circle"></i> Nuovo binding{% else %}<i class="fas fa-pen"></i> Edit binding v{{ record.version }}{% endif %}
+    </h2>
+</section>
+
+<form method="post" style="background:#fff; border:1px solid #cbd5e1; border-radius:8px; padding:1.2rem; max-width:900px;">
+    <div class="dr-form-row">
+        <label>Job</label>
+        <select name="job_code" required>
+            {% for j in jobs %}
+            <option value="{{ j.job_code }}" {% if record.job_code==j.job_code or request.args.get('job_code')==j.job_code %}selected{% endif %}>
+                {{ j.job_code }} — {{ j.description|truncate(60) }}
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="dr-form-row">
+        <label>Provider</label>
+        <select name="provider_id" required>
+            <option value="">— scegli —</option>
+            {% for p in providers %}
+            <option value="{{ p.id }}" {% if record.provider_id==p.id %}selected{% endif %}>
+                {{ p.name }} ({{ p.kind }}{% if p.default_model %} / {{ p.default_model }}{% endif %})
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="dr-form-row">
+        <label>Model id</label>
+        <input type="text" name="model_id" value="{{ record.model_id or 'claude-haiku-4-5' }}" required>
+    </div>
+    <div class="dr-form-row">
+        <label>Temperature</label>
+        <input type="number" step="0.1" name="temperature" value="{{ record.temperature or 0.0 }}" min="0" max="2">
+    </div>
+    <div class="dr-form-row">
+        <label>Max tokens</label>
+        <input type="number" name="max_tokens" value="{{ record.max_tokens or 1024 }}">
+    </div>
+    <div class="dr-form-row">
+        <label>Timeout (ms)</label>
+        <input type="number" name="timeout_ms" value="{{ record.timeout_ms or 5000 }}">
+    </div>
+    <div class="dr-form-row">
+        <label>Fallback provider</label>
+        <select name="fallback_provider_id">
+            <option value="">— nessuno —</option>
+            {% for p in providers %}
+            <option value="{{ p.id }}" {% if record.fallback_provider_id==p.id %}selected{% endif %}>{{ p.name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="dr-form-row">
+        <label>Fallback model</label>
+        <input type="text" name="fallback_model_id" value="{{ record.fallback_model_id or '' }}" placeholder="claude-sonnet-4-6">
+    </div>
+    <div class="dr-form-row">
+        <label>Traffic split %</label>
+        <div>
+            <input type="number" name="traffic_split" value="{{ record.traffic_split or 100 }}" min="0" max="100">
+            <div class="help">100% = unico binding attivo per questo job. Per A/B: 80 + 20 su 2 binding.</div>
+        </div>
+    </div>
+    <div class="dr-form-row">
+        <label>Stato</label>
+        <label style="font-weight:normal;">
+            <input type="checkbox" name="enabled" {% if record.enabled is not defined or record.enabled %}checked{% endif %}> Attivo
+        </label>
+    </div>
+    <div class="dr-form-row">
+        <label>System prompt template (Jinja2)</label>
+        <textarea name="system_prompt_template" rows="6" placeholder="Lasciare vuoto per usare il template di default in prompts/{job_code}.j2">{{ record.system_prompt_template or '' }}</textarea>
+    </div>
+    <div class="dr-form-row">
+        <label>User prompt template (Jinja2)</label>
+        <textarea name="user_prompt_template" rows="6" placeholder="Lasciare vuoto per usare il template di default">{{ record.user_prompt_template or '' }}</textarea>
+    </div>
+    <div class="dr-form-row">
+        <label>Note</label>
+        <input type="text" name="notes" value="{{ record.notes or '' }}">
+    </div>
+    {% if not is_new %}
+    <div class="dr-form-row">
+        <label></label>
+        <label style="font-weight:normal;">
+            <input type="checkbox" name="new_version"> Salva come <strong>nuova versione</strong> (disabilita le precedenti)
+        </label>
+    </div>
+    {% endif %}
+    <div style="display:flex; gap:0.5rem; padding-top:0.7rem;">
+        <button type="submit" class="dr-btn dr-btn-primary" style="width:auto;"><i class="fas fa-save"></i> Salva</button>
+        <a href="{{ url_for('ai.models_list') }}" class="dr-btn" style="width:auto;">Annulla</a>
+    </div>
+</form>
+{% endblock %}

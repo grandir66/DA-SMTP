@@ -1,0 +1,32 @@
+{% extends "admin/_base.html" %}
+{% block title %}Impostazioni{% endblock %}
+{% block content %}
+<section class="dr-section">
+    <h2><i class="fas fa-sliders"></i> Impostazioni globali</h2>
+    <p class="dr-hint">
+        Settings chiave-valore consumate dal listener relay e dall'admin.
+        I default smarthost vengono usati quando una route alias-specifica non ne configura uno proprio.
+    </p>
+</section>
+<form method="post">
+<div class="dr-section">
+    {% for s in settings %}
+    <div class="dr-form-row">
+        <label>{{ s.key }}</label>
+        <div>
+            {% if s._masked %}
+            <input type="text" value="{{ s.value }}" readonly style="background:#f1f5f9;">
+            <div class="help">[Mascherato per sicurezza — gestione in <a href="{{ url_for('connection.connection_view') }}">Connessione &amp; API</a>]</div>
+            {% else %}
+            <input type="text" name="{{ s.key }}" value="{{ s.value or '' }}">
+            {% endif %}
+            {% if s.description %}<div class="help">{{ s.description }}</div>{% endif %}
+        </div>
+    </div>
+    {% endfor %}
+    <div style="text-align:right;">
+        <button class="dr-btn dr-btn-primary" style="width:auto;"><i class="fas fa-save"></i> Salva tutte</button>
+    </div>
+</div>
+</form>
+{% endblock %}

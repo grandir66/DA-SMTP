@@ -1,0 +1,268 @@
+{% extends "admin/_base.html" %}
+{% block title %}{{ 'Nuovo gruppo' if is_new else (record.group_label or record.name) }}{% endblock %}
+
+{% block extra_head %}
+<style>
+    .rg-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; max-width:1100px; }
+    .rg-card { background:#fff; border:1px solid #cbd5e1; border-radius:8px; overflow:hidden; }
+    .rg-card.full { grid-column:1 / -1; }
+    .rg-card > h3 { margin:0; padding:0.8rem 1.1rem; font-size:0.95rem; background:linear-gradient(180deg, #fafbfd 0%, #f4f6fa 100%); color:#0b2a4a; border-bottom:1px solid #cbd5e1; display:flex; align-items:center; gap:0.5rem; }
+    .rg-body { padding:1rem 1.1rem; }
+    .rg-row { display:grid; grid-template-columns:170px 1fr; gap:0.8rem; align-items:start; margin-bottom:0.7rem; }
+    .rg-row > label { font-weight:500; color:#0b2a4a; padding-top:0.4rem; font-size:0.88rem; }
+    .rg-row input[type="text"], .rg-row input[type="number"], .rg-row select, .rg-row textarea {
+        width:100%; padding:0.45rem 0.6rem; border:1px solid #cbd5e1; border-radius:5px; font-family:inherit; font-size:0.88rem;
+    }
+    .rg-row .help { font-size:0.78rem; color:#64748b; margin-top:0.2rem; }
+    .rg-defaults-grid { display:grid; grid-template-columns:1fr 1fr; gap:0.6rem; }
+    .rg-defaults-grid .rg-row { grid-template-columns:120px 1fr; }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="dr-section">
+    <div style="display:flex; gap:0.5rem; align-items:center;">
+        <a href="{{ url_for('rules.list_view') }}" class="dr-btn"><i class="fas fa-arrow-left"></i> Lista regole</a>
+        <h2 style="margin:0;">
+            {% if is_new %}<i class="fas fa-folder-plus"></i> Nuovo gruppo
+            {% else %}<i class="fas fa-folder-open"></i> {{ record.group_label or record.name }}{% endif %}
+        </h2>
+        <span class="rule-badge-group">gruppo</span>
+    </div>
+    <p style="color:var(--dr-gray-dark); font-size:0.85rem; margin:0.4rem 0;">
+        Un gruppo definisce <strong>match_*</strong> e <strong>action_map_defaults</strong> condivisi
+        ereditati dai figli. Non esegue azioni dirette: l'azione concreta vive sui figli.
+    </p>
+</section>
+
+<form method="post">
+<div class="rg-grid">
+
+    <div class="rg-card">
+        <h3><i class="fas fa-id-card"></i> Identificazione</h3>
+        <div class="rg-body">
+            <div class="rg-row">
+                <label>Etichetta</label>
+                <div>
+                    <input type="text" name="group_label" value="{{ record.group_label or '' }}"
+                           placeholder="es. Fuori orario contratto" required>
+                    <div class="help">Mostrata nella tree view come titolo del gruppo.</div>
+                </div>
+            </div>
+            <div class="rg-row">
+                <label>Nome interno</label>
+                <input type="text" name="name" value="{{ record.name or '' }}"
+                       placeholder="auto: [GRUPPO] {etichetta}">
+            </div>
+            <div class="rg-row">
+                <label>Priority globale</label>
+                <div>
+                    <input type="number" name="priority" min="1" max="999999" value="{{ record.priority or 100 }}" required>
+                    <div class="help">1..999999. Lascia spazio (≥10) tra il padre e i figli per inserimenti futuri.</div>
+                </div>
+            </div>
+            <div class="rg-row">
+                <label>Stato</label>
+                <label style="font-weight:normal;">
+                    <input type="checkbox" name="enabled" {% if record.enabled is not defined or record.enabled %}checked{% endif %}> Gruppo attivo
+                </label>
+            </div>
+            <div class="rg-row">
+                <label>Esclusivo</label>
+                <div>
+                    <label style="font-weight:normal;">
+                        <input type="checkbox" name="exclusive_match" {% if record.exclusive_match is not defined or record.exclusive_match %}checked{% endif %}>
+                        Blocca i top-level successivi se un figlio matcha
+                    </label>
+                    <div class="help">Default ON. Se OFF, dopo un match nel gruppo si valutano comunque gruppi/orfane successive.</div>
+                </div>
+            </div>
+            <div class="rg-row">
+                <label>Scope</label>
+                <div>
+                    <select name="scope_type">
+                        <option value="global" {% if record.scope_type=='global' or not record.scope_type %}selected{% endif %}>global</option>
+                        <option value="sector_pack" {% if record.scope_type=='sector_pack' %}selected{% endif %}>sector_pack</option>
+                    </select>
+                    <input type="text" name="scope_ref" value="{{ record.scope_ref or '' }}" placeholder="settore (solo per sector_pack)">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="rg-card">
+        <h3><i class="fas fa-filter"></i> Match condivisi (ereditati dai figli)</h3>
+        <div class="rg-body">
+            <div class="rg-row">
+                <label>To dominio</label>
+                <input type="text" name="match_to_domain" value="{{ record.match_to_domain or '' }}" placeholder="es. domarc.it">
+            </div>
+            <div class="rg-row">
+                <label>From dominio</label>
+                <input type="text" name="match_from_domain" value="{{ record.match_from_domain or '' }}" placeholder="es. cliente.com">
+            </div>
+            <div class="rg-row">
+                <label>Subject regex</label>
+                <input type="text" name="match_subject_regex" value="{{ record.match_subject_regex or '' }}" placeholder="(?i)urgente|critico">
+            </div>
+            <div class="rg-row">
+                <label>From regex</label>
+                <input type="text" name="match_from_regex" value="{{ record.match_from_regex or '' }}">
+            </div>
+            <div class="rg-row">
+                <label>To regex</label>
+                <input type="text" name="match_to_regex" value="{{ record.match_to_regex or '' }}">
+            </div>
+            <div class="rg-row">
+                <label>Body regex</label>
+                <input type="text" name="match_body_regex" value="{{ record.match_body_regex or '' }}">
+            </div>
+            <div class="rg-row">
+                <label>Stato servizio</label>
+                <select name="match_in_service">
+                    <option value="" {% if record.match_in_service is none %}selected{% endif %}>indifferente</option>
+                    <option value="true" {% if record.match_in_service==1 %}selected{% endif %}>in orario</option>
+                    <option value="false" {% if record.match_in_service==0 %}selected{% endif %}>fuori orario</option>
+                </select>
+            </div>
+            <div class="rg-row">
+                <label>Contratto attivo</label>
+                <select name="match_contract_active">
+                    <option value="" {% if record.match_contract_active is none %}selected{% endif %}>indifferente</option>
+                    <option value="true" {% if record.match_contract_active==1 %}selected{% endif %}>con contratto</option>
+                    <option value="false" {% if record.match_contract_active==0 %}selected{% endif %}>senza contratto</option>
+                </select>
+            </div>
+            <div class="rg-row">
+                <label>Cliente noto</label>
+                <select name="match_known_customer">
+                    <option value="" {% if record.match_known_customer is none %}selected{% endif %}>indifferente</option>
+                    <option value="true" {% if record.match_known_customer==1 %}selected{% endif %}>censito</option>
+                    <option value="false" {% if record.match_known_customer==0 %}selected{% endif %}>non censito</option>
+                </select>
+            </div>
+            <div class="rg-row">
+                <label>Eccezione oggi</label>
+                <select name="match_has_exception_today">
+                    <option value="" {% if record.match_has_exception_today is none %}selected{% endif %}>indifferente</option>
+                    <option value="true" {% if record.match_has_exception_today==1 %}selected{% endif %}>solo se eccezione attiva</option>
+                    <option value="false" {% if record.match_has_exception_today==0 %}selected{% endif %}>solo senza eccezione</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <div class="rg-card full">
+        <h3><i class="fas fa-cogs"></i> Defaults action_map ereditabili (whitelist)</h3>
+        <div class="rg-body">
+            <p class="help" style="margin-top:0;">Solo le chiavi qui presenti vengono ereditate dai figli. I figli possono sovrascriverle individualmente.</p>
+            <div class="rg-defaults-grid">
+                <div>
+                    <h4 style="margin:0 0 0.4rem; font-size:0.88rem; color:var(--dr-primary);">Delivery</h4>
+                    <div class="rg-row">
+                        <label>keep_original</label>
+                        <label style="font-weight:normal;">
+                            <input type="checkbox" name="action_map_keep_original_delivery"
+                                   {% if record.action_map and record.action_map.keep_original_delivery %}checked{% endif %}>
+                            Recapita anche al destinatario originale
+                        </label>
+                    </div>
+                    <div class="rg-row">
+                        <label>also_deliver_to</label>
+                        <input type="text" name="action_map_also_deliver_to"
+                               value="{{ record.action_map.also_deliver_to if record.action_map else '' }}"
+                               placeholder="ticket@domarc.it,...">
+                    </div>
+                    <div class="rg-row">
+                        <label>apply_rules</label>
+                        <label style="font-weight:normal;">
+                            <input type="checkbox" name="action_map_apply_rules"
+                                   {% if record.action_map and record.action_map.apply_rules %}checked{% endif %}>
+                            Forza riapplicazione regole
+                        </label>
+                    </div>
+                </div>
+                <div>
+                    <h4 style="margin:0 0 0.4rem; font-size:0.88rem; color:var(--dr-primary);">Auto-reply defaults</h4>
+                    <div class="rg-row">
+                        <label>reply_mode</label>
+                        <select name="action_map_reply_mode">
+                            <option value="" {% if not record.action_map or not record.action_map.reply_mode %}selected{% endif %}>—</option>
+                            <option value="to_sender_only" {% if record.action_map and record.action_map.reply_mode=='to_sender_only' %}selected{% endif %}>to_sender_only</option>
+                            <option value="reply_all" {% if record.action_map and record.action_map.reply_mode=='reply_all' %}selected{% endif %}>reply_all</option>
+                            <option value="to_alias" {% if record.action_map and record.action_map.reply_mode=='to_alias' %}selected{% endif %}>to_alias</option>
+                        </select>
+                    </div>
+                    <div class="rg-row">
+                        <label>subject_prefix</label>
+                        <input type="text" name="action_map_reply_subject_prefix"
+                               value="{{ record.action_map.reply_subject_prefix if record.action_map else '' }}">
+                    </div>
+                    <div class="rg-row">
+                        <label>reply_to</label>
+                        <input type="text" name="action_map_reply_to"
+                               value="{{ record.action_map.reply_to if record.action_map else '' }}">
+                    </div>
+                    <div class="rg-row">
+                        <label>generate_auth_code</label>
+                        <label style="font-weight:normal;">
+                            <input type="checkbox" name="action_map_generate_auth_code"
+                                   {% if record.action_map and record.action_map.generate_auth_code %}checked{% endif %}>
+                        </label>
+                    </div>
+                    <div class="rg-row">
+                        <label>auth_code_ttl_h</label>
+                        <input type="number" name="action_map_auth_code_ttl_hours"
+                               value="{{ record.action_map.auth_code_ttl_hours if record.action_map else '' }}"
+                               min="1" max="720">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if not is_new %}
+    <div class="rg-card full">
+        <h3><i class="fas fa-list-tree"></i> Figli del gruppo ({{ children|length }})</h3>
+        <div class="rg-body">
+            {% if children %}
+            <table class="dr-table">
+                <thead><tr><th class="num">Pri</th><th>Nome</th><th>Azione</th><th>Flow</th><th>Stato</th><th></th></tr></thead>
+                <tbody>
+                {% for c in children %}
+                <tr {% if not c.enabled %}style="opacity:0.55;"{% endif %}>
+                    <td class="num"><code>{{ c.priority }}</code></td>
+                    <td><a href="{{ url_for('rules.child_form_view', group_id=record.id, child_id=c.id) }}">{{ c.name }}</a></td>
+                    <td><span class="dr-action-pill {{ c.action }}">{{ c.action }}</span></td>
+                    <td>
+                        {% if c.continue_in_group %}<span class="rule-inherit-badge"><i class="fas fa-arrow-right"></i> continua nei fratelli</span>{% endif %}
+                        {% if c.exit_group_continue %}<span class="rule-inherit-badge"><i class="fas fa-sign-out-alt"></i> esce + continua top</span>{% endif %}
+                        {% if not c.continue_in_group and not c.exit_group_continue %}<small>STOP</small>{% endif %}
+                    </td>
+                    <td><span class="rule-status {{ 'on' if c.enabled else 'off' }}">{{ 'on' if c.enabled else 'off' }}</span></td>
+                    <td><a href="{{ url_for('rules.child_form_view', group_id=record.id, child_id=c.id) }}" class="dr-btn"><i class="fas fa-pen"></i></a></td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="dr-empty">Gruppo vuoto. <a href="{{ url_for('rules.child_form_view', group_id=record.id) }}">Aggiungi un figlio</a>.</div>
+            {% endif %}
+            <div style="margin-top:0.7rem;">
+                <a href="{{ url_for('rules.child_form_view', group_id=record.id) }}" class="dr-btn dr-btn-primary" style="width:auto;">
+                    <i class="fas fa-plus"></i> Aggiungi figlio
+                </a>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<div style="display:flex; gap:0.5rem; padding:1rem 0; max-width:1100px;">
+    <button type="submit" class="dr-btn dr-btn-primary" style="width:auto;">
+        <i class="fas fa-save"></i> {{ 'Crea gruppo' if is_new else 'Salva' }}
+    </button>
+    <a href="{{ url_for('rules.list_view') }}" class="dr-btn" style="width:auto;">Annulla</a>
+</div>
+</form>
+{% endblock %}

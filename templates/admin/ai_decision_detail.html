@@ -1,0 +1,43 @@
+{% extends "admin/_base.html" %}
+{% block title %}Decision #{{ decision.id }}{% endblock %}
+{% block content %}
+<section class="dr-section">
+    <a href="{{ url_for('ai.decisions_list') }}" class="dr-btn"><i class="fas fa-arrow-left"></i> Decisioni</a>
+    <h2 style="margin:0.5rem 0;"><i class="fas fa-file-lines"></i> Decision #{{ decision.id }}</h2>
+</section>
+
+<div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; max-width:1100px;">
+    <div class="dr-card" style="background:#fff; border:1px solid #cbd5e1; border-radius:8px; padding:1rem;">
+        <h3 style="margin:0 0 0.6rem; color:var(--dr-primary);">Identificazione</h3>
+        <div class="dr-form-row"><label>Job</label><div><code>{{ decision.job_code }}</code></div></div>
+        <div class="dr-form-row"><label>Provider</label><div>{{ decision.provider }}</div></div>
+        <div class="dr-form-row"><label>Model</label><div><code>{{ decision.model }}</code></div></div>
+        <div class="dr-form-row"><label>Binding id</label><div>{{ decision.binding_id }}</div></div>
+        <div class="dr-form-row"><label>Event UUID</label><div><small><code>{{ decision.event_uuid or '—' }}</code></small></div></div>
+        <div class="dr-form-row"><label>Prompt hash</label><div><small><code>{{ decision.prompt_hash or '—' }}</code></small></div></div>
+        <div class="dr-form-row"><label>PII redactions</label><div>{{ decision.pii_redactions_count or 0 }}</div></div>
+    </div>
+    <div class="dr-card" style="background:#fff; border:1px solid #cbd5e1; border-radius:8px; padding:1rem;">
+        <h3 style="margin:0 0 0.6rem; color:var(--dr-primary);">Risultato</h3>
+        <div class="dr-form-row"><label>Intent</label><div>{{ decision.intent or '—' }}</div></div>
+        <div class="dr-form-row"><label>Urgenza</label><div>{{ decision.urgenza_proposta or '—' }}</div></div>
+        <div class="dr-form-row"><label>Confidence</label><div>{{ decision.confidence or '—' }}</div></div>
+        <div class="dr-form-row"><label>Summary</label><div>{{ decision.summary or '—' }}</div></div>
+        <div class="dr-form-row"><label>Latency</label><div>{{ decision.latency_ms }}ms</div></div>
+        <div class="dr-form-row"><label>Tokens</label><div>{{ decision.input_tokens }} → {{ decision.output_tokens }}</div></div>
+        <div class="dr-form-row"><label>Costo</label><div>${{ '%.5f'|format(decision.cost_usd or 0) }}</div></div>
+        <div class="dr-form-row"><label>Stato</label><div>
+            {% if decision.error %}<span class="rule-status off">ERROR</span>: {{ decision.error }}
+            {% elif decision.shadow_mode %}<span class="rule-inherit-badge">shadow mode</span>
+            {% elif decision.applied %}<span class="rule-status on">applied by {{ decision.applied_by or '—' }}</span>
+            {% else %}<span class="rule-inherit-badge">logged only</span>{% endif %}
+            {% if decision.fallback_used %}<span class="rule-inherit-badge">fallback used</span>{% endif %}
+        </div></div>
+    </div>
+</div>
+
+<div class="dr-card" style="background:#fff; border:1px solid #cbd5e1; border-radius:8px; padding:1rem; margin-top:1rem; max-width:1100px;">
+    <h3 style="margin:0 0 0.6rem; color:var(--dr-primary);">Raw output</h3>
+    <pre style="background:#0f172a; color:#e2e8f0; padding:1rem; border-radius:5px; overflow:auto; max-height:400px;">{{ decision.raw_output_json|tojson(indent=2) }}</pre>
+</div>
+{% endblock %}

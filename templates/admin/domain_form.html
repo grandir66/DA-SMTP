@@ -1,0 +1,28 @@
+{% extends "admin/_base.html" %}
+{% block title %}{{ 'Nuovo dominio' if is_new else record.domain }}{% endblock %}
+{% block content %}
+<section class="dr-section">
+    <a href="{{ url_for('domains.domains_list') }}" class="dr-btn">← Lista</a>
+    <h2>{% if is_new %}Nuovo dominio gestito{% else %}{{ record.domain }}{% endif %}</h2>
+</section>
+<form method="post">
+<div class="dr-section">
+    <div class="dr-form-row"><label>Dominio *</label><input type="text" name="domain" required value="{{ record.domain or '' }}" placeholder="acme.it"></div>
+    <div class="dr-form-row"><label>Smarthost host</label><input type="text" name="smarthost_host" value="{{ record.smarthost_host or '' }}" placeholder="smtp.acme.it"></div>
+    <div class="dr-form-row"><label>Smarthost port</label><input type="number" name="smarthost_port" value="{{ record.smarthost_port or 25 }}" style="width:120px;"></div>
+    <div class="dr-form-row"><label>TLS</label>
+        <select name="smarthost_tls">
+            {% for v in ['opportunistic','strict','none'] %}<option value="{{ v }}" {% if record.smarthost_tls==v %}selected{% endif %}>{{ v }}</option>{% endfor %}
+        </select></div>
+    <div class="dr-form-row"><label>Apply rules</label>
+        <div><label><input type="checkbox" name="apply_rules" {% if record.apply_rules or is_new %}checked{% endif %}> Le regole vengono valutate</label></div></div>
+    <div class="dr-form-row"><label>Stato</label>
+        <div><label><input type="checkbox" name="enabled" {% if record.enabled or is_new %}checked{% endif %}> Attivo</label></div></div>
+    <div class="dr-form-row"><label>Note</label><textarea name="notes">{{ record.notes or '' }}</textarea></div>
+    <div style="text-align:right;">
+        <a href="{{ url_for('domains.domains_list') }}" class="dr-btn">Annulla</a>
+        <button class="dr-btn dr-btn-primary" style="width:auto;"><i class="fas fa-save"></i> Salva</button>
+    </div>
+</div>
+</form>
+{% endblock %}

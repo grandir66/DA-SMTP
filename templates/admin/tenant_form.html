@@ -1,0 +1,40 @@
+{% extends "admin/_base.html" %}
+{% block title %}{{ 'Nuovo tenant' if is_new else record.ragione_sociale }}{% endblock %}
+{% block content %}
+<section class="dr-section">
+    <a href="{{ url_for('tenants.list_view') }}" class="dr-btn">← Lista</a>
+    <h2>{% if is_new %}<i class="fas fa-plus-circle"></i> Nuovo tenant{% else %}<i class="fas fa-pen"></i> {{ record.ragione_sociale }}{% if is_default %} (default){% endif %}{% endif %}</h2>
+</section>
+<form method="post" style="max-width:800px;">
+<div class="dr-section">
+    <div class="dr-form-row">
+        <label>Codice *</label>
+        <div>
+            <input type="text" name="codice" required maxlength="50" value="{{ record.codice or '' }}"
+                   {% if not is_new %}readonly style="background:#f1f5f9;"{% endif %} placeholder="ACME001">
+            <div class="help">Identificatore corto, alfanumerico maiuscolo. Non modificabile dopo creazione.</div>
+        </div>
+    </div>
+    <div class="dr-form-row">
+        <label>Ragione sociale *</label>
+        <input type="text" name="ragione_sociale" required maxlength="255" value="{{ record.ragione_sociale or '' }}">
+    </div>
+    <div class="dr-form-row">
+        <label>Descrizione</label>
+        <textarea name="description">{{ record.description or '' }}</textarea>
+    </div>
+    <div class="dr-form-row">
+        <label>Contratto attivo</label>
+        <div><label><input type="checkbox" name="contract_active" {% if record.contract_active or is_new %}checked{% endif %}> Sì</label></div>
+    </div>
+    <div class="dr-form-row">
+        <label>Tenant abilitato</label>
+        <div><label><input type="checkbox" name="enabled" {% if record.enabled or is_new %}checked{% endif %}> Sì</label></div>
+    </div>
+    <div style="text-align:right;">
+        <a href="{{ url_for('tenants.list_view') }}" class="dr-btn">Annulla</a>
+        <button class="dr-btn dr-btn-primary" style="width:auto;"><i class="fas fa-save"></i> Salva</button>
+    </div>
+</div>
+</form>
+{% endblock %}

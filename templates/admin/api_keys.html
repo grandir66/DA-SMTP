@@ -1,0 +1,60 @@
+{% extends "admin/_base.html" %}
+{% block title %}Chiavi API{% endblock %}
+{% block content %}
+<section class="dr-section">
+    <div style="display:flex; gap:0.5rem; align-items:center;">
+        <h2 style="margin:0;"><i class="fas fa-key"></i> Chiavi API (cifrate)</h2>
+        <a href="{{ url_for('secrets_modules.api_key_form') }}" class="dr-btn dr-btn-primary" style="width:auto;">
+            <i class="fas fa-plus"></i> Nuova chiave
+        </a>
+    </div>
+    <div class="rule-inherit-banner" style="margin-top:0.7rem;">
+        <h4><i class="fas fa-shield-halved"></i> Cifratura Fernet attiva</h4>
+        Le chiavi sono cifrate con master key Fernet in <code>/var/lib/domarc-smtp-relay-admin/master.key</code>
+        (auto-generata al primo avvio, permessi 600). All'avvio del servizio le chiavi vengono decifrate
+        e iniettate in <code>os.environ</code> per essere lette dai provider.
+        <br><strong>Backup obbligatorio</strong> della master key insieme al DB (senza la master key le
+        chiavi cifrate diventano illegibili).
+    </div>
+</section>
+
+<div class="dr-table-wrap">
+<table class="dr-table">
+    <thead>
+        <tr><th>Nome</th><th>Env var</th><th>Valore (masked)</th><th>Descrizione</th><th>Stato</th><th>Ultima rotazione</th><th></th></tr>
+    </thead>
+    <tbody>
+    {% for k in keys %}
+    <tr {% if not k.enabled %}style="opacity:0.55;"{% endif %}>
+        <td><a href="{{ url_for('secrets_modules.api_key_form', key_id=k.id) }}"><strong>{{ k.name }}</strong></a></td>
+        <td><code>{{ k.env_var_name }}</code></td>
+        <td><code>{{ k.masked_preview or '***' }}</code></td>
+        <td><small>{{ k.description or '—' }}</small></td>
+        <td><span class="rule-status {{ 'on' if k.enabled else 'off' }}">{{ 'attiva' if k.enabled else 'disattiva' }}</span></td>
+        <td><small>{{ k.last_rotated_at or k.created_at or '—' }}</small></td>
+        <td style="white-space:nowrap;">
+            <a href="{{ url_for('secrets_modules.api_key_form', key_id=k.id) }}" class="dr-btn" style="width:auto; padding:0.2rem 0.5rem;">
+                <i class="fas fa-pen"></i>
+            </a>
+            <form method="post" action="{{ url_for('secrets_modules.api_key_toggle', key_id=k.id) }}" style="display:inline;">
+                <button class="dr-btn" style="width:auto; padding:0.2rem 0.5rem;" title="Toggle">
+                    <i class="fas fa-power-off"></i>
+                </button>
+            </form>
+            {% if session.role == 'superadmin' %}
+            <form method="post" action="{{ url_for('secrets_modules.api_key_delete', key_id=k.id) }}" style="display:inline;"
+                  onsubmit="return confirm('Eliminare la chiave «{{ k.name }}»? Operazione irreversibile.');">
+                <button class="dr-btn dr-btn-danger" style="width:auto; padding:0.2rem 0.5rem;">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </form>
+            {% endif %}
+        </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="7" class="dr-empty">Nessuna chiave configurata. <a href="{{ url_for('secrets_modules.api_key_form') }}">Aggiungine una</a> per attivare i provider IA.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endblock %}

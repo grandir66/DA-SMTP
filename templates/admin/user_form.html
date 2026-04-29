@@ -1,0 +1,134 @@
+{% extends "admin/_base.html" %}
+{% block title %}{{ 'Nuovo utente' if is_new else record.username }}{% endblock %}
+
+{% block extra_head %}
+<style>
+    .uf-row { display:grid; grid-template-columns:160px 1fr; gap:0.7rem; align-items:start; margin-bottom:0.7rem; }
+    .uf-row label { font-weight:500; padding-top:0.4rem; color:#0b2a4a; font-size:0.88rem; }
+    .uf-row input[type=text], .uf-row input[type=password], .uf-row input[type=email], .uf-row select {
+        width:100%; padding:0.45rem 0.6rem; border:1px solid #cbd5e1; border-radius:5px; font-family:inherit; font-size:0.88rem;
+    }
+    .uf-row .help { font-size:0.78rem; color:#64748b; margin-top:0.2rem; }
+    .role-explainer { background:#f8fafc; border:1px solid #cbd5e1; border-radius:6px; padding:0.7rem 0.9rem; margin:0.6rem 0; font-size:0.85rem; color:#475569; }
+    .role-explainer strong { color:#0b2a4a; }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="dr-section">
+    <div style="display:flex; gap:0.5rem; align-items:center;">
+        <a href="{{ url_for('users.list_view') }}" class="dr-btn"><i class="fas fa-arrow-left"></i> Lista</a>
+        <h2 style="margin:0;">
+            {% if is_new %}<i class="fas fa-user-plus"></i> Nuovo utente
+            {% else %}<i class="fas fa-pen"></i> {{ record.username }}{% if is_self %} <small style="color:#3b82f6;">(tu)</small>{% endif %}
+            {% endif %}
+        </h2>
+    </div>
+</section>
+
+<form method="post" action="" style="max-width:800px;">
+<section class="dr-card">
+    <div class="uf-row">
+        <label>Username *</label>
+        <input type="text" name="username" required maxlength="50" value="{{ record.username or '' }}"
+               {% if is_self %}readonly style="background:#f1f5f9;"{% endif %}>
+    </div>
+    <div class="uf-row">
+        <label>Nome completo</label>
+        <input type="text" name="full_name" maxlength="100" value="{{ record.full_name or '' }}">
+    </div>
+    <div class="uf-row">
+        <label>Email</label>
+        <input type="email" name="email" maxlength="100" value="{{ record.email or '' }}">
+    </div>
+    <div class="uf-row">
+        <label>Password {% if is_new %}*{% endif %}</label>
+        <div>
+            <input type="password" name="password" {% if is_new %}required{% endif %}
+                   placeholder="{% if is_new %}min 8 caratteri{% else %}lascia vuoto per non cambiare{% endif %}">
+            <div class="help">{% if is_new %}Verrà hashata con bcrypt prima del salvataggio.{% else %}Compila solo se vuoi modificare la password attuale.{% endif %}</div>
+        </div>
+    </div>
+    <div class="uf-row">
+        <label>Ruolo *</label>
+        <div>
+            <select name="role" id="role" required onchange="onRoleChange()">
+                {% if is_superadmin %}
+                <option value="superadmin" {% if record.role == 'superadmin' %}selected{% endif %}>Superadmin (globale)</option>
+                {% endif %}
+                <option value="admin"    {% if record.role == 'admin' %}selected{% endif %}>Admin (tenant)</option>
+                <option value="tech"     {% if record.role == 'tech' %}selected{% endif %}>Tech (operativo)</option>
+                <option value="readonly" {% if record.role == 'readonly' or not record.role %}selected{% endif %}>Readonly (visualizzazione)</option>
+            </select>
+            <div class="role-explainer" id="role-explainer"></div>
+        </div>
+    </div>
+    <div class="uf-row" id="tenant-row">
+        <label>Tenant *</label>
+        <div>
+            <select name="tenant_id" id="tenant_id" {% if not is_superadmin %}disabled{% endif %}>
+                {% for t in available_tenants %}
+                <option value="{{ t.id }}" {% if record.tenant_id == t.id %}selected{% endif %}>
+                    {{ t.codice }}{% if t.ragione_sociale %} — {{ t.ragione_sociale }}{% endif %}
+                </option>
+                {% endfor %}
+            </select>
+            <div class="help">
+                {% if is_superadmin %}
+                Tenant a cui appartiene l'utente. Per superadmin il valore è ignorato (visibilità globale).
+                {% else %}
+                Forzato al tuo tenant (non modificabile).
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="uf-row">
+        <label>Stato</label>
+        <div>
+            <label style="font-weight:400;">
+                <input type="checkbox" name="enabled" {% if record.enabled or is_new %}checked{% endif %}
+                       {% if is_self %}disabled{% endif %}>
+                Attivo (può fare login)
+            </label>
+            {% if is_self %}<div class="help">Non puoi disabilitare il tuo stesso account.</div>{% endif %}
+        </div>
+    </div>
+
+    <div style="display:flex; gap:0.5rem; padding-top:1rem; border-top:1px solid #e2e8f0; margin-top:1rem;">
+        <a href="{{ url_for('users.list_view') }}" class="dr-btn">Annulla</a>
+        {% if not is_new and not is_self %}
+        <form method="post" action="{{ url_for('users.delete_view', user_id=record.id) }}" style="display:inline;"
+              onsubmit="return confirm('Eliminare l\'utente {{ record.username }}?');">
+            <button class="dr-btn dr-btn-danger" style="width:auto;"><i class="fas fa-trash"></i> Elimina</button>
+        </form>
+        {% endif %}
+        <button type="submit" class="dr-btn dr-btn-primary" style="margin-left:auto; width:auto;">
+            <i class="fas fa-save"></i> {{ 'Crea' if is_new else 'Salva' }}
+        </button>
+    </div>
+</section>
+</form>
+
+<script>
+const ROLE_DESCRIPTIONS = {
+    superadmin: '<strong>Superadmin</strong>: accesso a tutti i tenant, switch contesto, CRUD utenti globale, gestione tenant. Può creare altri superadmin.',
+    admin:      '<strong>Admin</strong>: gestisce un singolo tenant — CRUD regole, template, profili, settings, utenti del proprio tenant (no superadmin). Non vede gli altri tenant.',
+    tech:       '<strong>Tech</strong>: operativo — può creare/modificare regole, template, orari, ack occurrences. Non gestisce utenti né configurazione tenant.',
+    readonly:   '<strong>Readonly</strong>: visualizzazione di dashboard, eventi, regole, anagrafiche. Nessuna modifica.',
+};
+function onRoleChange() {
+    const role = document.getElementById('role').value;
+    document.getElementById('role-explainer').innerHTML = ROLE_DESCRIPTIONS[role] || '';
+    // Tenant required solo per non-superadmin
+    const trow = document.getElementById('tenant-row');
+    if (role === 'superadmin') {
+        trow.style.opacity = '0.5';
+        document.getElementById('tenant_id').required = false;
+    } else {
+        trow.style.opacity = '1';
+        document.getElementById('tenant_id').required = true;
+    }
+}
+onRoleChange();
+</script>
+{% endblock %}

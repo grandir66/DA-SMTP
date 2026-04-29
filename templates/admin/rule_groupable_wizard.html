@@ -1,0 +1,76 @@
+{% extends "admin/_base.html" %}
+{% block title %}Suggerisci gruppi — Domarc SMTP Relay{% endblock %}
+
+{% block content %}
+<section class="dr-section">
+    <div style="display:flex; gap:0.5rem; align-items:center;">
+        <a href="{{ url_for('rules.list_view') }}" class="dr-btn"><i class="fas fa-arrow-left"></i> Lista</a>
+        <h2 style="margin:0;"><i class="fas fa-wand-magic-sparkles"></i> Wizard "Suggerisci gruppi"</h2>
+    </div>
+    <p style="color:var(--dr-gray-dark); font-size:0.85rem;">
+        Trova cluster di regole orfane con <code>match_*</code> identici, candidati a essere raggruppati
+        sotto un padre comune. La promozione è atomica: la prima regola del cluster diventa "modello",
+        le altre diventano figli del nuovo gruppo.
+    </p>
+</section>
+
+{% if not clusters %}
+<div class="dr-empty">
+    <i class="fas fa-magnifying-glass"></i>
+    Nessun cluster individuato. Le regole orfane attuali hanno tutte match diversi tra loro
+    (oppure ce ne sono troppo poche per formare gruppi).
+</div>
+{% endif %}
+
+{% for cluster in clusters %}
+<div class="dr-card" style="background:#fff; border:1px solid #cbd5e1; border-radius:8px; padding:1rem; margin-bottom:1rem; max-width:1100px;">
+    <h3 style="margin:0 0 0.6rem; color:var(--dr-primary);">
+        <i class="fas fa-layer-group"></i> Cluster #{{ loop.index }}
+        <span class="rule-badge-children">{{ cluster.size }} regole</span>
+    </h3>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
+        <div>
+            <h4 style="margin:0 0 0.3rem; font-size:0.88rem;">Match comuni</h4>
+            <div class="rule-inherit-banner" style="margin:0;">
+                {% for k, v in cluster.common_matches.items() %}
+                <code>{{ k }}={{ v }}</code>{% if not loop.last %}, {% endif %}
+                {% endfor %}
+            </div>
+            {% if cluster.common_action_map_defaults %}
+            <h4 style="margin:0.7rem 0 0.3rem; font-size:0.88rem;">Defaults action_map condivisi</h4>
+            <div class="rule-inherit-banner" style="margin:0;">
+                {% for k, v in cluster.common_action_map_defaults.items() %}
+                <code>{{ k }}={{ v }}</code>{% if not loop.last %}, {% endif %}
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+        <div>
+            <h4 style="margin:0 0 0.3rem; font-size:0.88rem;">Etichetta suggerita</h4>
+            <strong>{{ cluster.suggested_label }}</strong>
+
+            <h4 style="margin:0.7rem 0 0.3rem; font-size:0.88rem;">Regole nel cluster</h4>
+            <ul style="margin:0; padding-left:1.2rem; font-size:0.85rem;">
+                {% for r in cluster.rules %}
+                <li><code>#{{ r.id }}</code> {{ r.name }} — <span class="dr-action-pill {{ r.action }}">{{ r.action }}</span></li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+
+    <form method="post" action="{{ url_for('rules.groupable_promote_view') }}" style="margin-top:1rem;"
+          onsubmit="return confirm('Promuovere {{ cluster.size }} regole al gruppo «' + this.group_label.value + '»? Operazione atomica.');">
+        <input type="text" name="group_label" value="{{ cluster.suggested_label }}"
+               style="padding:0.45rem 0.6rem; border:1px solid #cbd5e1; border-radius:5px; min-width:300px;"
+               placeholder="Etichetta del nuovo gruppo">
+        {% for rid in cluster.rule_ids %}
+        <input type="hidden" name="rule_ids" value="{{ rid }}">
+        {% endfor %}
+        <button type="submit" class="dr-btn dr-btn-primary" style="width:auto;">
+            <i class="fas fa-check"></i> Promuovi a gruppo
+        </button>
+    </form>
+</div>
+{% endfor %}
+{% endblock %}

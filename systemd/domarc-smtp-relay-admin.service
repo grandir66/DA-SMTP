@@ -1,0 +1,38 @@
+[Unit]
+Description=Domarc SMTP Relay — Admin Web (Flask)
+Documentation=file:///opt/domarc-smtp-relay-admin/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=domarc-relay
+Group=domarc-relay
+WorkingDirectory=/opt/domarc-smtp-relay-admin
+Environment="PATH=/opt/domarc-smtp-relay-admin/.venv/bin:/usr/bin:/bin"
+EnvironmentFile=/etc/domarc-smtp-relay-admin/secrets.env
+ExecStart=/opt/domarc-smtp-relay-admin/.venv/bin/domarc-smtp-relay-admin serve
+Restart=on-failure
+RestartSec=5
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/domarc-smtp-relay /var/log/domarc-smtp-relay
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+RestrictRealtime=true
+SystemCallArchitectures=native
+
+LimitNOFILE=4096
+
+[Install]
+WantedBy=multi-user.target

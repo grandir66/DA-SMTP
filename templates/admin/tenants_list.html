@@ -1,0 +1,52 @@
+{% extends "admin/_base.html" %}
+{% block title %}Tenant — Domarc SMTP Relay{% endblock %}
+{% block content %}
+<section class="dr-section">
+    <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+        <h2 style="margin:0;"><i class="fas fa-users"></i> Tenant ({{ tenants|length }})</h2>
+        <a href="{{ url_for('tenants.form_view') }}" class="dr-btn dr-btn-primary" style="width:auto;">
+            <i class="fas fa-plus"></i> Nuovo
+        </a>
+        <a href="{{ url_for('tenants.overview_view') }}" class="dr-btn" style="width:auto;">
+            <i class="fas fa-chart-bar"></i> Overview KPI
+        </a>
+        <form method="get" class="dr-filters" style="margin-left:auto;">
+            <select name="state" onchange="this.form.submit()">
+                <option value="all" {% if filter_state=='all' %}selected{% endif %}>Tutti</option>
+                <option value="enabled" {% if filter_state=='enabled' %}selected{% endif %}>Attivi</option>
+                <option value="disabled" {% if filter_state=='disabled' %}selected{% endif %}>Disabilitati</option>
+            </select>
+            <input type="search" name="q" value="{{ search }}" placeholder="cerca…">
+        </form>
+    </div>
+</section>
+
+<div class="dr-table-wrap">
+<table class="dr-table">
+    <thead><tr><th>Codice</th><th>Ragione sociale</th><th>Contratto</th><th>Stato</th><th></th></tr></thead>
+    <tbody>
+        {% for t in tenants %}
+        <tr>
+            <td><a href="{{ url_for('tenants.form_view', tenant_id=t.id) }}"><code>{{ t.codice }}</code></a>
+                {% if t.id == 1 %}<small>(default)</small>{% endif %}</td>
+            <td>{{ t.ragione_sociale }}</td>
+            <td>{% if t.contract_active %}<span class="dr-badge dr-badge-ok">contratto</span>{% else %}<small style="color:#94a3b8;">—</small>{% endif %}</td>
+            <td>{% if t.enabled %}<span class="dr-badge dr-badge-ok">enabled</span>{% else %}<span class="dr-badge dr-badge-error">disabled</span>{% endif %}</td>
+            <td>
+                <a href="{{ url_for('tenants.switch_view', tenant_id=t.id) }}" class="dr-btn" title="Switch">→</a>
+                <a href="{{ url_for('tenants.form_view', tenant_id=t.id) }}" class="dr-btn"><i class="fas fa-pen"></i></a>
+                {% if t.id != 1 %}
+                <form method="post" action="{{ url_for('tenants.delete_view', tenant_id=t.id) }}" style="display:inline;"
+                      onsubmit="return confirm('Eliminare {{ t.codice }}?');">
+                    <button class="dr-btn dr-btn-danger"><i class="fas fa-trash"></i></button>
+                </form>
+                {% endif %}
+            </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="dr-empty">Nessun tenant. <a href="{{ url_for('tenants.form_view') }}">Crea il primo</a>.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endblock %}

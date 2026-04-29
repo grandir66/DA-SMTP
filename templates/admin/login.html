@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Accesso — Domarc SMTP Relay</title>
+    <link href="https://fonts.googleapis.com/css2?family=Signika:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+</head>
+<body class="dr-login-bg">
+    <div class="dr-login-box">
+        <div class="dr-login-brand">
+            <i class="fas fa-tower-broadcast"></i>
+            <h1>Domarc</h1>
+            <small>SMTP Relay Admin</small>
+        </div>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div class="dr-flashes">
+            {% for category, msg in messages %}
+            <div class="dr-flash dr-flash-{{ category }}">{{ msg }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
+        <form method="post" class="dr-login-form">
+            <label>
+                <span><i class="fas fa-user"></i> Username</span>
+                <input type="text" name="username" required autofocus autocomplete="username">
+            </label>
+            <label>
+                <span><i class="fas fa-lock"></i> Password</span>
+                <input type="password" name="password" required autocomplete="current-password">
+            </label>
+            <button type="submit" class="dr-btn dr-btn-primary">
+                <i class="fas fa-arrow-right-to-bracket"></i> Accedi
+            </button>
+        </form>
+        <small class="dr-login-hint">
+            Primo accesso: usa l'utente <code>admin</code> creato al boot
+            (vedi <code>DOMARC_RELAY_BOOTSTRAP_PASSWORD</code> in ambiente).
+        </small>
+    </div>
+</body>
+</html>

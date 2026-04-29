@@ -1,0 +1,57 @@
+{% extends "admin/_base.html" %}
+{% block title %}Connessione &amp; API{% endblock %}
+{% block content %}
+<section class="dr-section">
+    <h2><i class="fas fa-plug"></i> Connessione &amp; API</h2>
+    <p class="dr-hint">
+        Configurazione del canale tra il <strong>listener relay</strong> (daemon SMTP, processo separato)
+        e questo admin standalone. Il listener legge regole/template/clienti da qui via HTTPS
+        e pushia eventi in tempo reale.
+    </p>
+</section>
+
+<div class="dr-card">
+    <h3><i class="fas fa-key"></i> API key</h3>
+    <p>Chiave da inserire come <code>STORMSHIELD_RELAY_API_KEY</code> (o <code>DOMARC_RELAY_API_KEY</code>) nel <code>secrets.env</code> del listener:</p>
+    <pre style="background:#0f172a; color:#e2e8f0; padding:0.9rem; border-radius:6px; word-break:break-all;">{{ api_key }}</pre>
+    <form method="post" action="{{ url_for('connection.regen_key') }}" onsubmit="return confirm('Rigenerare la chiave? Il listener perderà l\'autenticazione finché non aggiorni il suo secrets.env.');">
+        <button class="dr-btn dr-btn-danger" style="width:auto;"><i class="fas fa-rotate"></i> Rigenera chiave</button>
+    </form>
+</div>
+
+<div class="dr-card" style="margin-top:1rem;">
+    <h3><i class="fas fa-server"></i> Endpoint disponibili</h3>
+    <table class="dr-table">
+        <thead><tr><th>Endpoint</th><th>Metodo</th><th>Descrizione</th></tr></thead>
+        <tbody>
+            <tr><td class="mono">/api/v1/relay/health</td><td>GET</td><td>Healthcheck (X-API-Key required)</td></tr>
+            <tr><td class="mono">/api/v1/relay/customers/active</td><td>GET</td><td>Anagrafica clienti</td></tr>
+            <tr><td class="mono">/api/v1/relay/rules/active</td><td>GET</td><td>Regole attive</td></tr>
+            <tr><td class="mono">/api/v1/relay/templates/active</td><td>GET</td><td>Template auto-reply</td></tr>
+            <tr><td class="mono">/api/v1/relay/aggregations/active</td><td>GET</td><td>Aggregazioni errori</td></tr>
+            <tr><td class="mono">/api/v1/relay/routes/active</td><td>GET</td><td>Routes (alias intercept)</td></tr>
+            <tr><td class="mono">/api/v1/relay/domain-routing/active</td><td>GET</td><td>Domain routing</td></tr>
+            <tr><td class="mono">/api/v1/relay/settings/active</td><td>GET</td><td>Settings globali</td></tr>
+            <tr><td class="mono">/api/v1/relay/events</td><td>POST</td><td>Replicazione eventi (audit)</td></tr>
+            <tr><td class="mono">/api/v1/relay/auth-codes</td><td>POST</td><td>Genera codice autorizzazione</td></tr>
+            <tr><td class="mono">/api/v1/relay/aggregations/&lt;id&gt;/occurrence</td><td>POST</td><td>Replica stato occurrence (best-effort)</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<div class="dr-card" style="margin-top:1rem;">
+    <h3><i class="fas fa-circle-info"></i> Configurazione listener (esempio)</h3>
+    <pre style="background:#fafbfd; padding:0.9rem; border-radius:6px; font-size:0.82rem; overflow:auto;">
+# /etc/stormshield-smtp-relay/secrets.env (o equivalente)
+RELAY_API_KEY={{ api_key }}
+RELAY_MANAGER_BASE_URL=https://192.168.4.41:8443
+
+# /etc/stormshield-smtp-relay/relay.yaml
+manager:
+  base_url: "https://192.168.4.41:8443"
+  api_key_env: "RELAY_API_KEY"
+  ca_bundle_env: "RELAY_MANAGER_CA_BUNDLE"  # path al cert.crt o vuoto+verify_tls=false in dev
+  verify_tls: false   # cert self-signed in dev
+</pre>
+</div>
+{% endblock %}

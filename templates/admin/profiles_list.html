@@ -1,0 +1,117 @@
+{% extends "admin/_base.html" %}
+{% block title %}Profili orari{% endblock %}
+{% block content %}
+<section class="dr-section">
+    <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+        <h2 style="margin:0;"><i class="fas fa-business-time"></i> Profili orari servizio ({{ profiles|length }})</h2>
+        <a href="{{ url_for('profiles.form_view') }}" class="dr-btn dr-btn-primary" style="width:auto;">
+            <i class="fas fa-plus"></i> Nuovo profilo custom
+        </a>
+        <form method="post" action="{{ url_for('profiles.refresh_holidays') }}" style="display:inline;"
+              onsubmit="return confirm('Ricalcolare festività italiane (anno corrente + prossimo) sui profili con auto-update?');">
+            <button class="dr-btn" style="width:auto;" title="Ricalcola Pasqua + festività fisse italiane">
+                <i class="fas fa-rotate"></i> Refresh festività
+            </button>
+        </form>
+    </div>
+    <p class="dr-hint">
+        I profili <strong>built-in</strong> (STD/EXT/H24/NO) sono i 4 canonici Domarc.
+        <strong>Sono modificabili</strong> per orari, festività e flag autorizzazione (code+nome restano fissi).
+        L'eliminazione è bloccata. Per profili totalmente custom, usa "Nuovo profilo custom".
+    </p>
+</section>
+
+<div class="dr-card">
+    <h3><i class="fas fa-shield-halved"></i> Profili built-in</h3>
+    <table class="dr-table">
+        <thead>
+            <tr>
+                <th>Code</th>
+                <th>Nome</th>
+                <th>Descrizione</th>
+                <th>Schedule</th>
+                <th>Festività</th>
+                <th>Auth fuori orario</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for p in builtin %}
+            <tr>
+                <td><strong><code>{{ p.code or p.name }}</code></strong></td>
+                <td><a href="{{ url_for('profiles.form_view', profile_id=p.id) }}">{{ p.name }}</a></td>
+                <td>
+                    <small>{{ p.description or '—' }}</small>
+                    {% if p.details %}<br><small style="color:#64748b;">{{ p.details }}</small>{% endif %}
+                </td>
+                <td><small style="font-family:monospace;">
+                    {% set sch = p.schedule or {} %}
+                    {% for d in ['mon','tue','wed','thu','fri','sat','sun'] %}
+                    {%- set slots = sch.get(d) or [] -%}
+                    {%- if slots -%}
+                    <span style="color:#64748b;">{{ d }}</span>
+                    {%- for s in slots %} {{ s[0] }}–{{ s[1] }}{% if not loop.last %},{% endif %}{% endfor -%}
+                    <br>
+                    {%- endif -%}
+                    {% endfor %}
+                    {% if not sch %}—{% endif %}
+                </small></td>
+                <td>{% if p.exclude_holidays %}<span class="dr-badge dr-badge-info">escluse</span>{% else %}<span class="dr-badge">incluse</span>{% endif %}</td>
+                <td>
+                    {% if p.requires_authorization_always %}
+                        <span class="dr-badge dr-badge-warn">sempre richiesta</span>
+                    {% elif p.authorize_outside_hours %}
+                        <span class="dr-badge dr-badge-ok">sì, fuori orario</span>
+                    {% else %}
+                        <span class="dr-badge">no</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <a href="{{ url_for('profiles.form_view', profile_id=p.id) }}" class="dr-btn" style="width:auto; padding:0.2rem 0.5rem;" title="Modifica orari">
+                        <i class="fas fa-pen"></i>
+                    </a>
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="7" class="dr-empty">Nessun profilo built-in. Esegui import dal manager o riapplica migration 003.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="dr-card" style="margin-top:1rem;">
+    <h3><i class="fas fa-user-pen"></i> Profili custom (tenant corrente)</h3>
+    <table class="dr-table">
+        <thead>
+            <tr>
+                <th>Code</th>
+                <th>Nome</th>
+                <th>Descrizione</th>
+                <th>Auto holidays</th>
+                <th>Stato</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for p in custom %}
+            <tr>
+                <td><code>{{ p.code or '—' }}</code></td>
+                <td><a href="{{ url_for('profiles.form_view', profile_id=p.id) }}"><strong>{{ p.name }}</strong></a></td>
+                <td><small>{{ p.description or '—' }}</small></td>
+                <td>{% if p.holidays_auto %}<i class="fas fa-check" style="color:#10b981;"></i>{% else %}<i class="fas fa-xmark" style="color:#cbd5e1;"></i>{% endif %}</td>
+                <td>{% if p.enabled %}<span class="dr-badge dr-badge-ok">attivo</span>{% else %}<span class="dr-badge dr-badge-error">spento</span>{% endif %}</td>
+                <td style="white-space:nowrap;">
+                    <a href="{{ url_for('profiles.form_view', profile_id=p.id) }}" class="dr-btn" style="width:auto; padding:0.2rem 0.5rem;" title="Modifica"><i class="fas fa-pen"></i></a>
+                    <form method="post" action="{{ url_for('profiles.delete_view', profile_id=p.id) }}" style="display:inline;"
+                          onsubmit="return confirm('Eliminare il profilo «{{ p.name }}»?');">
+                        <button class="dr-btn dr-btn-danger" style="width:auto; padding:0.2rem 0.5rem;" title="Elimina"><i class="fas fa-trash"></i></button>
+                    </form>
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="6" class="dr-empty">Nessun profilo custom. <a href="{{ url_for('profiles.form_view') }}">Creane uno</a> per orari personalizzati per questo tenant.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

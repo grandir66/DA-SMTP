@@ -1,0 +1,49 @@
+{% extends "admin/_base.html" %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block extra_head %}
+<style>
+    .manual-doc { max-width: 1100px; background: #fff; border: 1px solid var(--dr-gray);
+                  border-radius: 8px; padding: 1.5rem 2rem; line-height: 1.6; }
+    .manual-doc h1 { color: var(--dr-primary); border-bottom: 3px solid var(--dr-accent);
+                     padding-bottom: 0.5rem; margin-top: 0; }
+    .manual-doc h2 { color: var(--dr-primary); margin-top: 1.8rem;
+                     border-bottom: 1px solid var(--dr-gray); padding-bottom: 0.3rem; }
+    .manual-doc h3 { color: var(--dr-gray-dark); margin-top: 1.2rem; }
+    .manual-doc table { font-size: 0.85rem; margin: 0.5rem 0; }
+    .manual-doc table th { background: var(--dr-gray-light); }
+    .manual-doc code { background: #eef2f7; padding: 0.05rem 0.35rem; border-radius: 3px;
+                       font-size: 0.85rem; }
+    .manual-doc pre { background: #0f172a; color: #e2e8f0; padding: 1rem; border-radius: 5px;
+                      overflow: auto; font-size: 0.82rem; }
+    .manual-doc hr { border: none; border-top: 2px solid var(--dr-gray); margin: 1.5rem 0; }
+    .manual-doc a { color: var(--dr-blue); }
+    .manual-toolbar { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 1rem;
+                      max-width: 1100px; flex-wrap: wrap; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="manual-toolbar">
+    <h2 style="margin:0;"><i class="fas fa-book"></i> {{ title }}</h2>
+    {% if raw_url %}
+    <a href="{{ raw_url }}" class="dr-btn" style="width:auto;" target="_blank">
+        <i class="fas fa-file-code"></i> Raw markdown
+    </a>
+    {% endif %}
+    <a href="{{ other_link_url }}" class="dr-btn" style="width:auto;">
+        <i class="fas fa-arrow-right"></i> {{ other_link_label }}
+    </a>
+    {% if session.role in ('admin', 'superadmin') %}
+    <form method="post" action="{{ url_for('manual.regenerate') }}" style="display:inline;">
+        <button class="dr-btn" style="width:auto;" title="Rigenera il manuale">
+            <i class="fas fa-rotate"></i> Rigenera
+        </button>
+    </form>
+    {% endif %}
+</div>
+
+<div class="manual-doc">
+    {{ html_content|safe }}
+</div>
+{% endblock %}

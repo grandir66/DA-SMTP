@@ -1,0 +1,66 @@
+{% extends "admin/_base.html" %}
+{% block title %}Orari servizio{% endblock %}
+{% block content %}
+<section class="dr-section">
+    <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+        <h2 style="margin:0;"><i class="fas fa-clock"></i> Orari servizio ({{ rows|length }})</h2>
+        <a href="{{ url_for('service_hours.form_view') }}" class="dr-btn dr-btn-primary" style="width:auto;">
+            <i class="fas fa-plus"></i> Nuovo cliente
+        </a>
+        <a href="{{ url_for('profiles.list_view') }}" class="dr-btn" style="width:auto;">
+            <i class="fas fa-business-time"></i> Gestione profili
+        </a>
+        <form method="get" class="dr-filters" style="margin-left:auto;">
+            <input type="search" name="q" value="{{ search }}" placeholder="cerca codcli…">
+            <button class="dr-btn"><i class="fas fa-magnifying-glass"></i></button>
+        </form>
+    </div>
+</section>
+<div class="dr-table-wrap">
+<table class="dr-table">
+    <thead>
+        <tr>
+            <th>Codcli</th>
+            <th>Profilo</th>
+            <th>Timezone</th>
+            <th class="num">Festività</th>
+            <th class="num">Eccezioni</th>
+            <th>Aggiornato</th>
+            <th>Stato</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for r in rows %}
+        <tr>
+            <td><a href="{{ url_for('service_hours.form_view', codcli=r.codice_cliente) }}"><strong>{{ r.codice_cliente }}</strong></a></td>
+            <td>
+                {% if r.profile %}
+                <span class="dr-badge dr-badge-info">{{ r.profile }}</span>
+                {% else %}
+                <small style="color:#94a3b8;">custom</small>
+                {% endif %}
+            </td>
+            <td><small>{{ r.timezone }}</small></td>
+            <td class="num">{{ (r.holidays or [])|length }}</td>
+            <td class="num">{{ (r.schedule_exceptions or [])|length }}</td>
+            <td><small>
+                {% if r.updated_at %}{{ r.updated_at }}{% else %}—{% endif %}
+                {% if r.updated_by %}<br><span style="color:#94a3b8;">{{ r.updated_by }}</span>{% endif %}
+            </small></td>
+            <td>{% if r.enabled %}<span class="dr-badge dr-badge-ok">attivo</span>{% else %}<span class="dr-badge dr-badge-error">spento</span>{% endif %}</td>
+            <td style="white-space:nowrap;">
+                <a href="{{ url_for('service_hours.form_view', codcli=r.codice_cliente) }}" class="dr-btn" style="width:auto; padding:0.2rem 0.5rem;" title="Modifica"><i class="fas fa-pen"></i></a>
+                <form method="post" action="{{ url_for('service_hours.delete_view', codcli=r.codice_cliente) }}" style="display:inline;"
+                      onsubmit="return confirm('Eliminare orari di {{ r.codice_cliente }}?');">
+                    <button class="dr-btn dr-btn-danger" style="width:auto; padding:0.2rem 0.5rem;" title="Elimina"><i class="fas fa-trash"></i></button>
+                </form>
+            </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" class="dr-empty">Nessun cliente con orari configurati. <a href="{{ url_for('service_hours.form_view') }}">Aggiungi il primo</a>.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endblock %}

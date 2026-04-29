@@ -1,0 +1,58 @@
+{% extends "admin/_base.html" %}
+{% block title %}AI Routing per job{% endblock %}
+{% block content %}
+<section class="dr-section">
+    <div style="display:flex; gap:0.5rem; align-items:center;">
+        <a href="{{ url_for('ai.dashboard') }}" class="dr-btn"><i class="fas fa-arrow-left"></i> AI Dashboard</a>
+        <h2 style="margin:0;"><i class="fas fa-route"></i> Routing per job</h2>
+        <a href="{{ url_for('ai.model_form') }}" class="dr-btn dr-btn-primary" style="width:auto;">
+            <i class="fas fa-plus"></i> Nuovo binding
+        </a>
+    </div>
+    <p style="color:var(--dr-gray-dark); font-size:0.85rem;">
+        Ogni <strong>job_code</strong> (classify_email, summarize, critical_classify, ecc.) viene assegnato a un provider+modello tramite un <strong>binding</strong>.
+        Un binding può essere versionato (v1, v2, ...). Più binding attivi sullo stesso job → traffic split A/B.
+    </p>
+</section>
+
+<div class="dr-table-wrap">
+<table class="dr-table">
+    <thead>
+        <tr><th>Job</th><th>Descrizione</th><th>Bindings attivi</th><th>Storico versioni</th><th></th></tr>
+    </thead>
+    <tbody>
+    {% for job in jobs %}
+    {% set binds = bindings_grouped.get(job.job_code, []) %}
+    {% set actives = binds|selectattr('enabled', 'equalto', 1)|list %}
+    <tr>
+        <td><code>{{ job.job_code }}</code></td>
+        <td><small>{{ job.description }}</small><br><small style="color:var(--dr-gray-dark);">{{ job.modality }}, timeout {{ job.default_timeout_ms }}ms</small></td>
+        <td>
+            {% if actives %}
+            {% for b in actives %}
+            <div>
+                <span class="rule-status on">v{{ b.version }}</span>
+                {% set p = providers.get(b.provider_id) %}
+                <strong>{{ p.name if p else '?' }}</strong> / <code>{{ b.model_id }}</code>
+                {% if b.traffic_split != 100 %}<span class="rule-inherit-badge">{{ b.traffic_split }}%</span>{% endif %}
+                <a href="{{ url_for('ai.model_form', binding_id=b.id) }}" class="dr-btn" style="width:auto; padding:0.1rem 0.4rem;">
+                    <i class="fas fa-pen"></i>
+                </a>
+            </div>
+            {% endfor %}
+            {% else %}
+            <small style="color:var(--dr-gray-dark);">— nessun binding attivo —</small>
+            {% endif %}
+        </td>
+        <td><small>{{ binds|length }} totali ({{ binds|length - actives|length }} archiviati)</small></td>
+        <td>
+            <a href="{{ url_for('ai.model_form') }}?job_code={{ job.job_code }}" class="dr-btn" style="width:auto; padding:0.2rem 0.5rem;">
+                <i class="fas fa-plus"></i>
+            </a>
+        </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endblock %}
