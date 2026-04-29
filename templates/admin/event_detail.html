@@ -101,6 +101,57 @@
                     <span style="color:#94a3b8;">nessuna regola applicata</span>
                     {% endif %}
                 </dd>
+                {% set chain = (event.payload_metadata or {}).get('chain') if event.payload_metadata is mapping else None %}
+                {% set matched_chain = chain | selectattr('matched') | list if chain else [] %}
+                {% if chain %}
+                <dt>Catena di valutazione</dt>
+                <dd>
+                    <span style="color:#64748b; font-size:0.85rem;">
+                        {{ chain | length }} regole valutate, <strong>{{ matched_chain | length }}</strong> in match
+                    </span>
+                    {% if matched_chain | length > 1 %}
+                    <div style="margin-top:0.4rem;">
+                        {% for c in matched_chain %}
+                        <a href="{{ url_for('rules.form_view', rule_id=c.rule_id) }}"
+                           style="display:inline-block; margin:0.15rem 0.3rem 0.15rem 0; padding:0.18rem 0.55rem; background:#dcfce7; color:#14532d; border:1px solid #86efac; border-radius:12px; font-size:0.78rem; text-decoration:none;"
+                           title="priority {{ c.priority }} — scope {{ c.scope or '?' }}">
+                            <i class="fas fa-check-circle"></i> #{{ c.rule_id }} {{ c.rule_name or '' }}
+                        </a>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                    <details style="margin-top:0.4rem;">
+                        <summary style="cursor:pointer; color:#64748b; font-size:0.82rem;">Dettaglio completo ({{ chain | length }} step)</summary>
+                        <table style="margin-top:0.4rem; width:100%; font-size:0.82rem; border-collapse:collapse;">
+                            <thead>
+                                <tr style="background:#f1f5f9; text-align:left;">
+                                    <th style="padding:0.3rem 0.5rem;">#</th>
+                                    <th style="padding:0.3rem 0.5rem;">Regola</th>
+                                    <th style="padding:0.3rem 0.5rem;">Scope</th>
+                                    <th style="padding:0.3rem 0.5rem;">Priority</th>
+                                    <th style="padding:0.3rem 0.5rem; text-align:center;">Match</th>
+                                    <th style="padding:0.3rem 0.5rem;">Reasons</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            {% for c in chain %}
+                                <tr style="border-bottom:1px solid #f1f5f9; {% if c.matched %}background:#f0fdf4;{% endif %}">
+                                    <td style="padding:0.3rem 0.5rem;"><a href="{{ url_for('rules.form_view', rule_id=c.rule_id) }}">#{{ c.rule_id }}</a></td>
+                                    <td style="padding:0.3rem 0.5rem;">{{ c.rule_name or '—' }}</td>
+                                    <td style="padding:0.3rem 0.5rem; color:#64748b;">{{ c.scope or '—' }}</td>
+                                    <td style="padding:0.3rem 0.5rem; color:#64748b;">{{ c.priority }}</td>
+                                    <td style="padding:0.3rem 0.5rem; text-align:center;">
+                                        {% if c.matched %}<i class="fas fa-check" style="color:#16a34a;"></i>
+                                        {% else %}<i class="fas fa-xmark" style="color:#94a3b8;"></i>{% endif %}
+                                    </td>
+                                    <td style="padding:0.3rem 0.5rem; color:#64748b; font-size:0.78rem;">{{ (c.reasons or []) | join(', ') }}</td>
+                                </tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </details>
+                </dd>
+                {% endif %}
                 <dt>Ticket aperto</dt><dd>{{ event.ticket_id or '—' }}</dd>
                 <dt>Codice cliente</dt>
                 <dd>

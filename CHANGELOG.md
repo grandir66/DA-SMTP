@@ -5,6 +5,41 @@ Il formato è basato su [Keep a Changelog](https://keepachangelog.com/it/1.1.0/)
 
 ## [Unreleased]
 
+### Aggiunte — Catena di regole valutate negli eventi
+- **Lista eventi**: badge verde "+N" accanto al `rule_id` quando più di una
+  regola ha matchato durante la valutazione (es. gruppo padre + figlio).
+  Tooltip al hover spiega "N regole valutate, M in match".
+- **Dettaglio evento**: nuova sezione "Catena di valutazione" che mostra:
+  - Pill verdi cliccabili per ogni regola in match (oltre la prima),
+  - Tabella espandibile (`<details>`) con ogni regola valutata, scope,
+    priority, esito match e reasons. Le righe matchate sono evidenziate
+    in verde chiaro.
+- I dati arrivano già da `payload_metadata.chain` (popolato dal listener
+  durante l'evaluazione, non serve cambio schema).
+
+### Correzioni — Body mail non memorizzato negli eventi
+- **Bug**: la tabella `events_log` del listener ha le colonne `body_text`
+  e `body_html`, ma sia l'INSERT in `storage.insert_event(...)` sia il
+  payload trasmesso all'admin in `sync.flush_events_to_manager(...)` le
+  ignoravano. Risultato: in admin tutti gli eventi avevano `body_text =
+  body_html = NULL` anche quando la mail aveva chiaramente un corpo.
+- **Fix** in [/opt/stormshield-smtp-relay/relay/](file:///opt/stormshield-smtp-relay/relay/):
+  1. `storage.py::insert_event` accetta `body_text` e `body_html`,
+     applicando cap di sicurezza (32 KB plain, 64 KB HTML) e li salva
+     nelle colonne giuste.
+  2. `pipeline.py` passa `parsed.body_text` e `parsed.body_html` a
+     `insert_event`. Privacy bypass NON salva il body (per design GDPR).
+  3. `sync.py::flush_events_to_manager` include `body_text` e `body_html`
+     nel payload POST verso l'admin (`/api/v1/relay/events`).
+- **Gotcha**: durante il debugging, ho restartato solo
+  `stormshield-smtp-relay-listener` ma il flusso eventi gira nel servizio
+  separato `stormshield-smtp-relay-scheduler`. Per applicare i fix in
+  `sync.py` serve `systemctl restart stormshield-smtp-relay-scheduler`.
+- **Verifica**: test post-fix
+  `r.grandi@domarc.it → r.grandi@datia.it` con corpo "Test v5 ..." →
+  admin event id=44, `body_text` = 79 byte intatti, `chain` 7 step
+  con 2 matched.
+
 ### Correzioni — BUG CRITICO consegna mail in shadow mode IA
 - **Bug**: tutte le mail processate da una regola con `action='ai_classify'`
   in IA shadow mode NON venivano consegnate al destinatario reale, anche se

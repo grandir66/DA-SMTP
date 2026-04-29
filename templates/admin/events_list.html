@@ -149,6 +149,16 @@
                 <td>
                     {% if e.rule_id %}
                     <a href="{{ url_for('rules.form_view', rule_id=e.rule_id) }}" onclick="event.stopPropagation();">#{{ e.rule_id }}</a>
+                    {% set chain = pm.get('chain') if pm else None %}
+                    {% if chain %}
+                        {% set extra_matched = (chain | selectattr('matched') | list | length) - 1 %}
+                        {% if extra_matched > 0 %}
+                        <span title="Catena: {{ chain | length }} regole valutate, {{ extra_matched + 1 }} in match — apri il dettaglio per la lista completa"
+                              style="display:inline-block; margin-left:0.25rem; background:#dcfce7; color:#14532d; padding:0.05rem 0.4rem; border-radius:9px; font-size:0.7rem; font-weight:600; cursor:help;">
+                            +{{ extra_matched }}
+                        </span>
+                        {% endif %}
+                    {% endif %}
                     {% else %}<span style="color:#cbd5e1;">—</span>{% endif %}
                 </td>
                 <td class="mono"><small>{{ e.ticket_id or '—' }}</small></td>
