@@ -321,7 +321,14 @@ code { background: #eef2f7; padding: 0.05rem 0.35rem; border-radius: 3px; font-s
     border: 1px solid #cbd5e1;
     border-radius: 7px;
     background: #f8fafc;
-    overflow: hidden;
+}
+.rule-group .rule-group-header {
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+}
+.rule-group .rule-group-body:last-child {
+    border-bottom-left-radius: 6px;
+    border-bottom-right-radius: 6px;
 }
 .rule-group .rule-group-header {
     background: linear-gradient(90deg, #e0e7ff 0%, #f8fafc 100%);
