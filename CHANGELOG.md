@@ -5,6 +5,28 @@ Il formato è basato su [Keep a Changelog](https://keepachangelog.com/it/1.1.0/)
 
 ## [Unreleased]
 
+### Correzioni — Audit completo voci action_map: 5 campi UI fantasma implementati
+- L'admin permetteva di configurare 5 campi nel form regola che venivano salvati
+  in `action_map` ma il listener **non li leggeva mai** (UI fantasma):
+  - `reply_subject_prefix` (es. "Re: ")
+  - `reply_to` (header Reply-To)
+  - `reply_quote_original` (include corpo originale)
+  - `reply_attach_original` (allega .eml originale)
+  - `reply_mode` (`to_sender_only` / `reply_all` / `to_alias`)
+- **Fix** in [/opt/stormshield-smtp-relay/relay/](file:///opt/stormshield-smtp-relay/relay/):
+  1. `auto_reply.py::build_auto_reply_db` esteso con 6 nuovi parametri
+     (`subject_prefix`, `reply_to`, `quote_original`, `attach_original`,
+     `original_mime`, `original_body_text`, `original_body_html`).
+     Subject prefix prepended; Reply-To header aggiunto; quote in coda
+     a body text+html con blockquote; allegato .eml `message/rfc822`.
+  2. `actions.py::do_auto_reply` legge i 5 fields da `action_map` e
+     li passa al builder. `reply_mode` modifica i destinatari:
+     `reply_all` aggiunge i `to_addresses` originali (escluso il
+     mittente); `to_alias` cambia il From al destinatario originale.
+- **Verifica**: regola #44 con tutti i 5 fields valorizzati →
+  test E2E mostra Subject `Re: ...`, `Reply-To: support@domarc.it`,
+  blockquote del corpo originale, attachment `messaggio_originale.eml`.
+
 ### Correzioni — Match colonne mancanti nel listener
 - **Bug**: la tabella `rules_cache` del listener non conosceva 5 colonne
   che l'admin invia: `match_from_domain`, `match_contract_active`,
