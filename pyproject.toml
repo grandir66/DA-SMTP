@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "domarc-smtp-relay-admin"
-version = "1.0.0"
+version = "0.8.1"
 description = "Domarc SMTP Relay — web admin (Flask) standalone, multi-tenant, SQLite/Postgres"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -14,7 +14,7 @@ authors = [
 ]
 keywords = ["smtp", "relay", "email", "antispam", "msp"]
 classifiers = [
-    "Development Status :: 5 - Production/Stable",
+    "Development Status :: 4 - Beta",
     "Environment :: Web Environment",
     "Framework :: Flask",
     "Intended Audience :: System Administrators",

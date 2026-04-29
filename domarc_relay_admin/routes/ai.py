@@ -30,6 +30,33 @@ def _actor() -> str:
     return session.get("username") or "ui"
 
 
+def _safe_int(value, default: int, *, min_val: int | None = None,
+                max_val: int | None = None) -> int:
+    """Parsing int sicuro: non crasha su input invalido, applica clamp opzionale."""
+    try:
+        v = int(value) if value not in (None, "") else default
+    except (TypeError, ValueError):
+        v = default
+    if min_val is not None and v < min_val:
+        v = min_val
+    if max_val is not None and v > max_val:
+        v = max_val
+    return v
+
+
+def _safe_float(value, default: float, *, min_val: float | None = None,
+                  max_val: float | None = None) -> float:
+    try:
+        v = float(value) if value not in (None, "") else default
+    except (TypeError, ValueError):
+        v = default
+    if min_val is not None and v < min_val:
+        v = min_val
+    if max_val is not None and v > max_val:
+        v = max_val
+    return v
+
+
 @ai_bp.route("/")
 @login_required(role="admin")
 def dashboard():
@@ -168,18 +195,18 @@ def model_form(binding_id: int | None = None):
         data = {
             "id": binding_id,
             "job_code": request.form.get("job_code"),
-            "provider_id": int(request.form.get("provider_id") or 0) or None,
+            "provider_id": _safe_int(request.form.get("provider_id"), 0) or None,
             "model_id": (request.form.get("model_id") or "").strip(),
             "system_prompt_template": (request.form.get("system_prompt_template") or "").strip() or None,
             "user_prompt_template": (request.form.get("user_prompt_template") or "").strip() or None,
-            "temperature": float(request.form.get("temperature") or 0.0),
-            "max_tokens": int(request.form.get("max_tokens") or 1024),
-            "timeout_ms": int(request.form.get("timeout_ms") or 5000),
+            "temperature": _safe_float(request.form.get("temperature"), 0.0, min_val=0.0, max_val=2.0),
+            "max_tokens": _safe_int(request.form.get("max_tokens"), 1024, min_val=1, max_val=200000),
+            "timeout_ms": _safe_int(request.form.get("timeout_ms"), 5000, min_val=500, max_val=60000),
             "fallback_provider_id": (
-                int(request.form.get("fallback_provider_id") or 0) or None
+                _safe_int(request.form.get("fallback_provider_id"), 0) or None
             ),
             "fallback_model_id": (request.form.get("fallback_model_id") or "").strip() or None,
-            "traffic_split": int(request.form.get("traffic_split") or 100),
+            "traffic_split": _safe_int(request.form.get("traffic_split"), 100, min_val=0, max_val=100),
             "enabled": (request.form.get("enabled") or "").lower() in ("on", "true", "1"),
             "notes": (request.form.get("notes") or "").strip() or None,
         }
@@ -274,7 +301,7 @@ def proposal_detail(proposal_id: int):
         from ..ai_assistant.rule_proposer import accept_proposal, reject_proposal
         action = (request.form.get("action") or "").strip()
         notes = (request.form.get("review_notes") or "").strip() or None
-        priority = int(request.form.get("priority") or 200)
+        priority = _safe_int(request.form.get("priority"), 200, min_val=1, max_val=999999)
         try:
             if action == "accept":
                 rule_id = accept_proposal(
@@ -343,8 +370,8 @@ def cluster_detail(cluster_id: int):
     if request.method == "POST":
         action = (request.form.get("action") or "").strip()
         if action == "update_threshold":
-            threshold = int(request.form.get("manual_threshold") or 5)
-            window = int(request.form.get("manual_recovery_window_min") or 60)
+            threshold = _safe_int(request.form.get("manual_threshold"), 5, min_val=1, max_val=10000)
+            window = _safe_int(request.form.get("manual_recovery_window_min"), 60, min_val=1, max_val=10080)
             if threshold < 1 or threshold > 1000:
                 flash("Soglia threshold deve essere 1-1000.", "error")
             else:

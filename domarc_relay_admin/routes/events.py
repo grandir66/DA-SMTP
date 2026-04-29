@@ -4,7 +4,7 @@ from __future__ import annotations
 import csv
 import io
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from flask import Blueprint, Response, abort, current_app, flash, g, jsonify, redirect, render_template, request, url_for
@@ -210,7 +210,7 @@ def export_view(fmt: str):
     }
     rows, _ = _storage().list_events(tenant_id=_tid(), hours=hours,
                                       page=1, page_size=50000, filters=filters)
-    fname_ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    fname_ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     if fmt == "json":
         return jsonify({"tenant_id": _tid(), "count": len(rows), "events": rows})
     buf = io.StringIO()

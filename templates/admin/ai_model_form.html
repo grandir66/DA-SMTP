@@ -40,11 +40,11 @@
     </div>
     <div class="dr-form-row">
         <label>Max tokens</label>
-        <input type="number" name="max_tokens" value="{{ record.max_tokens or 1024 }}">
+        <input type="number" name="max_tokens" value="{{ record.max_tokens or 1024 }}" min="1" max="200000" step="1">
     </div>
     <div class="dr-form-row">
         <label>Timeout (ms)</label>
-        <input type="number" name="timeout_ms" value="{{ record.timeout_ms or 5000 }}">
+        <input type="number" name="timeout_ms" value="{{ record.timeout_ms or 5000 }}" min="500" max="60000" step="500">
     </div>
     <div class="dr-form-row">
         <label>Fallback provider</label>

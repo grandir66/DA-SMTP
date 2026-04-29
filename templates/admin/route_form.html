@@ -13,7 +13,7 @@
 
     <h3>Forward (smarthost)</h3>
     <div class="dr-form-row"><label>Target host</label><input type="text" name="forward_target" value="{{ record.forward_target or '' }}" placeholder="acme.mail.protection.outlook.com"></div>
-    <div class="dr-form-row"><label>Porta</label><input type="number" name="forward_port" value="{{ record.forward_port or 25 }}" style="width:120px;"></div>
+    <div class="dr-form-row"><label>Porta</label><input type="number" name="forward_port" value="{{ record.forward_port or 25 }}" min="1" max="65535" style="width:120px;"></div>
     <div class="dr-form-row"><label>TLS</label>
         <select name="forward_tls">
             {% for v in ['opportunistic','strict','none'] %}<option value="{{ v }}" {% if record.forward_tls==v %}selected{% endif %}>{{ v }}</option>{% endfor %}

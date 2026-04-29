@@ -1,0 +1,277 @@
+{% extends "admin/_base.html" %}
+{% block title %}Activity Live{% endblock %}
+{% block extra_head %}
+<style>
+.activity-toolbar { display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap; padding:0.6rem 0; max-width:1200px; }
+.activity-toolbar .pulse { display:inline-block; width:10px; height:10px; border-radius:50%; background:#10b981; box-shadow:0 0 0 0 rgba(16,185,129,0.8); animation: pulse 2s infinite; }
+.activity-toolbar .pulse.paused { background:#9ca3af; animation:none; }
+@keyframes pulse { 0% { box-shadow:0 0 0 0 rgba(16,185,129,0.8); } 70% { box-shadow:0 0 0 8px rgba(16,185,129,0); } 100% { box-shadow:0 0 0 0 rgba(16,185,129,0); } }
+
+.activity-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:0.8rem; max-width:1400px; }
+@media (max-width: 1100px) { .activity-grid { grid-template-columns:1fr; } }
+
+.activity-col { background:#fff; border:1px solid var(--dr-gray); border-radius:8px; overflow:hidden; }
+.activity-col-header { background:linear-gradient(180deg, #f1f5f9 0%, #e2e8f0 100%); padding:0.6rem 0.9rem; font-weight:600; color:var(--dr-primary); border-bottom:1px solid var(--dr-gray); display:flex; align-items:center; gap:0.4rem; }
+.activity-col-header .badge-count { margin-left:auto; background:var(--dr-blue); color:#fff; padding:0.05rem 0.5rem; border-radius:9px; font-size:0.78rem; }
+.activity-col-body { max-height:calc(100vh - 250px); overflow-y:auto; }
+
+.activity-row { padding:0.55rem 0.8rem; border-bottom:1px solid #eef2f7; font-size:0.82rem; transition:background 0.4s ease-out; }
+.activity-row:last-child { border-bottom:none; }
+.activity-row.fresh { background:#fef9c3; }  /* yellow flash on new */
+.activity-row .ts { color:var(--dr-gray-dark); font-size:0.75rem; }
+.activity-row .badges { display:flex; gap:0.2rem; flex-wrap:wrap; margin-top:0.2rem; }
+.activity-row .badges .b { padding:0.05rem 0.35rem; border-radius:9px; font-size:0.68rem; font-weight:600; }
+.activity-row .b-action { background:#dbeafe; color:#1d4ed8; }
+.activity-row .b-rule { background:#fef3c7; color:#92400e; }
+.activity-row .b-ai { background:#ede9fe; color:#6d28d9; }
+.activity-row .b-error { background:#fee2e2; color:#dc2626; }
+.activity-row .b-shadow { background:#e0e7ff; color:#4338ca; }
+.activity-row .b-applied { background:#d1fae5; color:#047857; }
+.activity-row .b-bypass { background:#fee2e2; color:#dc2626; }
+.activity-row .b-cluster-acc { background:#fef3c7; color:#92400e; }
+.activity-row .b-cluster-tkt { background:#fee2e2; color:#dc2626; }
+.activity-row .b-cluster-rec { background:#d1fae5; color:#047857; }
+
+.activity-empty { padding:1.5rem; text-align:center; color:var(--dr-gray-dark); }
+.activity-stats { display:flex; gap:1rem; font-size:0.85rem; color:var(--dr-gray-dark); margin-left:auto; }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="dr-section">
+    <h2 style="margin:0;"><i class="fas fa-bolt"></i> Activity Live — flusso mail e analisi</h2>
+
+    <div class="activity-toolbar">
+        <span class="pulse" id="pulse-indicator"></span>
+        <strong id="status-text">Live polling attivo (2s)</strong>
+        <button id="toggle-btn" class="dr-btn" style="width:auto;">
+            <i class="fas fa-pause"></i> Pausa
+        </button>
+        <button id="clear-btn" class="dr-btn" style="width:auto;">
+            <i class="fas fa-broom"></i> Pulisci
+        </button>
+        <label style="font-weight:normal; font-size:0.85rem;">
+            Polling interval:
+            <select id="interval-select" style="padding:0.25rem 0.5rem;">
+                <option value="1000">1s</option>
+                <option value="2000" selected>2s</option>
+                <option value="5000">5s</option>
+                <option value="10000">10s</option>
+            </select>
+        </label>
+        <div class="activity-stats">
+            <span>Eventi: <strong id="stat-events">0</strong></span>
+            <span>Decisioni: <strong id="stat-decisions">0</strong></span>
+            <span>Cluster: <strong id="stat-clusters">0</strong></span>
+            <span>Last poll: <span id="stat-lastpoll">—</span></span>
+        </div>
+    </div>
+    <p style="color:var(--dr-gray-dark); font-size:0.85rem;">
+        Tail in tempo reale degli eventi che attraversano il sistema:
+        <span class="b b-action" style="padding:0.05rem 0.35rem; border-radius:9px; font-size:0.78rem; background:#dbeafe; color:#1d4ed8;">mail processate</span>
+        ←
+        <span class="b b-ai" style="padding:0.05rem 0.35rem; border-radius:9px; font-size:0.78rem; background:#ede9fe; color:#6d28d9;">decisioni IA</span>
+        ←
+        <span class="b b-cluster-acc" style="padding:0.05rem 0.35rem; border-radius:9px; font-size:0.78rem; background:#fef3c7; color:#92400e;">cluster errori</span>.
+        Polling incrementale (only-new), niente reload pagina.
+    </p>
+</section>
+
+<div class="activity-grid">
+    <div class="activity-col">
+        <div class="activity-col-header">
+            <i class="fas fa-envelope"></i> Mail processate
+            <span class="badge-count" id="count-events">0</span>
+        </div>
+        <div class="activity-col-body" id="col-events">
+            <div class="activity-empty">In attesa di nuove mail…</div>
+        </div>
+    </div>
+
+    <div class="activity-col">
+        <div class="activity-col-header">
+            <i class="fas fa-robot"></i> Decisioni IA
+            <span class="badge-count" id="count-decisions">0</span>
+        </div>
+        <div class="activity-col-body" id="col-decisions">
+            <div class="activity-empty">In attesa di nuove inferenze…</div>
+        </div>
+    </div>
+
+    <div class="activity-col">
+        <div class="activity-col-header">
+            <i class="fas fa-layer-group"></i> Cluster errori
+            <span class="badge-count" id="count-clusters">0</span>
+        </div>
+        <div class="activity-col-body" id="col-clusters">
+            <div class="activity-empty">In attesa di errori clusterizzabili…</div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    const state = {
+        sinceEvent: 0,
+        sinceDecision: 0,
+        sinceCluster: 0,
+        running: true,
+        intervalMs: 2000,
+        timer: null,
+        totalEvents: 0,
+        totalDecisions: 0,
+        totalClusters: 0,
+    };
+
+    const streamUrl = '{{ url_for("activity.stream") }}';
+
+    function fmtTime(iso) {
+        if (!iso) return '—';
+        try {
+            const d = new Date(iso.replace(' ', 'T').replace(/\+\d\d:\d\d$/, ''));
+            return d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        } catch (e) { return iso.slice(11, 19); }
+    }
+
+    function escapeHtml(s) {
+        return String(s || '').replace(/[&<>"']/g, c => ({
+            '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+        }[c]));
+    }
+
+    function renderEvent(e) {
+        const badges = [];
+        if (e.action_taken) badges.push(`<span class="b b-action">${escapeHtml(e.action_taken)}</span>`);
+        if (e.rule_id) badges.push(`<span class="b b-rule">rule#${e.rule_id}</span>`);
+        if (e.ai_decision_id) badges.push(`<span class="b b-ai">🤖 IA #${e.ai_decision_id}</span>`);
+        if (e.ai_unavailable) badges.push(`<span class="b b-error">IA fail-safe</span>`);
+        if (e.privacy_bypass) badges.push(`<span class="b b-bypass">privacy bypass</span>`);
+        if (e.ai_classification) badges.push(`<span class="b b-ai">${escapeHtml(e.ai_classification)}</span>`);
+        if (e.ai_urgenza) badges.push(`<span class="b b-ai">${escapeHtml(e.ai_urgenza)}</span>`);
+
+        return `
+        <div class="activity-row fresh" data-id="${e.id}">
+            <div><strong>${escapeHtml(e.subject || '(no subject)')}</strong></div>
+            <div class="ts">${fmtTime(e.received_at)} · ${escapeHtml(e.from_address || '?')} → ${escapeHtml(e.to_address || '?')}</div>
+            <div class="badges">${badges.join('')}</div>
+        </div>`;
+    }
+
+    function renderDecision(d) {
+        const badges = [];
+        if (d.shadow_mode) badges.push(`<span class="b b-shadow">shadow</span>`);
+        else if (d.applied) badges.push(`<span class="b b-applied">applied</span>`);
+        if (d.error) badges.push(`<span class="b b-error">error</span>`);
+        if (d.urgenza) badges.push(`<span class="b b-ai">${escapeHtml(d.urgenza)}</span>`);
+
+        const cost = d.cost_usd ? `· $${parseFloat(d.cost_usd).toFixed(5)}` : '';
+        const lat = d.latency_ms ? `· ${d.latency_ms}ms` : '';
+        return `
+        <div class="activity-row fresh" data-id="${d.id}">
+            <div><strong>${escapeHtml(d.intent || '?')}</strong> · ${escapeHtml(d.summary || '')}</div>
+            <div class="ts">${fmtTime(d.created_at)} · ${escapeHtml(d.job_code)} · ${escapeHtml(d.model || '')} ${lat} ${cost}</div>
+            <div class="badges">${badges.join('')}</div>
+        </div>`;
+    }
+
+    function renderCluster(c) {
+        const stateClass = c.state === 'recovered' ? 'b-cluster-rec'
+                         : c.state === 'ticket_opened' ? 'b-cluster-tkt'
+                         : 'b-cluster-acc';
+        return `
+        <div class="activity-row fresh" data-id="${c.id}">
+            <div><strong>${escapeHtml(c.subject || '?')}</strong></div>
+            <div class="ts">${fmtTime(c.last_seen)} · count=${c.count}/${c.threshold}</div>
+            <div class="badges"><span class="b ${stateClass}">${escapeHtml(c.state)}</span></div>
+        </div>`;
+    }
+
+    function prependItems(colId, items, render) {
+        if (!items.length) return;
+        const col = document.getElementById(colId);
+        // rimuovi empty placeholder
+        const empty = col.querySelector('.activity-empty');
+        if (empty) empty.remove();
+        // prepend in ordine inverso (più recente in cima)
+        const html = items.map(render).join('');
+        col.insertAdjacentHTML('afterbegin', html);
+        // limita a 200 righe per colonna (memory)
+        const rows = col.querySelectorAll('.activity-row');
+        for (let i = 200; i < rows.length; i++) rows[i].remove();
+        // remove fresh class dopo 1.5s
+        setTimeout(() => {
+            col.querySelectorAll('.activity-row.fresh').forEach(r => r.classList.remove('fresh'));
+        }, 1500);
+    }
+
+    async function poll() {
+        if (!state.running) return;
+        try {
+            const url = `${streamUrl}?since_event_id=${state.sinceEvent}&since_decision_id=${state.sinceDecision}&since_cluster_id=${state.sinceCluster}`;
+            const resp = await fetch(url);
+            if (!resp.ok) {
+                document.getElementById('status-text').textContent = `Errore HTTP ${resp.status}`;
+                return;
+            }
+            const data = await resp.json();
+            prependItems('col-events', data.events || [], renderEvent);
+            prependItems('col-decisions', data.decisions || [], renderDecision);
+            prependItems('col-clusters', data.clusters || [], renderCluster);
+            state.sinceEvent = Math.max(state.sinceEvent, data.max_event_id || 0);
+            state.sinceDecision = Math.max(state.sinceDecision, data.max_decision_id || 0);
+            state.sinceCluster = Math.max(state.sinceCluster, data.max_cluster_id || 0);
+            state.totalEvents += (data.events || []).length;
+            state.totalDecisions += (data.decisions || []).length;
+            state.totalClusters += (data.clusters || []).length;
+            document.getElementById('count-events').textContent = state.totalEvents;
+            document.getElementById('count-decisions').textContent = state.totalDecisions;
+            document.getElementById('count-clusters').textContent = state.totalClusters;
+            document.getElementById('stat-events').textContent = state.totalEvents;
+            document.getElementById('stat-decisions').textContent = state.totalDecisions;
+            document.getElementById('stat-clusters').textContent = state.totalClusters;
+            document.getElementById('stat-lastpoll').textContent = new Date().toLocaleTimeString('it-IT');
+        } catch (exc) {
+            document.getElementById('status-text').textContent = `Errore: ${exc}`;
+        }
+    }
+
+    function startPolling() {
+        if (state.timer) clearInterval(state.timer);
+        state.running = true;
+        document.getElementById('pulse-indicator').classList.remove('paused');
+        document.getElementById('status-text').textContent = `Live polling attivo (${state.intervalMs/1000}s)`;
+        document.getElementById('toggle-btn').innerHTML = '<i class="fas fa-pause"></i> Pausa';
+        poll();
+        state.timer = setInterval(poll, state.intervalMs);
+    }
+    function pausePolling() {
+        if (state.timer) clearInterval(state.timer);
+        state.running = false;
+        document.getElementById('pulse-indicator').classList.add('paused');
+        document.getElementById('status-text').textContent = 'Polling in pausa';
+        document.getElementById('toggle-btn').innerHTML = '<i class="fas fa-play"></i> Riprendi';
+    }
+
+    document.getElementById('toggle-btn').addEventListener('click', () => {
+        if (state.running) pausePolling(); else startPolling();
+    });
+    document.getElementById('clear-btn').addEventListener('click', () => {
+        ['col-events', 'col-decisions', 'col-clusters'].forEach(id => {
+            const c = document.getElementById(id);
+            c.innerHTML = '<div class="activity-empty">In attesa…</div>';
+        });
+        state.totalEvents = state.totalDecisions = state.totalClusters = 0;
+        document.getElementById('count-events').textContent = '0';
+        document.getElementById('count-decisions').textContent = '0';
+        document.getElementById('count-clusters').textContent = '0';
+    });
+    document.getElementById('interval-select').addEventListener('change', (ev) => {
+        state.intervalMs = parseInt(ev.target.value, 10);
+        if (state.running) startPolling();
+    });
+
+    // Avvio
+    startPolling();
+})();
+</script>
+{% endblock %}

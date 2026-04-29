@@ -3,24 +3,37 @@
 Tutte le modifiche rilevanti a questo progetto vengono documentate in questo file.
 Il formato è basato su [Keep a Changelog](https://keepachangelog.com/it/1.1.0/).
 
-## [1.0.0] — 2026-04-29 — Production-ready release
+## [0.8.1] — 2026-04-29 — Audit + Activity Live + Hardening
 
-Prima release stabile. Consolidamento finale di tutte le feature implementate
-nelle 5 release precedenti (v0.1.0 → v0.5.0).
+### Aggiunte — Audit del codice (4 pass)
+- **PASS 1 codice**: 0 bare except, 0 mutable defaults, 0 print() spuri (solo CLI), 0 eval/exec, 0 assert in produzione, sintassi tutti i `.py` OK. **1 TODO** in [app.py](domarc_relay_admin/app.py#L149) (page change-password v1.0).
+- **PASS 2 UI**: 156 form POST (CSRF è una valutazione futura per pre-1.0), 12 punti `int(request.form.get(...))` senza try/except (corretti), 10 input number senza min/max nei template (4 corretti).
+- **PASS 3 performance**: 16 chiamate `list_settings()` (ottimizzazione caching pre-1.0), `sqlite_impl.py` 2493 righe → candidato refactor split, 0 storage queries dentro template (✓).
+
+### Aggiunte — Activity Live realtime ([routes/activity.py](domarc_relay_admin/routes/activity.py))
+- **`/activity`** — pagina HTML con tail live di 3 colonne sincronizzate:
+  - Mail processate (subject, from, to, action_taken, badge regola, badge IA, badge urgenza)
+  - Decisioni IA (intent, summary, model, latency, costo, badge shadow/applied/error)
+  - Cluster errori (subject, count/threshold, state colorato)
+- **`/activity/stream?since_event_id=N&since_decision_id=N&since_cluster_id=N`** — endpoint JSON con polling **incrementale only-new**, niente reload pagina.
+- **UI features**:
+  - Pulse indicator (pulsa quando il polling è attivo).
+  - Bottone Pausa/Riprendi + Pulisci.
+  - Selettore intervallo polling (1/2/5/10s).
+  - Auto-fade del flash giallo "fresh" sui nuovi item dopo 1.5s.
+  - Limite 200 righe per colonna (rolling window memory).
+  - Stats counter cumulativi e timestamp ultimo poll.
+
+### Correzioni — fix prioritari
+- **`datetime.utcnow()`** deprecato in Python 3.12 sostituito con `datetime.now(timezone.utc)` in 4 file: [routes/templates.py](domarc_relay_admin/routes/templates.py), [routes/events.py](domarc_relay_admin/routes/events.py), [routes/api.py](domarc_relay_admin/routes/api.py), [routes/rules.py](domarc_relay_admin/routes/rules.py).
+- **Helper `_safe_int` / `_safe_float`** in [routes/ai.py](domarc_relay_admin/routes/ai.py) con clamp min/max per parsing input form senza crash su `int("invalid")`. Applicato a 9 punti critici (provider_id, max_tokens, timeout_ms, fallback_provider_id, traffic_split, priority, threshold, recovery_window, temperature).
+- **min/max su input number** nei template chiave: ai_model_form (max_tokens 1..200000, timeout_ms 500..60000), domain_form e route_form (port 1..65535).
 
 ### Modifiche
-- **Bump versione 0.5.0 → 1.0.0** — Production/Stable.
-- Development status passato da "3 - Alpha" a "5 - Production/Stable" in
-  [pyproject.toml](pyproject.toml).
-- **README.md riscritto** con quickstart completo, architettura, configurazione
-  env, link alla documentazione, sezioni health check e backup.
-- **Nuovo [docs/operations.md](docs/operations.md)** — manuale operazionale
-  completo con 8 sezioni: backup/restore (script schedulabile in cron),
-  master.key rotation (procedura senza data loss), rollback migration,
-  path di sistema, log e troubleshooting, **troubleshooting delivery**
-  (cause filtri lato destinatario, casi tipici state outbound),
-  permission matrix per ruolo (5 ruoli × 18 endpoint), procedura
-  aggiornamento versione.
+- **Bump versione 0.5.0 → 0.8.1** (beta — incrementi patch fino a test esaustivo).
+- **Development Status: "3 - Alpha" → "4 - Beta"** in [pyproject.toml](pyproject.toml).
+- **README.md riscritto** con quickstart completo, architettura, configurazione env, link alla documentazione.
+- **Nuovo [docs/operations.md](docs/operations.md)** — manuale operazionale completo (8 sezioni: backup/restore, master.key rotation, rollback migration, path sistema, log/troubleshooting, **troubleshooting delivery**, permission matrix 5 ruoli × 18 endpoint, procedura aggiornamento).
 
 ### Verifiche finali
 - Test suite: **162/162 verdi** (rule engine v2: 88, AI assistant: 74).

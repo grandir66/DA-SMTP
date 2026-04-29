@@ -6,7 +6,7 @@ import io
 import json
 import os
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from flask import Blueprint, Response, abort, current_app, flash, g, jsonify, redirect, render_template, request, send_file, session, url_for
@@ -87,7 +87,7 @@ def export_view(fmt: str):
     if fmt not in ("csv", "json"):
         abort(404)
     rows = _storage().list_templates(tenant_id=_tid())
-    fname_ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    fname_ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     if fmt == "json":
         return jsonify({"tenant_id": _tid(), "count": len(rows), "templates": rows})
     buf = io.StringIO()

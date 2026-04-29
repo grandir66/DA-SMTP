@@ -375,7 +375,7 @@ def events_post():
             new_id = storage.insert_event({
                 "tenant_id": evt.get("tenant_id", 1),
                 "relay_event_uuid": str(uuid_str),
-                "received_at": evt.get("received_at") or datetime.utcnow().isoformat(),
+                "received_at": evt.get("received_at") or datetime.now(timezone.utc).isoformat(),
                 "from_address": evt.get("from_address"),
                 "to_address": evt.get("to_address"),
                 "subject": evt.get("subject"),

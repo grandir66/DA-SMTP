@@ -9,7 +9,7 @@
 <div class="dr-section">
     <div class="dr-form-row"><label>Dominio *</label><input type="text" name="domain" required value="{{ record.domain or '' }}" placeholder="acme.it"></div>
     <div class="dr-form-row"><label>Smarthost host</label><input type="text" name="smarthost_host" value="{{ record.smarthost_host or '' }}" placeholder="smtp.acme.it"></div>
-    <div class="dr-form-row"><label>Smarthost port</label><input type="number" name="smarthost_port" value="{{ record.smarthost_port or 25 }}" style="width:120px;"></div>
+    <div class="dr-form-row"><label>Smarthost port</label><input type="number" name="smarthost_port" value="{{ record.smarthost_port or 25 }}" min="1" max="65535" style="width:120px;"></div>
     <div class="dr-form-row"><label>TLS</label>
         <select name="smarthost_tls">
             {% for v in ['opportunistic','strict','none'] %}<option value="{{ v }}" {% if record.smarthost_tls==v %}selected{% endif %}>{{ v }}</option>{% endfor %}

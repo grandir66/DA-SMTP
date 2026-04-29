@@ -5,7 +5,7 @@ import csv
 import io
 import json
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 
 from flask import Blueprint, Response, abort, current_app, flash, g, jsonify, redirect, render_template, request, session, url_for
 
@@ -202,7 +202,7 @@ def export_view(fmt: str):
     if fmt not in ("csv", "json"):
         abort(404)
     rules = _storage().list_rules(tenant_id=_tid())
-    fname_ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    fname_ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     if fmt == "json":
         return jsonify({"tenant_id": _tid(), "count": len(rules), "rules": rules})
     buf = io.StringIO()
