@@ -3,6 +3,80 @@
 Tutte le modifiche rilevanti a questo progetto vengono documentate in questo file.
 Il formato è basato su [Keep a Changelog](https://keepachangelog.com/it/1.1.0/).
 
+## [1.0.0] — 2026-04-29 — Production-ready release
+
+Prima release stabile. Consolidamento finale di tutte le feature implementate
+nelle 5 release precedenti (v0.1.0 → v0.5.0).
+
+### Modifiche
+- **Bump versione 0.5.0 → 1.0.0** — Production/Stable.
+- Development status passato da "3 - Alpha" a "5 - Production/Stable" in
+  [pyproject.toml](pyproject.toml).
+- **README.md riscritto** con quickstart completo, architettura, configurazione
+  env, link alla documentazione, sezioni health check e backup.
+- **Nuovo [docs/operations.md](docs/operations.md)** — manuale operazionale
+  completo con 8 sezioni: backup/restore (script schedulabile in cron),
+  master.key rotation (procedura senza data loss), rollback migration,
+  path di sistema, log e troubleshooting, **troubleshooting delivery**
+  (cause filtri lato destinatario, casi tipici state outbound),
+  permission matrix per ruolo (5 ruoli × 18 endpoint), procedura
+  aggiornamento versione.
+
+### Verifiche finali
+- Test suite: **162/162 verdi** (rule engine v2: 88, AI assistant: 74).
+- Health check live: 3/3 OK (DB read 0ms, Fernet roundtrip 0ms, Claude API 820ms).
+- Schema DB: v17 (17 migrations applicate correttamente).
+- Manual auto-generato: 24KB con 9 sezioni rigenerate all'avvio.
+- Repository git: 7 commit su `main`, 0 secret leak verificato.
+
+### Riepilogo feature v1.0
+
+#### Rule Engine v2 (gerarchia padre/figlio)
+- Migration 010, priorità globale 1..999999, ereditarietà action_map.
+- Validatori V001-V008 + V_PRI_RANGE + warnings W001-W005 + W_PRI_GAP.
+- Flatten verso listener legacy con test parità ≥ 50 eventi sintetici.
+- UI: tree view collassabile, 3 form (orfana/gruppo/figlio), simulazione
+  inline, anteprima flatten, wizard "Suggerisci gruppi".
+
+#### Privacy bypass GDPR
+- Migration 011, liste indirizzi e domini esclusi dal rule engine.
+- Audit log GDPR-compliant per ogni operazione.
+- Pre-check nel listener prima del rule engine.
+- 4 tab UI (mittenti/destinatari/domini/audit) + quick-add.
+
+#### AI Assistant (Claude API + futuro DGX Spark)
+- Migration 012-017. Provider pluggabili, routing per job versionato + A/B.
+- PII redactor 3-stage (regex + signature stripping + spaCy NER + dictionary).
+- Decisioni con cost tracking, audit, structured output via tool_use.
+- **F2 Error Aggregator**: clustering deterministico, recovery automatico,
+  soglia manuale per cluster.
+- **F3 Shadow → Live**: switch atomico con confidence threshold + pre-flight
+  check (≥50 decisioni osservate) + audit log transizioni.
+- **F3.5 Rule Proposer**: learning loop AI → regole statiche con dedup
+  fingerprint, accept/reject UI con evidence.
+
+#### Settings UI cifrate
+- Migration 013. API keys con Fernet encryption (master.key auto-gen 600).
+- Catalogo whitelist 5 moduli installabili da UI con audit log subprocess pip.
+
+#### Health check + dashboard sistema
+- Endpoint /health/full con 10 component checks.
+- Endpoint /health/test-stack con DB + Fernet + Claude API live test.
+- Pagina UI con check visivi colorati e bottone test stack async.
+
+#### Auto-generazione documentazione
+- Manual.md auto-rigenerato all'avvio in /var/lib/domarc-smtp-relay-admin/.
+- 9 sezioni: architettura, schema DB, blueprint UI, settings, action regole,
+  validatori, AI job catalog, moduli, path di sistema.
+- UI /manual con render HTML + /manual/changelog vista completa.
+
+### Roadmap post v1.0 (v1.1+)
+- F4 — DGX Spark self-hosted (provider locale + ottimizzazione costo/latenza).
+- Custom Services Aggregator (modulo separato fuori scope SMTP relay).
+- Email Conversations + Mini-Ticket (alternativa al Manager principale).
+
+---
+
 ## [0.5.0] — 2026-04-29
 
 ### Aggiunte — F3.5 Rule Proposer (learning loop AI → regole statiche)
