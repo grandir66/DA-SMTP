@@ -3,6 +3,43 @@
 Tutte le modifiche rilevanti a questo progetto vengono documentate in questo file.
 Il formato è basato su [Keep a Changelog](https://keepachangelog.com/it/1.1.0/).
 
+## [0.2.0] — 2026-04-29
+
+### Aggiunte — Repository GitHub & versionamento
+- **Versione bump 0.1.0 → 0.2.0** in [pyproject.toml](pyproject.toml) e [`__version__`](domarc_relay_admin/__init__.py). Esposta nel footer del topbar UI cliccabile (link al manuale).
+- **Manual.md auto-generato** ([domarc_relay_admin/manual_generator.py](domarc_relay_admin/manual_generator.py)) con 9 sezioni: architettura, schema DB (history migrations + tabelle toccate), blueprint UI (con docstring + paths), settings runtime, action regole, validatori Rule Engine v2, AI job catalog, moduli Python installabili, path di sistema. Rigenerato all'avvio dell'app + on-demand via UI o `domarc-smtp-relay-admin manual` (CLI). Salvato runtime in `/var/lib/domarc-smtp-relay-admin/manual.md` (path override via env `DOMARC_RELAY_MANUAL_PATH`).
+- **Blueprint** [routes/manual.py](domarc_relay_admin/routes/manual.py) con renderer markdown→HTML leggero (no dipendenze esterne) per:
+  - `/manual` — vista HTML del manuale
+  - `/manual/raw` — download markdown raw
+  - `/manual/changelog` — vista HTML del CHANGELOG.md
+  - `/manual/regenerate` (admin/superadmin) — rigenera al volo
+- **`.gitignore`** strutturato per escludere: `.venv/`, `*.db`, `master.key`, `secrets.env`, `backups/`, modelli spaCy/sentence-transformers, log, cache pytest. Sanitizzazione verificata: 143 file in repo, 0 secret leak (master.key + admin.db + credenziali tutti esclusi).
+- **Repository git inizializzato** sul progetto admin standalone. Commit `e0dd4ff` "Initial release v0.2.0", branch `main`. Pronto per push GitHub `DA-SMTP`.
+
+### Aggiunte — Test suite AI Assistant (134/134 verdi)
+- [tests/test_pii_redactor.py](tests/test_pii_redactor.py) — 22 casi: regex IBAN/CF/P.IVA/telefono/email/IPv4/URL+token, signature stripping (cordialmente, distinti saluti, marker `--`), dictionary custom (anche con char non-word in coda).
+- [tests/test_ai_provider_claude.py](tests/test_ai_provider_claude.py) — 9 casi: cost tracking per modello, init senza API key, structured output via tool_use, fallback parse text, error handling senza eccezioni, list_available_models.
+- [tests/test_ai_router.py](tests/test_ai_router.py) — 5 casi: traffic split A/B (distribuzione su 2000 sample tolleranza ±5%), cache invalidation, prompt rendering Jinja2.
+- [tests/test_ai_dao.py](tests/test_ai_dao.py) — 11 casi: insert/list/get decisioni, sum cost, JSON encoding, binding versioning con disabilitazione precedenti, cifratura API key Fernet roundtrip, masking, toggle, audit module install log.
+- **Totale**: 134/134 test PASS (88 Rule Engine v2 + 46 AI Assistant) in 4.7s.
+
+### Aggiunte — F3 Shadow → Live mode (migration 014)
+- **Migration 014** ([migrations/014_ai_shadow_audit.sqlite.sql](domarc_relay_admin/migrations/014_ai_shadow_audit.sqlite.sql)):
+  - Setting `ai_apply_min_confidence` (default 0.85): solo decisioni con confidence ≥ soglia vengono applicate in live mode.
+  - Setting `ai_shadow_min_decisions_before_live` (default 50): pre-flight check anti-rush prima dell'attivazione live.
+  - Tabella `ai_shadow_audit` con campi `transition`, `decisions_seen`, `avg_confidence`, `actor`, `notes`, `at`.
+- **Pipeline `decisions.classify_email`** ([ai_assistant/decisions.py](domarc_relay_admin/ai_assistant/decisions.py)) ora calcola `will_apply = master_on AND not_shadow_global AND no_error AND confidence >= min_conf AND has_suggested_action`. Le decisioni che non passano il check sono comunque salvate ma con `applied=0, shadow_mode=1, shadow_reason=...` per audit chiaro.
+- **UI `/ai/shadow-mode`** ([routes/ai.py](domarc_relay_admin/routes/ai.py) + [templates/admin/ai_shadow_mode.html](templates/admin/ai_shadow_mode.html)): pagina di switch con stats 7gg (decisioni totali, confidence media, % alta confidence, errori), pre-flight check visivo, conferma multi-step con textbox "CONFERMO", audit log delle transizioni.
+- **Voce dashboard** AI: bottone "Shadow ↔ Live" colorato in verde quando attivo LIVE.
+
+### Verifiche — Live Claude API end-to-end
+- API key utente reale aggiunta in [/settings/api-keys](http://192.168.4.41:8443/settings/api-keys), provider aggiornato (`api_key_env=ANTHROPIC_API_KEY`, nome "Claude API").
+- Health check provider: ✓ OK, latenza 869ms, model `claude-haiku-4-5`.
+- Test classify diretto: input `[URGENT] Server down` + body 727 token → risposta strutturata `intent="problema_tecnico", urgenza="CRITICA", summary` corretto, costo $0.00120, latency 1109ms.
+- Test end-to-end via SMTP: mail "[CRITICAL] Database production down" → listener `do_ai_classify` → admin `POST /ai/classify` → PII redactor 3 redactions → Claude → decisione #6 reale (`intent=problema_tecnico, urgenza=CRITICA, summary` corretto, costo $0.00212, latency 1209ms, shadow=1, error=None).
+
+---
+
 ## [Unreleased]
 
 ### Aggiunte — Pannello IA all'interno del form regola
