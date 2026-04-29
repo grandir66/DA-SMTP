@@ -2004,6 +2004,88 @@ class SqliteStorage(Storage):
             ).fetchall()
             return [dict(r) for r in rows]
 
+    # ============================================ AI ERROR CLUSTERS (F2) ===
+
+    def list_ai_error_clusters(self, *, tenant_id: int | None = None,
+                                states: tuple[str, ...] | None = None,
+                                limit: int = 200) -> list[dict[str, Any]]:
+        where: list[str] = []
+        params: list[Any] = []
+        if tenant_id is not None:
+            where.append("tenant_id = ?"); params.append(int(tenant_id))
+        if states:
+            placeholders = ",".join("?" * len(states))
+            where.append(f"state IN ({placeholders})")
+            params.extend(states)
+        ws = "WHERE " + " AND ".join(where) if where else ""
+        params.append(int(limit))
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"SELECT * FROM ai_error_clusters {ws} "
+                f"ORDER BY last_seen DESC LIMIT ?", params,
+            ).fetchall()
+            return [dict(r) for r in rows]
+
+    def get_ai_error_cluster(self, cluster_id: int) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM ai_error_clusters WHERE id = ?", (cluster_id,),
+            ).fetchone()
+            return dict(row) if row else None
+
+    def upsert_ai_error_cluster(self, data: dict[str, Any]) -> int:
+        """Insert/update di un cluster errori.
+
+        Per update: passa ``id`` + i campi da modificare (gli altri restano).
+        Per insert: passa almeno ``tenant_id`` + ``fingerprint_hex`` +
+        ``representative_subject``.
+        """
+        cid = data.get("id")
+        with self.transaction() as conn:
+            if cid:
+                # Update parziale (solo campi forniti)
+                fields = []
+                values: list[Any] = []
+                for col in ("count", "state", "manual_threshold",
+                              "manual_recovery_window_min", "ticket_id",
+                              "representative_subject", "representative_body_excerpt",
+                              "notes", "fingerprint_hex"):
+                    if col in data:
+                        fields.append(f"{col} = ?")
+                        values.append(data[col])
+                # Campi datetime gestiti come now() se passati come stringa magica
+                if data.get("last_seen") == "datetime('now')":
+                    fields.append("last_seen = datetime('now')")
+                if data.get("recovery_seen_at") == "datetime('now')":
+                    fields.append("recovery_seen_at = datetime('now')")
+                if not fields:
+                    return int(cid)
+                values.append(int(cid))
+                conn.execute(
+                    f"UPDATE ai_error_clusters SET {', '.join(fields)} WHERE id = ?",
+                    values,
+                )
+                return int(cid)
+            cur = conn.execute(
+                """INSERT INTO ai_error_clusters
+                       (tenant_id, fingerprint_hex, representative_subject,
+                        representative_body_excerpt, count, state,
+                        manual_threshold, manual_recovery_window_min, notes)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    int(data.get("tenant_id", 1)),
+                    data.get("fingerprint_hex"),
+                    data.get("representative_subject"),
+                    data.get("representative_body_excerpt"),
+                    int(data.get("count", 1)),
+                    data.get("state", "accumulating"),
+                    int(data.get("manual_threshold", 5)),
+                    int(data.get("manual_recovery_window_min", 60)),
+                    data.get("notes"),
+                ),
+            )
+            return int(cur.lastrowid or 0)
+
     def insert_ai_shadow_audit(self, *, tenant_id: int, transition: str,
                                 actor: str | None = None,
                                 decisions_seen: int = 0,

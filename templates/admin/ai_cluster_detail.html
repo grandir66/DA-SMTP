@@ -1,0 +1,73 @@
+{% extends "admin/_base.html" %}
+{% block title %}Cluster #{{ cluster.id }}{% endblock %}
+{% block content %}
+<section class="dr-section">
+    <a href="{{ url_for('ai.clusters_list') }}" class="dr-btn"><i class="fas fa-arrow-left"></i> Cluster</a>
+    <h2 style="margin:0.5rem 0;"><i class="fas fa-layer-group"></i> Cluster #{{ cluster.id }}</h2>
+</section>
+
+<div style="display:grid; grid-template-columns:1.2fr 1fr; gap:1rem; max-width:1100px;">
+    <div class="dr-card" style="background:#fff; border:1px solid #cbd5e1; border-radius:8px; padding:1rem;">
+        <h3 style="margin:0 0 0.6rem; color:var(--dr-primary);">Identificazione</h3>
+        <div class="dr-form-row"><label>Subject</label><div><strong>{{ cluster.representative_subject }}</strong></div></div>
+        <div class="dr-form-row"><label>Body excerpt</label><div><small>{{ cluster.representative_body_excerpt or '—' }}</small></div></div>
+        <div class="dr-form-row"><label>Fingerprint</label><div><code style="font-size:0.78rem;">{{ cluster.fingerprint_hex }}</code></div></div>
+        <div class="dr-form-row"><label>Count</label><div><strong style="font-size:1.4rem;">{{ cluster.count }}</strong></div></div>
+        <div class="dr-form-row"><label>Stato</label><div>
+            {% if cluster.state == 'accumulating' %}<span style="background:#fef3c7; color:#92400e; padding:0.1rem 0.5rem; border-radius:9px; font-weight:600;">accumulating</span>
+            {% elif cluster.state == 'ticket_opened' %}<span style="background:#fee2e2; color:#dc2626; padding:0.1rem 0.5rem; border-radius:9px; font-weight:600;">ticket_opened</span>
+            {% elif cluster.state == 'recovered' %}<span class="rule-status on">recovered</span>
+            {% else %}<span>{{ cluster.state }}</span>{% endif %}
+        </div></div>
+        <div class="dr-form-row"><label>Ticket id</label><div><code>{{ cluster.ticket_id or '—' }}</code></div></div>
+        <div class="dr-form-row"><label>Primo visto</label><div>{{ cluster.first_seen }}</div></div>
+        <div class="dr-form-row"><label>Ultimo visto</label><div>{{ cluster.last_seen }}</div></div>
+        <div class="dr-form-row"><label>Recovery visto</label><div>{{ cluster.recovery_seen_at or '—' }}</div></div>
+        {% if cluster.notes %}
+        <div class="dr-form-row"><label>Note</label><div><small style="white-space:pre-line;">{{ cluster.notes }}</small></div></div>
+        {% endif %}
+    </div>
+
+    <div>
+        <div class="dr-card" style="background:#fff; border:1px solid #cbd5e1; border-radius:8px; padding:1rem; margin-bottom:1rem;">
+            <h3 style="margin:0 0 0.6rem; color:var(--dr-primary);"><i class="fas fa-sliders"></i> Soglia manuale</h3>
+            <p style="font-size:0.82rem; color:var(--dr-gray-dark);">
+                Quando <code>count ≥ threshold</code> il cluster passa a <strong>ticket_opened</strong>
+                e il sistema apre un ticket aggregato (TBD nel listener).
+            </p>
+            <form method="post">
+                <input type="hidden" name="action" value="update_threshold">
+                <div class="dr-form-row">
+                    <label>Threshold</label>
+                    <input type="number" name="manual_threshold" value="{{ cluster.manual_threshold }}" min="1" max="1000" required>
+                </div>
+                <div class="dr-form-row">
+                    <label>Recovery window (min)</label>
+                    <input type="number" name="manual_recovery_window_min" value="{{ cluster.manual_recovery_window_min }}" min="1" max="1440" required>
+                </div>
+                <button type="submit" class="dr-btn dr-btn-primary" style="width:auto;">
+                    <i class="fas fa-save"></i> Aggiorna soglia
+                </button>
+            </form>
+        </div>
+
+        <div class="dr-card" style="background:#fff; border:1px solid #cbd5e1; border-radius:8px; padding:1rem;">
+            <h3 style="margin:0 0 0.6rem; color:var(--dr-primary);"><i class="fas fa-flag-checkered"></i> Azioni manuali</h3>
+            {% if cluster.state != 'recovered' %}
+            <form method="post" onsubmit="return confirm('Marcare il cluster come recovered? Eventuali ticket aperti restano ma il cluster non aggregherà più.');">
+                <input type="hidden" name="action" value="force_recovered">
+                <button type="submit" class="dr-btn" style="width:auto; background:#10b981; color:#fff;">
+                    <i class="fas fa-check"></i> Marca recovered
+                </button>
+            </form>
+            {% endif %}
+            <form method="post" style="margin-top:0.5rem;" onsubmit="return confirm('Archiviare definitivamente il cluster?');">
+                <input type="hidden" name="action" value="archive">
+                <button type="submit" class="dr-btn dr-btn-danger" style="width:auto;">
+                    <i class="fas fa-archive"></i> Archivia
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

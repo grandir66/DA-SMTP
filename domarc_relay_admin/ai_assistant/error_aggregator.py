@@ -49,15 +49,29 @@ _RECOVERY_KEYWORDS_RE = re.compile(
     r"backup\s+ok|service\s+restored|tutto\s+ok|back\s+online|up)\b",
 )
 
+# Tag generici di severity/log level che non distinguono semanticamente la natura
+# del problema (es. [INFO]/[ALERT]/[WARNING] sono solo etichette di livello).
+# Strippati prima del fingerprint per accomunare error/recovery dello stesso evento.
+_LOG_LEVEL_KEYWORDS_RE = re.compile(
+    r"(?i)\b(info|warn|warning|notice|debug|trace)\b",
+)
+
 
 def _normalize_subject(subject: str) -> str:
     """Normalizza il subject per fingerprint:
     - lowercase
+    - rimuovi keyword error/recovery (così failed/recovered/ok mappano allo
+      stesso cluster quando il resto del subject è simile)
     - rimuovi numeri / hostname / IP / timestamp
     - rimuovi punteggiatura (lascia spazi)
     - collapse whitespace.
     """
     s = (subject or "").lower()
+    # Rimuovi tag log-level (info/warning/...) + keyword error/recovery PRIMA
+    # della normalizzazione → cluster stabile fra failed/recovered/info/alert.
+    s = _LOG_LEVEL_KEYWORDS_RE.sub(" ", s)
+    s = _ERROR_KEYWORDS_RE.sub(" ", s)
+    s = _RECOVERY_KEYWORDS_RE.sub(" ", s)
     s = re.sub(r"\b\d+\.\d+\.\d+\.\d+\b", "<ip>", s)         # IP
     s = re.sub(r"\b[a-z0-9-]+\d+(\.[a-z]{2,})?\b", "<host>", s)  # srv01, host-prod-12, ecc.
     s = re.sub(r"\b\d{1,4}([:/-]\d{1,4})+\b", "<time>", s)   # timestamp/dates

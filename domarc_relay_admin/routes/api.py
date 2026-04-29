@@ -393,12 +393,31 @@ def events_post():
                 accepted += 1
                 # Auto-upsert anagrafica indirizzi (mittente + destinatario)
                 _upsert_address_from_event(storage, evt)
+                # F2 — Error aggregator IA: hook per clustering errori
+                _try_aggregate_error_cluster(storage, evt)
             else:
                 duplicates += 1
         except Exception as exc:  # noqa: BLE001
             errors.append({"uuid": str(uuid_str), "error": str(exc)})
 
     return jsonify({"accepted": accepted, "duplicates": duplicates, "errors": errors}), 200
+
+
+def _try_aggregate_error_cluster(storage, evt: dict) -> None:
+    """Tenta clustering dell'evento (F2). Best-effort, errori loggati ma non bloccanti."""
+    try:
+        from ..ai_assistant.error_aggregator import process_event_for_clustering
+        result = process_event_for_clustering(
+            storage=storage,
+            tenant_id=int(evt.get("tenant_id") or 1),
+            event_uuid=evt.get("relay_event_uuid"),
+            subject=evt.get("subject"),
+            body_excerpt=(evt.get("body_text") or "")[:500],
+        )
+        if result:
+            logger.info("Error cluster: %s", result)
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("Error aggregator skip: %s", exc)
 
 
 def _upsert_address_from_event(storage, evt: dict) -> None:

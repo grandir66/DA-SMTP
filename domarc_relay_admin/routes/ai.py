@@ -221,6 +221,78 @@ def decision_detail(decision_id: int):
     return render_template("admin/ai_decision_detail.html", decision=decision)
 
 
+@ai_bp.route("/clusters")
+@login_required(role="admin")
+def clusters_list():
+    """Vista cluster errori IA (F2 — Error Aggregator)."""
+    storage = _storage()
+    tid = _tid()
+    state_filter = (request.args.get("state") or "").strip() or None
+    states_tuple = (state_filter,) if state_filter else None
+    clusters = storage.list_ai_error_clusters(
+        tenant_id=tid, states=states_tuple, limit=500,
+    )
+    # Stats
+    stats = {
+        "total": len(clusters),
+        "accumulating": sum(1 for c in clusters if c.get("state") == "accumulating"),
+        "ticket_opened": sum(1 for c in clusters if c.get("state") == "ticket_opened"),
+        "recovered": sum(1 for c in clusters if c.get("state") == "recovered"),
+    }
+    return render_template("admin/ai_clusters.html",
+                            clusters=clusters, stats=stats,
+                            state_filter=state_filter)
+
+
+@ai_bp.route("/clusters/<int:cluster_id>", methods=["GET", "POST"])
+@login_required(role="admin")
+def cluster_detail(cluster_id: int):
+    storage = _storage()
+    tid = _tid()
+    cluster = storage.get_ai_error_cluster(cluster_id)
+    if not cluster:
+        flash("Cluster non trovato.", "error")
+        return redirect(url_for("ai.clusters_list"))
+    if request.method == "POST":
+        action = (request.form.get("action") or "").strip()
+        if action == "update_threshold":
+            threshold = int(request.form.get("manual_threshold") or 5)
+            window = int(request.form.get("manual_recovery_window_min") or 60)
+            if threshold < 1 or threshold > 1000:
+                flash("Soglia threshold deve essere 1-1000.", "error")
+            else:
+                storage.upsert_ai_error_cluster({
+                    "id": cluster_id, "tenant_id": cluster["tenant_id"],
+                    "fingerprint_hex": cluster["fingerprint_hex"],
+                    "manual_threshold": threshold,
+                    "manual_recovery_window_min": window,
+                })
+                flash(f"Soglia aggiornata: threshold={threshold}, recovery_window={window}min.", "success")
+        elif action == "force_recovered":
+            storage.upsert_ai_error_cluster({
+                "id": cluster_id, "tenant_id": cluster["tenant_id"],
+                "fingerprint_hex": cluster["fingerprint_hex"],
+                "state": "recovered", "recovery_seen_at": "datetime('now')",
+                "notes": (cluster.get("notes") or "") + f"\n[manual] recovered by {_actor()} at " + datetime_now_iso(),
+            })
+            flash("Cluster marcato come recovered.", "success")
+        elif action == "archive":
+            storage.upsert_ai_error_cluster({
+                "id": cluster_id, "tenant_id": cluster["tenant_id"],
+                "fingerprint_hex": cluster["fingerprint_hex"],
+                "state": "archived",
+            })
+            flash("Cluster archiviato.", "success")
+        return redirect(url_for("ai.cluster_detail", cluster_id=cluster_id))
+    return render_template("admin/ai_cluster_detail.html", cluster=cluster)
+
+
+def datetime_now_iso() -> str:
+    """Helper data ora per audit trail nelle note."""
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
 @ai_bp.route("/shadow-mode", methods=["GET", "POST"])
 @login_required(role="admin")
 def shadow_mode_switch():

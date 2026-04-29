@@ -3,6 +3,33 @@
 Tutte le modifiche rilevanti a questo progetto vengono documentate in questo file.
 Il formato è basato su [Keep a Changelog](https://keepachangelog.com/it/1.1.0/).
 
+## [0.3.0] — 2026-04-29
+
+### Aggiunte — F2 AI Error Aggregator (migration 015)
+- **Migration 015** ([migrations/015_ai_error_clusters_fingerprint.sqlite.sql](domarc_relay_admin/migrations/015_ai_error_clusters_fingerprint.sqlite.sql)): aggiunge `fingerprint_hex TEXT` su `ai_error_clusters` + indice. La migration 012 aveva solo `fingerprint_embedding BLOB` riservato a F4 (sentence-transformers).
+- **Modulo** [ai_assistant/error_aggregator.py](domarc_relay_admin/ai_assistant/error_aggregator.py):
+  - Fingerprint deterministico SHA256(subject_normalizzato + body_excerpt).
+  - Normalizzazione subject: lowercase + strip log-level keyword (info/warn/notice/...) + strip error keyword (failed/error/critical/...) + strip recovery keyword (ok/recovered/resolved/...) + strip hostname/IP/numeri/timestamp → cluster stabile fra failed e recovered dello stesso evento.
+  - `is_error_event()` / `is_recovery_event()` con keyword italiane + inglesi.
+  - `process_event_for_clustering()`: orchestra create/increment/recovery del cluster con fingerprint lookup.
+  - Soglia manuale `manual_threshold` per cluster (default 5): quando count ≥ threshold il cluster passa a `ticket_opened`.
+  - Recovery automatico: mail con keyword `ok/recovered/...` matchando lo stesso fingerprint del cluster errore → cluster.state=`recovered` + `recovery_seen_at` valorizzato.
+- **DAO** ([storage/sqlite_impl.py](domarc_relay_admin/storage/sqlite_impl.py)) esteso con: `list_ai_error_clusters` (filtro per states), `get_ai_error_cluster`, `upsert_ai_error_cluster` (insert + update parziale).
+- **Hook automatico** in `POST /api/v1/relay/events` admin: ogni evento flushato dal listener viene passato a `process_event_for_clustering` (best-effort, errori loggati ma non bloccanti). Nessuna modifica al listener richiesta.
+- **UI** ([routes/ai.py](domarc_relay_admin/routes/ai.py)) blueprint:
+  - `/ai/clusters` — tabella con filtro stato (accumulating/ticket_opened/recovered/archived) + 4 KPI card.
+  - `/ai/clusters/<id>` — dettaglio: identificazione (subject, body excerpt, fingerprint, count, state, ticket, timestamps, note); form di edit `manual_threshold` e `manual_recovery_window_min`; azioni "Marca recovered" e "Archivia".
+  - Voce dashboard AI: pulsante "Error Clusters".
+- **Test pytest** [tests/test_ai_error_aggregator.py](tests/test_ai_error_aggregator.py) — 17 casi: normalization (lowercase, strip keyword, strip host/IP/numeri), fingerprint stabilità, error/recovery detection, lifecycle clustering (create/increment/threshold/recovery), threshold custom configurabile.
+- **Verifica end-to-end**: 5 mail "[ALERT] Backup failed on srv0[1-5]" → 1 cluster `count=5, state=ticket_opened`. 1 mail "[INFO] Backup recovered on srv01" → cluster `state=recovered, recovery_seen_at` valorizzato. Stesso fingerprint indipendentemente da log-level (ALERT/INFO) e keyword status (failed/recovered).
+
+### Modifiche
+- Versione bump 0.2.0 → 0.3.0.
+- Schema DB: v14 → v15.
+- Test suite: 134 → 152 (17 nuovi error_aggregator + correzione caso edge fingerprint match).
+
+---
+
 ## [0.2.0] — 2026-04-29
 
 ### Aggiunte — Repository GitHub & versionamento

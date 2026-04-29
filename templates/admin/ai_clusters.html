@@ -1,0 +1,92 @@
+{% extends "admin/_base.html" %}
+{% block title %}AI Error Clusters{% endblock %}
+{% block content %}
+<section class="dr-section">
+    <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+        <a href="{{ url_for('ai.dashboard') }}" class="dr-btn"><i class="fas fa-arrow-left"></i> AI Dashboard</a>
+        <h2 style="margin:0;"><i class="fas fa-layer-group"></i> Error Clusters (F2)</h2>
+        <form method="get" class="dr-filters" style="margin-left:auto;">
+            <select name="state" onchange="this.form.submit()">
+                <option value="">— tutti gli stati —</option>
+                <option value="accumulating" {% if state_filter=='accumulating' %}selected{% endif %}>accumulating</option>
+                <option value="ticket_opened" {% if state_filter=='ticket_opened' %}selected{% endif %}>ticket_opened</option>
+                <option value="recovered" {% if state_filter=='recovered' %}selected{% endif %}>recovered</option>
+                <option value="archived" {% if state_filter=='archived' %}selected{% endif %}>archived</option>
+            </select>
+        </form>
+    </div>
+    <p style="color:var(--dr-gray-dark); font-size:0.85rem;">
+        Cluster di errori riconosciuti per <strong>fingerprint deterministico</strong> (subject normalizzato + body excerpt).
+        Quando un cluster raggiunge la sua <code>manual_threshold</code> (default 5), viene aperto un ticket aggregato.
+        Mail con keyword recovery (<code>ok/resolved/recovered/cleared</code>) chiudono il cluster.
+    </p>
+</section>
+
+<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px,1fr)); gap:0.5rem; max-width:900px; margin-bottom:1rem;">
+    <div class="dr-card" style="background:#fff; border:1px solid #cbd5e1; border-radius:8px; padding:0.7rem;">
+        <small style="color:var(--dr-gray-dark);">Totale</small>
+        <div style="font-size:1.5rem; font-weight:700;">{{ stats.total }}</div>
+    </div>
+    <div class="dr-card" style="background:#fff; border:1px solid #cbd5e1; border-radius:8px; padding:0.7rem;">
+        <small style="color:var(--dr-gray-dark);">Accumulating</small>
+        <div style="font-size:1.5rem; font-weight:700; color:#f59e0b;">{{ stats.accumulating }}</div>
+    </div>
+    <div class="dr-card" style="background:#fff; border:1px solid #cbd5e1; border-radius:8px; padding:0.7rem;">
+        <small style="color:var(--dr-gray-dark);">Ticket aperti</small>
+        <div style="font-size:1.5rem; font-weight:700; color:#dc2626;">{{ stats.ticket_opened }}</div>
+    </div>
+    <div class="dr-card" style="background:#fff; border:1px solid #cbd5e1; border-radius:8px; padding:0.7rem;">
+        <small style="color:var(--dr-gray-dark);">Recovered</small>
+        <div style="font-size:1.5rem; font-weight:700; color:#10b981;">{{ stats.recovered }}</div>
+    </div>
+</div>
+
+<div class="dr-table-wrap">
+<table class="dr-table">
+    <thead>
+        <tr>
+            <th class="num">#</th>
+            <th>Subject rappresentativo</th>
+            <th class="num">Count</th>
+            <th class="num">Threshold</th>
+            <th>Stato</th>
+            <th>Primo visto</th>
+            <th>Ultimo visto</th>
+            <th>Recovery</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for c in clusters %}
+    <tr>
+        <td class="num">{{ c.id }}</td>
+        <td><a href="{{ url_for('ai.cluster_detail', cluster_id=c.id) }}"><strong>{{ c.representative_subject|truncate(60) }}</strong></a><br>
+            <small style="color:var(--dr-gray-dark); font-family:ui-monospace,monospace;">fp: {{ c.fingerprint_hex[:16] if c.fingerprint_hex else '—' }}</small>
+        </td>
+        <td class="num"><strong>{{ c.count }}</strong></td>
+        <td class="num">{{ c.manual_threshold }}</td>
+        <td>
+            {% if c.state == 'accumulating' %}<span style="background:#fef3c7; color:#92400e; padding:0.1rem 0.5rem; border-radius:9px; font-size:0.75rem; font-weight:600;">accumulating</span>
+            {% elif c.state == 'ticket_opened' %}<span style="background:#fee2e2; color:#dc2626; padding:0.1rem 0.5rem; border-radius:9px; font-size:0.75rem; font-weight:600;">ticket_opened</span>
+            {% elif c.state == 'recovered' %}<span class="rule-status on">recovered</span>
+            {% else %}<span style="background:#f1f5f9; color:#64748b; padding:0.1rem 0.5rem; border-radius:9px; font-size:0.75rem;">{{ c.state }}</span>{% endif %}
+        </td>
+        <td><small>{{ c.first_seen }}</small></td>
+        <td><small>{{ c.last_seen }}</small></td>
+        <td><small>{{ c.recovery_seen_at or '—' }}</small></td>
+        <td>
+            <a href="{{ url_for('ai.cluster_detail', cluster_id=c.id) }}" class="dr-btn" style="width:auto; padding:0.2rem 0.5rem;">
+                <i class="fas fa-eye"></i>
+            </a>
+        </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="9" class="dr-empty">
+        Nessun cluster errori. Quando arrivano mail con error indicators
+        (<code>error/failed/down/timeout/...</code>), verranno raggruppate qui.
+    </td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endblock %}
