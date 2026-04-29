@@ -3,6 +3,34 @@
 Tutte le modifiche rilevanti a questo progetto vengono documentate in questo file.
 Il formato è basato su [Keep a Changelog](https://keepachangelog.com/it/1.1.0/).
 
+## [0.8.2] — 2026-04-29 — Queue UI + Customers Redesign + Test esaustivi
+
+### Aggiunte — Queue & Quarantena ([routes/queue.py](domarc_relay_admin/routes/queue.py))
+- **`/queue/`** — vista unificata 3 tab (Outbound queue, Quarantena, Dispatch) con accesso **read-only cross-service** al DB del listener (`/var/lib/stormshield-smtp-relay/relay.db`).
+- **`/queue/outbound/<id>`** — dettaglio singola mail in coda outbound (mittente, destinatari, smarthost, stato, ultimi errori, dimensione MIME).
+- **`/queue/quarantine/<id>`** — dettaglio quarantena read-only (release/discard restano CLI-side sul listener).
+- **Stats pills** colorate per stato (sent/pending/failed/delivered) e contatori per tab.
+- **Override path listener**: setting `listener_db_path` o env `LISTENER_DB_PATH`.
+- **Sicurezza**: connessione `sqlite3 file:...?mode=ro&uri=1` impedisce qualsiasi write a livello driver. Group access cross-service via `usermod -aG stormshield-relay domarc-relay`.
+- Voce di menu nuova in [_base.html](templates/admin/_base.html): "Queue & Quarantena" (icona conveyor-belt) tra Activity e Eventi.
+
+### Modifiche — Tabella Clienti ([routes/customers.py](domarc_relay_admin/routes/customers.py) + [templates/admin/customers_list.html](templates/admin/customers_list.html))
+- **Restyling UI completo**: griglia 7 colonne (Codice / Ragione sociale / Profilo / Contratto / Domini & alias / Orari & eccezioni / Azioni). Grafica coerente con UI Kit (`.fw-table` + pill badges).
+- **Stat cards**: Totale clienti, Con/Senza contratto, distribuzione per profilo (STD/EXT/H24/NO), Eccezioni attive oggi.
+- **Filtri pill** per profilo (STD/EXT/H24/NO) e stato contratto (active/inactive).
+- **Quick action eccezioni orari**: pulsante diretto per cliente che apre il form di gestione `service_hours.form_view(codcli=cc)`. Badge rosso "has-exception" se ci sono eccezioni attive per la data odierna.
+- **Join service_hours** in routes per contare eccezioni `today` per `codice_cliente`.
+
+### Aggiunte — Test esaustivi (162 → 187 test)
+- [tests/test_queue.py](tests/test_queue.py) — 6 test: `_safe_int` clamping, `_open_listener_db` con path mancante, query sintetica su DB listener (outbound/quarantine/dispatch), garanzia read-only blocca INSERT.
+- [tests/test_activity_helpers.py](tests/test_activity_helpers.py) — 5 test: `_safe_int` con None/empty/garbage/clamping/negative.
+- [tests/test_manual_generator.py](tests/test_manual_generator.py) — 7 test: parsing migrations on-disk, supported_actions non vuoto, validators_summary contiene V001+W*, read_manual placeholder vs file presente, _read_version().
+- [tests/test_module_manager.py](tests/test_module_manager.py) — 7 test: catalogo whitelist con campi obbligatori e codici unici, `_is_installed` riconosce stdlib `json` e segnala assenti, install/uninstall con codice fuori whitelist NON invoca subprocess (sicurezza shell injection).
+
+### Debug — Delivery a r.grandi@datia.it
+- Verificato: tutte le mail di test (12) hanno raggiunto Microsoft EOP con `state=sent` in 2-4s. Causa mancata consegna: filtri anti-spam M365 bloccano mittenti `@example.com` senza SPF/DKIM (auth=none, SPF=fail). Mail finiscono in **EOP Quarantine** lato Microsoft 365.
+- Raccomandazione: usare mittenti di domini reali in test (`r.grandi@domarc.it`), oppure controllare M365 admin → Quarantine.
+
 ## [0.8.1] — 2026-04-29 — Audit + Activity Live + Hardening
 
 ### Aggiunte — Audit del codice (4 pass)

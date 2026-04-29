@@ -1,0 +1,25 @@
+{% extends "admin/_base.html" %}
+{% block title %}Outbound #{{ item.id }}{% endblock %}
+{% block content %}
+<section class="dr-section">
+    <a href="{{ url_for('queue.index') }}" class="dr-btn"><i class="fas fa-arrow-left"></i> Queue</a>
+    <h2 style="margin:0.5rem 0;"><i class="fas fa-paper-plane"></i> Outbound #{{ item.id }}</h2>
+</section>
+
+<div class="dr-card" style="background:#fff; border:1px solid #cbd5e1; border-radius:8px; padding:1rem; max-width:900px;">
+    <div class="dr-form-row"><label>Event UUID</label><div><code>{{ item.event_uuid }}</code></div></div>
+    <div class="dr-form-row"><label>Action</label><div>{{ item.action }}</div></div>
+    <div class="dr-form-row"><label>Stato</label><div><strong>{{ item.state }}</strong></div></div>
+    <div class="dr-form-row"><label>From</label><div class="mono">{{ item.mail_from }}</div></div>
+    <div class="dr-form-row"><label>Recipients</label><div class="mono">{{ item.recipients|join(', ') }}</div></div>
+    <div class="dr-form-row"><label>Smarthost</label><div class="mono">{{ item.smarthost }}:{{ item.smarthost_port }} (TLS={{ item.smarthost_tls }})</div></div>
+    <div class="dr-form-row"><label>Tentativi</label><div>{{ item.attempts }}</div></div>
+    <div class="dr-form-row"><label>Prossimo tentativo</label><div>{{ item.next_attempt_at or '—' }}</div></div>
+    <div class="dr-form-row"><label>Recapitata</label><div>{{ item.delivered_at or '—' }}</div></div>
+    <div class="dr-form-row"><label>Creata</label><div>{{ item.created_at }}</div></div>
+    {% if item.last_error %}
+    <div class="dr-form-row"><label>Ultimo errore</label><div style="color:#dc2626;"><code>{{ item.last_error }}</code></div></div>
+    {% endif %}
+    <div class="dr-form-row"><label>Dimensione MIME</label><div>{{ '%.1f'|format(item.mime_size / 1024) }} KB</div></div>
+</div>
+{% endblock %}

@@ -89,6 +89,7 @@ def create_app(config: AppConfig | None = None, *, init_db: bool = True) -> Flas
     from .routes.secrets_modules import secrets_modules_bp
     from .routes.manual import manual_bp
     from .routes.activity import activity_bp
+    from .routes.queue import queue_bp
     from .tenants import tenants_bp, register_tenant_middleware
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -113,6 +114,7 @@ def create_app(config: AppConfig | None = None, *, init_db: bool = True) -> Flas
     app.register_blueprint(secrets_modules_bp)
     app.register_blueprint(manual_bp)
     app.register_blueprint(activity_bp)
+    app.register_blueprint(queue_bp)
     app.register_blueprint(tenants_bp)
 
     # Manual auto-generato: rigenera all'avvio (best-effort, ignora errori).

@@ -1,0 +1,215 @@
+{% extends "admin/_base.html" %}
+{% block title %}Queue & Quarantena{% endblock %}
+{% block extra_head %}
+<style>
+.q-tabs { display:flex; gap:0.3rem; border-bottom:2px solid #cbd5e1; margin-bottom:0.8rem; }
+.q-tab { padding:0.55rem 1rem; cursor:pointer; border-radius:6px 6px 0 0; font-weight:500;
+         color:var(--dr-gray-dark); background:#f4f6fa; border:1px solid #cbd5e1; border-bottom:none; }
+.q-tab.active { color:var(--dr-primary); background:#fff; border-color:#cbd5e1;
+                border-bottom:2px solid #fff; margin-bottom:-2px; }
+.q-tab .badge { background:var(--dr-blue); color:#fff; padding:0.05rem 0.5rem; border-radius:9px;
+                font-size:0.72rem; margin-left:0.3rem; }
+.q-tab .badge-warn { background:#f59e0b; }
+.q-tab .badge-err { background:#dc2626; }
+.q-pane { display:none; }
+.q-pane.active { display:block; }
+.state-pill { display:inline-block; padding:0.05rem 0.5rem; border-radius:9px;
+              font-size:0.72rem; font-weight:600; }
+.state-pill.sent { background:#d1fae5; color:#047857; }
+.state-pill.pending { background:#fef3c7; color:#92400e; }
+.state-pill.failed { background:#fee2e2; color:#dc2626; }
+.state-pill.delivered { background:#d1fae5; color:#047857; }
+.state-pill.held { background:#fef3c7; color:#92400e; }
+.state-pill.released { background:#d1fae5; color:#047857; }
+</style>
+{% endblock %}
+{% block content %}
+<section class="dr-section">
+    <h2 style="margin:0;"><i class="fas fa-conveyor-belt"></i> Queue & Quarantena (live dal listener)</h2>
+    <p style="color:var(--dr-gray-dark); font-size:0.85rem;">
+        Visualizzazione <strong>read-only</strong> delle 3 code interne del listener SMTP separato.
+        Path DB: <code>{{ db_status.path }}</code>
+        {% if db_status.available %}
+        <span class="state-pill sent">accessibile</span>
+        {% else %}
+        <span class="state-pill failed">non accessibile</span>
+        {% if db_status.error %}<small>({{ db_status.error }})</small>{% endif %}
+        {% endif %}
+    </p>
+</section>
+
+{% if not db_status.available %}
+<div class="dr-empty">
+    <i class="fas fa-database"></i>
+    Impossibile accedere al DB del listener.<br>
+    Verifica che il path <code>{{ db_status.path }}</code> esista e che l'utente del servizio admin abbia permessi di lettura
+    (gruppo <code>stormshield-relay</code>).
+</div>
+{% else %}
+
+<div class="q-tabs">
+    {% set out_total = outbound|length %}
+    {% set out_failed = stats.outbound.get('failed', 0) %}
+    {% set out_pending = stats.outbound.get('pending', 0) %}
+    <div class="q-tab active" data-pane="outbound">
+        <i class="fas fa-paper-plane"></i> Outbound queue
+        <span class="badge {% if out_failed %}badge-err{% elif out_pending %}badge-warn{% endif %}">{{ out_total }}</span>
+    </div>
+    <div class="q-tab" data-pane="quarantine">
+        <i class="fas fa-shield-virus"></i> Quarantena
+        <span class="badge {% if quarantine|length %}badge-warn{% endif %}">{{ quarantine|length }}</span>
+    </div>
+    <div class="q-tab" data-pane="dispatch">
+        <i class="fas fa-ticket"></i> Dispatch ticket
+        <span class="badge">{{ dispatch|length }}</span>
+    </div>
+</div>
+
+{# ============================== OUTBOUND ============================== #}
+<div class="q-pane active" id="pane-outbound">
+    <div style="display:flex; gap:0.5rem; margin-bottom:0.6rem; flex-wrap:wrap;">
+        {% for st, n in stats.outbound.items() %}
+        <span class="state-pill {{ st }}" style="font-size:0.85rem; padding:0.2rem 0.7rem;">
+            {{ st }}: <strong>{{ n }}</strong>
+        </span>
+        {% endfor %}
+    </div>
+    <div class="dr-table-wrap">
+    <table class="dr-table">
+        <thead>
+            <tr>
+                <th class="num">#</th>
+                <th>Quando</th>
+                <th>Da</th>
+                <th>A</th>
+                <th>Smarthost</th>
+                <th>Action</th>
+                <th>Stato</th>
+                <th class="num">Tentativi</th>
+                <th>Recapitata</th>
+                <th>Errore</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for r in outbound %}
+        <tr {% if r.state == 'failed' %}style="background:#fef2f2;"{% elif r.state == 'pending' %}style="background:#fffbeb;"{% endif %}>
+            <td class="num">{{ r.id }}</td>
+            <td><small>{{ r.created_at }}</small></td>
+            <td class="mono"><small>{{ r.mail_from|default('—') }}</small></td>
+            <td class="mono"><small>{{ r.recipients|join(', ')|truncate(45) }}</small></td>
+            <td class="mono"><small>{{ r.smarthost }}:{{ r.smarthost_port }}</small></td>
+            <td><small>{{ r.action }}</small></td>
+            <td><span class="state-pill {{ r.state }}">{{ r.state }}</span></td>
+            <td class="num">{{ r.attempts }}</td>
+            <td><small>{{ r.delivered_at|default('—') }}</small></td>
+            <td class="mono"><small style="color:#dc2626;">{{ (r.last_error or '')|truncate(50) }}</small></td>
+            <td><a href="{{ url_for('queue.outbound_detail', queue_id=r.id) }}" class="dr-btn" style="width:auto; padding:0.15rem 0.4rem;"><i class="fas fa-eye"></i></a></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="11" class="dr-empty">Coda outbound vuota.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+
+{# ============================== QUARANTINE ============================== #}
+<div class="q-pane" id="pane-quarantine">
+    <p style="font-size:0.85rem; color:var(--dr-gray-dark);">
+        Mail messe in quarantena dal rule engine (action=<code>quarantine</code>) per review umano.
+        Rimangono qui finché un operatore non decide release o discard.
+    </p>
+    <div class="dr-table-wrap">
+    <table class="dr-table">
+        <thead>
+            <tr>
+                <th class="num">#</th>
+                <th>Quando</th>
+                <th>Da</th>
+                <th>A</th>
+                <th>Motivo</th>
+                <th>Decisione</th>
+                <th>Reviewed</th>
+                <th class="num">Size</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for q in quarantine %}
+        <tr {% if not q.decision %}style="background:#fef3c7;"{% endif %}>
+            <td class="num">{{ q.id }}</td>
+            <td><small>{{ q.created_at }}</small></td>
+            <td class="mono"><small>{{ q.from_address|default('—') }}</small></td>
+            <td class="mono"><small>{{ q.to_address|default('—')|truncate(40) }}</small></td>
+            <td><small>{{ q.reason|default('—') }}</small></td>
+            <td>
+                {% if q.decision == 'released' %}<span class="state-pill released">released</span>
+                {% elif q.decision == 'discarded' %}<span class="state-pill failed">discarded</span>
+                {% else %}<span class="state-pill held">in attesa</span>{% endif %}
+            </td>
+            <td><small>{{ q.reviewed_at|default('—') }}</small></td>
+            <td class="num"><small>{{ '%.1f'|format(q.mime_size / 1024) }} KB</small></td>
+            <td><a href="{{ url_for('queue.quarantine_detail', queue_id=q.id) }}" class="dr-btn" style="width:auto; padding:0.15rem 0.4rem;"><i class="fas fa-eye"></i></a></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="9" class="dr-empty">Quarantena vuota — nessuna mail trattenuta.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+
+{# ============================== DISPATCH ============================== #}
+<div class="q-pane" id="pane-dispatch">
+    <p style="font-size:0.85rem; color:var(--dr-gray-dark);">
+        Ticket in attesa di dispatch verso il manager (action=<code>create_ticket</code>).
+        Drainata periodicamente dal scheduler.
+    </p>
+    <div class="dr-table-wrap">
+    <table class="dr-table">
+        <thead>
+            <tr>
+                <th class="num">#</th>
+                <th>Quando</th>
+                <th>Event UUID</th>
+                <th>Stato</th>
+                <th class="num">Tentativi</th>
+                <th>Prossimo retry</th>
+                <th>Errore</th>
+                <th>Manager response</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for d in dispatch %}
+        <tr {% if d.state == 'failed' %}style="background:#fef2f2;"{% endif %}>
+            <td class="num">{{ d.id }}</td>
+            <td><small>{{ d.created_at }}</small></td>
+            <td class="mono"><small>{{ (d.event_uuid or '')[:12] }}…</small></td>
+            <td><span class="state-pill {{ d.state }}">{{ d.state }}</span></td>
+            <td class="num">{{ d.attempts }}</td>
+            <td><small>{{ d.next_attempt_at|default('—') }}</small></td>
+            <td><small style="color:#dc2626;">{{ (d.last_error or '')|truncate(50) }}</small></td>
+            <td><small>{{ (d.manager_response or '')|truncate(40) }}</small></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" class="dr-empty">Nessun dispatch pendente.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+
+<script>
+document.querySelectorAll('.q-tab').forEach(t => {
+    t.addEventListener('click', () => {
+        document.querySelectorAll('.q-tab').forEach(x => x.classList.remove('active'));
+        document.querySelectorAll('.q-pane').forEach(x => x.classList.remove('active'));
+        t.classList.add('active');
+        document.getElementById('pane-' + t.dataset.pane).classList.add('active');
+    });
+});
+</script>
+
+{% endif %}
+{% endblock %}

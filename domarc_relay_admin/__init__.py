@@ -6,7 +6,7 @@ Esporta:
 - `create_app(config=None) -> Flask` — app factory standard Flask
 - `__version__`
 """
-__version__ = "0.8.1"
+__version__ = "0.8.2"
 
 from .app import create_app
 

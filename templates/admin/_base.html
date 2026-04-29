@@ -36,6 +36,7 @@
                 <div class="dr-nav-menu">
                     <a href="{{ url_for('events.list_view') }}" class="{% if ep.startswith('events') %}active{% endif %}"><i class="fas fa-stream"></i> Eventi</a>
                     <a href="{{ url_for('activity.view') }}" class="{% if ep.startswith('activity') %}active{% endif %}" style="color:#10b981;"><i class="fas fa-bolt"></i> Activity Live</a>
+                    <a href="{{ url_for('queue.index') }}" class="{% if ep.startswith('queue') %}active{% endif %}"><i class="fas fa-conveyor-belt"></i> Queue & Quarantena</a>
                     <a href="{{ url_for('routes.routes_list') }}" class="{% if ep.startswith('routes') %}active{% endif %}"><i class="fas fa-route"></i> Mail intercettate</a>
                 </div>
             </div>

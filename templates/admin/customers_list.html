@@ -1,89 +1,208 @@
 {% extends "admin/_base.html" %}
-{% block title %}Anagrafica clienti{% endblock %}
+{% block title %}Clienti{% endblock %}
+{% block extra_head %}
+<style>
+.cust-stats { display:flex; gap:0.5rem; flex-wrap:wrap; margin:0.7rem 0; }
+.cust-stat-card { background:#fff; border:1px solid var(--dr-gray); border-radius:6px;
+                   padding:0.5rem 0.9rem; min-width:90px; }
+.cust-stat-card .label { font-size:0.7rem; color:var(--dr-gray-dark); text-transform:uppercase; letter-spacing:0.04em; }
+.cust-stat-card .value { font-size:1.4rem; font-weight:700; color:var(--dr-primary); }
+
+.cust-filters { display:flex; gap:0.4rem; flex-wrap:wrap; margin-bottom:0.6rem; align-items:center; }
+.cust-filters input, .cust-filters select { padding:0.35rem 0.6rem; border:1px solid var(--dr-gray); border-radius:5px; font-family:inherit; }
+.cust-filters .pill-link { padding:0.2rem 0.7rem; border-radius:9px; font-size:0.78rem; font-weight:600; text-decoration:none;
+                            background:#f1f5f9; color:var(--dr-gray-dark); border:1px solid #cbd5e1; }
+.cust-filters .pill-link.active { background:var(--dr-primary); color:#fff; border-color:var(--dr-primary); }
+.cust-filters .pill-link.profile-STD { background:#dbeafe; color:#1d4ed8; border-color:#93c5fd; }
+.cust-filters .pill-link.profile-EXT { background:#fef3c7; color:#92400e; border-color:#fde68a; }
+.cust-filters .pill-link.profile-H24 { background:#fee2e2; color:#dc2626; border-color:#fca5a5; }
+.cust-filters .pill-link.profile-NO { background:#f1f5f9; color:#64748b; border-color:#cbd5e1; }
+.cust-filters .pill-link.active.profile-STD { background:#1d4ed8; color:#fff; }
+.cust-filters .pill-link.active.profile-EXT { background:#92400e; color:#fff; }
+.cust-filters .pill-link.active.profile-H24 { background:#dc2626; color:#fff; }
+.cust-filters .pill-link.active.profile-NO { background:#64748b; color:#fff; }
+
+.cust-table { background:#fff; border:1px solid var(--dr-gray); border-radius:8px; overflow:hidden; }
+.cust-row { display:grid; grid-template-columns: 70px 1.5fr 80px 90px 1fr 130px 130px;
+            gap:0.7rem; padding:0.7rem 0.9rem; align-items:center; border-bottom:1px solid #eef2f7;
+            transition:background 0.1s; }
+.cust-row:hover { background:#f8fafc; }
+.cust-row:last-child { border-bottom:none; }
+.cust-row.header { background:#f1f5f9; font-weight:600; font-size:0.82rem;
+                    color:var(--dr-primary); text-transform:uppercase; letter-spacing:0.04em; }
+
+.cust-codcli { font-family:ui-monospace, monospace; font-weight:600; font-size:0.85rem; }
+.cust-name { font-weight:500; }
+.cust-name small { color:var(--dr-gray-dark); display:block; font-size:0.75rem; font-weight:normal; }
+
+.profile-badge { display:inline-block; padding:0.15rem 0.55rem; border-radius:9px;
+                  font-size:0.72rem; font-weight:700; text-align:center; min-width:46px; }
+.profile-badge.STD { background:#dbeafe; color:#1d4ed8; }
+.profile-badge.EXT { background:#fef3c7; color:#92400e; }
+.profile-badge.H24 { background:#fee2e2; color:#dc2626; }
+.profile-badge.NO { background:#f1f5f9; color:#64748b; }
+.profile-badge.UNK { background:#f1f5f9; color:#94a3b8; }
+
+.contract-badge { font-size:0.72rem; padding:0.1rem 0.5rem; border-radius:9px; }
+.contract-badge.active { background:#d1fae5; color:#047857; }
+.contract-badge.inactive { background:#fee2e2; color:#dc2626; }
+
+.cust-domains { font-family:ui-monospace, monospace; font-size:0.78rem; line-height:1.4; }
+.cust-domains .dom { display:inline-block; background:#f1f5f9; color:#475569;
+                      padding:0.05rem 0.4rem; border-radius:3px; margin:0.05rem; }
+.cust-domains .alias { background:#dbeafe; color:#1d4ed8; }
+
+.cust-actions { display:flex; gap:0.3rem; align-items:center; }
+.cust-actions a { display:inline-flex; align-items:center; gap:0.2rem; padding:0.25rem 0.55rem;
+                   border-radius:4px; font-size:0.75rem; text-decoration:none;
+                   border:1px solid #cbd5e1; color:var(--dr-gray-dark); }
+.cust-actions a:hover { border-color:#3b82f6; color:#3b82f6; text-decoration:none; }
+.cust-actions a.exception { border-color:#f59e0b; color:#92400e; background:#fef3c7; }
+.cust-actions a.has-exception { border-color:#dc2626; background:#fee2e2; color:#dc2626; }
+.cust-actions a.has-exception:hover { background:#fecaca; }
+
+.exception-pill { display:inline-flex; align-items:center; gap:0.2rem;
+                   background:#fef3c7; color:#92400e; padding:0.05rem 0.4rem;
+                   border-radius:9px; font-size:0.7rem; font-weight:600; }
+</style>
+{% endblock %}
 {% block content %}
 <section class="dr-section">
-    <h2><i class="fas fa-address-book"></i> Anagrafica clienti ({{ customers|length }})</h2>
-    <p class="dr-hint">
-        Sorgente: <code>{{ health.backend }}</code>
-        {% if health.path %}— path: <code>{{ health.path }}</code>{% endif %}
-        {% if health.base_url %}— url: <code>{{ health.base_url }}</code>{% endif %}
-        {% if health.last_error %}<span style="color:#b91c1c;">— errore: {{ health.last_error }}</span>{% endif %}
-    </p>
-    <p class="dr-hint">
-        Vista <strong>read-only</strong>: la fonte di verità è il backend configurato
-        (vedi <code>DOMARC_RELAY_CUSTOMER_SOURCE</code>). Vengono mostrati solo i clienti
-        <strong>abilitati</strong> sul gestionale (<code>is_active = TRUE</code>).
-    </p>
-    <form method="get" class="dr-filters">
-        <input type="search" name="q" value="{{ search }}" placeholder="cerca codcli / ragione sociale / dominio / alias…">
-        <button class="dr-btn"><i class="fas fa-magnifying-glass"></i></button>
+    <div style="display:flex; align-items:center; gap:0.5rem;">
+        <h2 style="margin:0;"><i class="fas fa-users"></i> Clienti</h2>
+        <span style="color:var(--dr-gray-dark); font-size:0.85rem;">
+            <strong>{{ filtered_count }}</strong>{% if filtered_count != all_count %} / {{ all_count }}{% endif %} clienti
+            · sorgente: <code>{{ health.backend }}</code>
+            {% if health.last_error %}<span style="color:#dc2626;">· errore: {{ health.last_error }}</span>{% endif %}
+        </span>
+    </div>
+
+    <div class="cust-stats">
+        <div class="cust-stat-card">
+            <div class="label">Totale</div>
+            <div class="value">{{ all_count }}</div>
+        </div>
+        <div class="cust-stat-card">
+            <div class="label">Con contratto</div>
+            <div class="value" style="color:#047857;">{{ contract_active_count }}</div>
+        </div>
+        <div class="cust-stat-card">
+            <div class="label">Senza contratto</div>
+            <div class="value" style="color:#dc2626;">{{ contract_inactive_count }}</div>
+        </div>
+        {% for prof, n in by_profile.items()|sort %}
+        <div class="cust-stat-card">
+            <div class="label">{{ prof }}</div>
+            <div class="value">{{ n }}</div>
+        </div>
+        {% endfor %}
+        <div class="cust-stat-card">
+            <div class="label">Eccezioni oggi</div>
+            <div class="value" style="color:#f59e0b;">{{ exceptions_today|length }}</div>
+        </div>
+    </div>
+
+    <form method="get" class="cust-filters">
+        <input type="search" name="q" value="{{ search }}" placeholder="🔍 codcli, ragione sociale, dominio…" style="min-width:320px;">
+
+        <span style="margin-left:0.4rem;">Profilo:</span>
+        <a href="?{% if search %}q={{ search }}&{% endif %}{% if contract_filter %}contract={{ contract_filter }}&{% endif %}"
+           class="pill-link {% if not profile_filter %}active{% endif %}">tutti</a>
+        {% for prof in ['STD', 'EXT', 'H24', 'NO'] %}
+        {% if by_profile.get(prof, 0) %}
+        <a href="?profile={{ prof }}{% if search %}&q={{ search }}{% endif %}{% if contract_filter %}&contract={{ contract_filter }}{% endif %}"
+           class="pill-link profile-{{ prof }} {% if profile_filter == prof %}active{% endif %}">{{ prof }} <strong>{{ by_profile[prof] }}</strong></a>
+        {% endif %}
+        {% endfor %}
+
+        <span style="margin-left:0.4rem;">Contratto:</span>
+        <a href="?{% if search %}q={{ search }}&{% endif %}{% if profile_filter %}profile={{ profile_filter }}&{% endif %}"
+           class="pill-link {% if not contract_filter %}active{% endif %}">tutti</a>
+        <a href="?contract=active{% if search %}&q={{ search }}{% endif %}{% if profile_filter %}&profile={{ profile_filter }}{% endif %}"
+           class="pill-link {% if contract_filter == 'active' %}active{% endif %}" style="background:#d1fae5; color:#047857; border-color:#86efac;">attivo</a>
+        <a href="?contract=inactive{% if search %}&q={{ search }}{% endif %}{% if profile_filter %}&profile={{ profile_filter }}{% endif %}"
+           class="pill-link {% if contract_filter == 'inactive' %}active{% endif %}" style="background:#fee2e2; color:#dc2626; border-color:#fca5a5;">inattivo</a>
+
+        <button class="dr-btn" style="margin-left:0.4rem;"><i class="fas fa-filter"></i></button>
     </form>
 </section>
 
-<div class="dr-table-wrap">
-<table class="dr-table">
-    <thead>
-        <tr>
-            <th>Codcli</th>
-            <th>Ragione sociale</th>
-            <th>Profilo orari</th>
-            <th>Contratto</th>
-            <th>Domini</th>
-            <th>Alias</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for c in customers %}
-        <tr>
-            <td><strong>{{ c.codice_cliente }}</strong></td>
-            <td>
-                {% if c.ragione_sociale %}{{ c.ragione_sociale }}{% else %}<span style="color:var(--dr-gray);">—</span>{% endif %}
-            </td>
-            <td>
-                {% if c.tipologia_servizio %}
-                <span class="dr-badge dr-badge-{% if c.tipologia_servizio == 'H24' %}info{% elif c.tipologia_servizio == 'EXT' %}warn{% elif c.tipologia_servizio == 'NO' %}error{% else %}ok{% endif %}">
-                    {{ c.tipologia_servizio }}
+<div class="cust-table">
+    <div class="cust-row header">
+        <div>Codice</div>
+        <div>Ragione sociale</div>
+        <div>Profilo</div>
+        <div>Contratto</div>
+        <div>Domini / Alias</div>
+        <div>Orari servizio</div>
+        <div>Azioni</div>
+    </div>
+    {% for c in customers %}
+    {% set cc = c.codice_cliente %}
+    {% set sh = sh_records.get(cc) %}
+    {% set has_today_exc = exceptions_today.get(cc, 0) %}
+    {% set prof = (c.tipologia_servizio or 'UNK')|upper %}
+    {% if prof == 'STANDARD' %}{% set prof = 'STD' %}{% endif %}
+    <div class="cust-row">
+        <div class="cust-codcli">{{ cc }}</div>
+        <div class="cust-name">
+            {{ c.ragione_sociale or '—' }}
+            {% if c.contract_type %}<small>{{ c.contract_type }}{% if c.contract_expiry_date %} · scad. {{ c.contract_expiry_date }}{% endif %}</small>{% endif %}
+        </div>
+        <div>
+            <span class="profile-badge {{ prof }}">{{ prof }}</span>
+            {% if c.profile_description %}
+            <small style="color:var(--dr-gray-dark); display:block; font-size:0.7rem; margin-top:0.2rem;">{{ c.profile_description|truncate(28) }}</small>
+            {% endif %}
+        </div>
+        <div>
+            {% if c.contract_active %}
+            <span class="contract-badge active">attivo</span>
+            {% else %}
+            <span class="contract-badge inactive">no</span>
+            {% endif %}
+        </div>
+        <div class="cust-domains">
+            {%- for d in (c.domains or [])[:3] -%}
+            <span class="dom" title="dominio">{{ d }}</span>
+            {%- endfor -%}
+            {% if c.domains and c.domains|length > 3 %}<small>+{{ c.domains|length - 3 }}</small>{% endif %}
+            {%- for a in (c.aliases or [])[:2] -%}
+            <span class="dom alias" title="alias">{{ a|truncate(25) }}</span>
+            {%- endfor -%}
+            {% if c.aliases and c.aliases|length > 2 %}<small>+{{ c.aliases|length - 2 }} alias</small>{% endif %}
+            {% if not c.domains and not c.aliases %}<small style="color:var(--dr-gray);">nessuno</small>{% endif %}
+        </div>
+        <div>
+            {% if sh %}
+                <small style="color:var(--dr-gray-dark);">profilo: <strong>{{ sh.profile_id or 'inherit' }}</strong></small>
+                {% if has_today_exc %}
+                <br><span class="exception-pill">
+                    <i class="fas fa-calendar-day"></i> {{ has_today_exc }} eccez. oggi
                 </span>
-                {% if c.profile_description %}
-                <small style="color:var(--dr-gray); display:block;">{{ c.profile_description }}</small>
+                {% elif sh.schedule_exceptions and sh.schedule_exceptions|length %}
+                <br><small style="color:var(--dr-gray-dark);">{{ sh.schedule_exceptions|length }} eccez. totali</small>
                 {% endif %}
-                {% else %}
-                <span style="color:var(--dr-gray);">—</span>
-                {% endif %}
-            </td>
-            <td>
-                {% if c.contract_type %}
-                <small>{{ c.contract_type }}</small>
-                {% if c.contract_expiry_date %}
-                <br><small style="color:var(--dr-gray);">scad. {{ c.contract_expiry_date }}</small>
-                {% endif %}
-                {% else %}
-                <span style="color:var(--dr-gray);">—</span>
-                {% endif %}
-            </td>
-            <td class="mono"><small>
-                {%- for d in c.domains -%}
-                {{ d }}{% if not loop.last %}<br>{% endif %}
-                {%- else -%}
-                <span style="color:var(--dr-gray);">—</span>
-                {%- endfor -%}
-            </small></td>
-            <td class="mono"><small>
-                {%- for a in c.aliases -%}
-                {{ a }}{% if not loop.last %}<br>{% endif %}
-                {%- else -%}
-                <span style="color:var(--dr-gray);">—</span>
-                {%- endfor -%}
-            </small></td>
-        </tr>
-        {% else %}
-        <tr><td colspan="6" class="dr-empty">
-            <i class="fas fa-circle-info"></i>
-            Nessun cliente abilitato caricato dalla sorgente.
-            Controlla la configurazione (<code>DOMARC_RELAY_CUSTOMER_SOURCE</code>).
-        </td></tr>
-        {% endfor %}
-    </tbody>
-</table>
+            {% else %}
+            <small style="color:var(--dr-gray);">— da profilo default —</small>
+            {% endif %}
+        </div>
+        <div class="cust-actions">
+            <a href="{{ url_for('service_hours.form_view', codcli=cc) }}"
+               class="{% if has_today_exc %}has-exception{% else %}exception{% endif %}"
+               title="Gestisci orari + eccezioni per {{ cc }}">
+                <i class="fas fa-calendar-plus"></i>
+                {% if has_today_exc %}{{ has_today_exc }} oggi{% else %}eccezioni{% endif %}
+            </a>
+        </div>
+    </div>
+    {% else %}
+    <div class="cust-row">
+        <div></div>
+        <div class="dr-empty" style="grid-column: 2 / -1; padding:2rem;">
+            Nessun cliente trovato con i filtri attuali.
+        </div>
+    </div>
+    {% endfor %}
 </div>
 {% endblock %}
