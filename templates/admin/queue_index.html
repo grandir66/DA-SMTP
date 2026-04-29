@@ -67,11 +67,54 @@
 
 {# ============================== OUTBOUND ============================== #}
 <div class="q-pane active" id="pane-outbound">
-    <div style="display:flex; gap:0.5rem; margin-bottom:0.6rem; flex-wrap:wrap;">
+    {# Riassunto età + stuck #}
+    <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:0.5rem; margin-bottom:0.7rem;">
+        <div style="background:#fff; border:1px solid #cbd5e1; border-radius:6px; padding:0.5rem 0.7rem;">
+            <div style="font-size:0.72rem; color:#64748b; text-transform:uppercase;">In coda &lt; 1m</div>
+            <div style="font-size:1.4rem; font-weight:600; color:#16a34a;">{{ stats.outbound_age_buckets['0_1m'] }}</div>
+        </div>
+        <div style="background:#fff; border:1px solid #cbd5e1; border-radius:6px; padding:0.5rem 0.7rem;">
+            <div style="font-size:0.72rem; color:#64748b; text-transform:uppercase;">1m – 5m</div>
+            <div style="font-size:1.4rem; font-weight:600; color:#0891b2;">{{ stats.outbound_age_buckets['1_5m'] }}</div>
+        </div>
+        <div style="background:#fff; border:1px solid #cbd5e1; border-radius:6px; padding:0.5rem 0.7rem;">
+            <div style="font-size:0.72rem; color:#64748b; text-transform:uppercase;">5m – 30m</div>
+            <div style="font-size:1.4rem; font-weight:600; color:#d97706;">{{ stats.outbound_age_buckets['5_30m'] }}</div>
+        </div>
+        <div style="background:#fff; border:1px solid {% if stats.outbound_age_buckets['over_30m'] %}#dc2626{% else %}#cbd5e1{% endif %}; border-radius:6px; padding:0.5rem 0.7rem;">
+            <div style="font-size:0.72rem; color:#64748b; text-transform:uppercase;">&gt; 30 min</div>
+            <div style="font-size:1.4rem; font-weight:600; color:{% if stats.outbound_age_buckets['over_30m'] %}#dc2626{% else %}#94a3b8{% endif %};">{{ stats.outbound_age_buckets['over_30m'] }}</div>
+        </div>
+        <div style="background:#fff; border:1px solid {% if stats.outbound_stuck %}#dc2626{% else %}#cbd5e1{% endif %}; border-radius:6px; padding:0.5rem 0.7rem;">
+            <div style="font-size:0.72rem; color:#64748b; text-transform:uppercase;">⚠ Bloccate</div>
+            <div style="font-size:1.4rem; font-weight:600; color:{% if stats.outbound_stuck %}#dc2626{% else %}#94a3b8{% endif %};">{{ stats.outbound_stuck }}</div>
+            <div style="font-size:0.7rem; color:#64748b;">retry passato o &gt;10m senza retry</div>
+        </div>
+        {% if stats.outbound_oldest_pending_age %}
+        <div style="background:#fff; border:1px solid #cbd5e1; border-radius:6px; padding:0.5rem 0.7rem;">
+            <div style="font-size:0.72rem; color:#64748b; text-transform:uppercase;">Pending più vecchio</div>
+            <div style="font-size:1rem; font-weight:600; color:#475569;">{{ stats.outbound_oldest_pending_age }}</div>
+        </div>
+        {% endif %}
+    </div>
+
+    {# Filtri stato #}
+    {% set qf = request.args.get('state','') %}
+    {% set qa = request.args.get('only_active','') %}
+    <div style="display:flex; gap:0.4rem; margin-bottom:0.6rem; flex-wrap:wrap; align-items:center;">
+        <span style="font-size:0.8rem; color:#475569;">Filtra:</span>
+        <a href="{{ url_for('queue.index') }}"
+           class="state-pill {% if not qf and not qa %}sent{% endif %}"
+           style="text-decoration:none;{% if qf or qa %}background:#f1f5f9;color:#475569;{% endif %}">tutti</a>
+        <a href="?only_active=1"
+           class="state-pill {% if qa %}pending{% else %}sent{% endif %}"
+           style="text-decoration:none;{% if not qa %}background:#f1f5f9;color:#475569;{% endif %}">solo attivi</a>
         {% for st, n in stats.outbound.items() %}
-        <span class="state-pill {{ st }}" style="font-size:0.85rem; padding:0.2rem 0.7rem;">
+        <a href="?state={{ st }}"
+           class="state-pill {{ st if qf == st else 'sent' }}"
+           style="text-decoration:none;{% if qf != st %}background:#f1f5f9;color:#475569;{% endif %}">
             {{ st }}: <strong>{{ n }}</strong>
-        </span>
+        </a>
         {% endfor %}
     </div>
     <div class="dr-table-wrap">
@@ -79,35 +122,48 @@
         <thead>
             <tr>
                 <th class="num">#</th>
-                <th>Quando</th>
+                <th>Età</th>
                 <th>Da</th>
                 <th>A</th>
                 <th>Smarthost</th>
                 <th>Action</th>
                 <th>Stato</th>
-                <th class="num">Tentativi</th>
-                <th>Recapitata</th>
+                <th class="num">Tent.</th>
+                <th>Prossimo retry</th>
                 <th>Errore</th>
                 <th></th>
             </tr>
         </thead>
         <tbody>
         {% for r in outbound %}
-        <tr {% if r.state == 'failed' %}style="background:#fef2f2;"{% elif r.state == 'pending' %}style="background:#fffbeb;"{% endif %}>
+        <tr {% if r.stuck %}style="background:#fee2e2;"
+            {% elif r.state == 'failed' %}style="background:#fef2f2;"
+            {% elif r.state == 'pending' %}style="background:#fffbeb;"{% endif %}>
             <td class="num">{{ r.id }}</td>
-            <td><small>{{ r.created_at }}</small></td>
-            <td class="mono"><small>{{ r.mail_from|default('—') }}</small></td>
+            <td>
+                <strong style="font-size:0.85rem;">{{ r.age_human }}</strong>
+                <br><small style="color:#94a3b8;">{{ r.created_at|truncate(19, True, '') }}</small>
+            </td>
+            <td class="mono"><small>{{ r.mail_from|default('—')|truncate(35) }}</small></td>
             <td class="mono"><small>{{ r.recipients|join(', ')|truncate(45) }}</small></td>
-            <td class="mono"><small>{{ r.smarthost }}:{{ r.smarthost_port }}</small></td>
+            <td class="mono"><small>{{ r.smarthost|truncate(30) }}:{{ r.smarthost_port }}</small></td>
             <td><small>{{ r.action }}</small></td>
-            <td><span class="state-pill {{ r.state }}">{{ r.state }}</span></td>
+            <td>
+                <span class="state-pill {{ r.state }}">{{ r.state }}</span>
+                {% if r.stuck %}<br><span style="color:#dc2626; font-size:0.7rem; font-weight:600;">⚠ BLOCCATA</span>{% endif %}
+                {% if r.delivered_at %}<br><small style="color:#16a34a;">✓ {{ r.delivered_at|truncate(19, True, '') }}</small>{% endif %}
+            </td>
             <td class="num">{{ r.attempts }}</td>
-            <td><small>{{ r.delivered_at|default('—') }}</small></td>
+            <td><small>{{ r.next_attempt_at|default('—', true)|truncate(19, True, '') }}</small></td>
             <td class="mono"><small style="color:#dc2626;">{{ (r.last_error or '')|truncate(50) }}</small></td>
             <td><a href="{{ url_for('queue.outbound_detail', queue_id=r.id) }}" class="dr-btn" style="width:auto; padding:0.15rem 0.4rem;"><i class="fas fa-eye"></i></a></td>
         </tr>
         {% else %}
-        <tr><td colspan="11" class="dr-empty">Coda outbound vuota.</td></tr>
+        <tr><td colspan="11" class="dr-empty">
+            {% if request.args.get('state') or request.args.get('only_active') %}
+            Nessuna riga corrisponde al filtro. <a href="{{ url_for('queue.index') }}">Mostra tutto</a>.
+            {% else %}Coda outbound vuota.{% endif %}
+        </td></tr>
         {% endfor %}
         </tbody>
     </table>

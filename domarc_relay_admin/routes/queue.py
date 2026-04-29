@@ -1,5 +1,10 @@
 """Queue admin: outbound_queue + quarantine + dispatch_queue del listener.
 
+In aggiunta al dump tabellare, calcoliamo:
+- ``age_seconds`` per ogni riga (per highlight messaggi bloccati);
+- ``stats.outbound_age_buckets`` (quanti messaggi in coda da 0-1m, 1-5m, 5-30m, >30m);
+- ``stats.outbound_stuck`` (numero pending/failed con `next_attempt_at` nel passato).
+
 L'admin web non ha le proprie tabelle di queue (sono nel DB del listener
 SMTP separato). Per visualizzarle, leggiamo direttamente il DB del listener
 in **read-only** (path tipico ``/var/lib/stormshield-smtp-relay/relay.db``).
@@ -17,9 +22,42 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+
+def _parse_iso(s: str | None) -> datetime | None:
+    if not s:
+        return None
+    try:
+        # Listener salva ISO con TZ; SQLite datetime() salva senza
+        s = s.replace("Z", "+00:00") if s.endswith("Z") else s
+        dt = datetime.fromisoformat(s.replace(" ", "T"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except (ValueError, TypeError):
+        return None
+
+
+def _age_seconds(s: str | None) -> int | None:
+    dt = _parse_iso(s)
+    if dt is None:
+        return None
+    return max(0, int((datetime.now(timezone.utc) - dt).total_seconds()))
+
+
+def _format_age(sec: int | None) -> str:
+    if sec is None:
+        return "—"
+    if sec < 60:
+        return f"{sec}s"
+    if sec < 3600:
+        return f"{sec//60}m {sec%60}s"
+    if sec < 86400:
+        return f"{sec//3600}h {(sec%3600)//60}m"
+    return f"{sec//86400}g {(sec%86400)//3600}h"
 
 from flask import (Blueprint, Response, abort, current_app, flash,
                    render_template, request)
@@ -79,31 +117,87 @@ def index():
     db_status = {"available": conn is not None,
                   "path": str(_listener_db_path())}
 
+    state_filter = (request.args.get("state") or "").strip().lower()
+    only_active = request.args.get("only_active") == "1"
+
     outbound: list[dict] = []
     quarantine: list[dict] = []
     dispatch: list[dict] = []
-    stats = {"outbound": {}, "quarantine_count": 0, "dispatch": {}}
+    stats: dict = {
+        "outbound": {},
+        "quarantine_count": 0,
+        "dispatch": {},
+        "outbound_age_buckets": {"0_1m": 0, "1_5m": 0, "5_30m": 0, "over_30m": 0},
+        "outbound_stuck": 0,
+        "outbound_oldest_pending_age": None,
+    }
+    age_threshold_pending = 600  # 10 min — sopra è "stuck"
 
     if conn is not None:
         try:
-            # Outbound queue (mail in attesa di delivery)
-            for r in conn.execute("""
+            # Outbound queue
+            outbound_rows = conn.execute("""
                 SELECT id, event_uuid, action, mail_from, rcpt_to_json,
                        smarthost, smarthost_port, smarthost_tls, state, attempts,
                        next_attempt_at, last_error, delivered_at, created_at,
                        length(mime_blob) AS mime_size
                 FROM outbound_queue
-                ORDER BY id DESC LIMIT 200
-            """):
+                ORDER BY
+                    CASE state
+                        WHEN 'pending' THEN 1
+                        WHEN 'failed'  THEN 2
+                        WHEN 'sent'    THEN 3
+                        ELSE 4 END,
+                    id DESC
+                LIMIT 300
+            """).fetchall()
+
+            now = datetime.now(timezone.utc)
+            oldest_pending: int | None = None
+            for r in outbound_rows:
                 d = dict(r)
                 try:
                     d["recipients"] = json.loads(d["rcpt_to_json"] or "[]")
                 except (TypeError, ValueError):
                     d["recipients"] = []
+                age = _age_seconds(d.get("created_at"))
+                d["age_seconds"] = age
+                d["age_human"] = _format_age(age)
+                # Bucket
+                if age is not None and d.get("state") not in ("sent", "delivered"):
+                    if age < 60:
+                        stats["outbound_age_buckets"]["0_1m"] += 1
+                    elif age < 300:
+                        stats["outbound_age_buckets"]["1_5m"] += 1
+                    elif age < 1800:
+                        stats["outbound_age_buckets"]["5_30m"] += 1
+                    else:
+                        stats["outbound_age_buckets"]["over_30m"] += 1
+                # Stuck = pending/failed con prossimo retry nel passato (lo scheduler avrebbe già dovuto)
+                # oppure pending da > 10 min senza retry pianificato.
+                stuck = False
+                if d.get("state") in ("pending", "failed"):
+                    nxt = _parse_iso(d.get("next_attempt_at"))
+                    if nxt is not None and nxt < now:
+                        stuck = True
+                    elif nxt is None and age is not None and age > age_threshold_pending:
+                        stuck = True
+                d["stuck"] = stuck
+                if stuck:
+                    stats["outbound_stuck"] += 1
+                if d.get("state") == "pending" and age is not None:
+                    if oldest_pending is None or age > oldest_pending:
+                        oldest_pending = age
+
+                # Filtri
+                if state_filter and d.get("state") != state_filter:
+                    continue
+                if only_active and d.get("state") in ("sent", "delivered"):
+                    continue
                 outbound.append(d)
-            for r in conn.execute("""
-                SELECT state, COUNT(*) AS n FROM outbound_queue GROUP BY state
-            """):
+
+            stats["outbound_oldest_pending_age"] = _format_age(oldest_pending) if oldest_pending else None
+            for r in conn.execute("SELECT state, COUNT(*) AS n FROM outbound_queue GROUP BY state"):
                 stats["outbound"][r["state"]] = r["n"]
 
             # Quarantine
