@@ -30,4 +30,9 @@ def get_customer_source(config) -> CustomerSource:
     if backend == "stormshield":
         from .stormshield_source import StormshieldCustomerSource
         return StormshieldCustomerSource(config.customer_source)
+    if backend == "postgres":
+        from .postgres_source import PostgresCustomerSource
+        cs = PostgresCustomerSource(config)
+        cs.start_sync_thread()  # primo sync blocking allo startup, poi periodico
+        return cs
     raise ValueError(f"customer_source backend non supportato: {backend}")
