@@ -24,20 +24,33 @@ if [[ "$HTTPS_MODE" == "letsencrypt" ]]; then
     PACKAGES+=(certbot python3-certbot-nginx)
 fi
 
-# Driver ODBC per MSSQL (gestionale Domarc usa SQL Server). Aggiunge repo Microsoft
-# se non presente. Pacchetto richiesto da pyodbc per il wizard.
+# Driver ODBC per MSSQL (gestionale Domarc usa SQL Server) — opzionale.
+# Microsoft a 2026-04 NON ha ancora rilasciato repo per Ubuntu 24.04 noble:
+# fallback alla 22.04 jammy (compatibile binario).
 if ! dpkg -l msodbcsql18 2>/dev/null | grep -q ^ii; then
-    if ! curl --silent --output /dev/null --fail https://packages.microsoft.com 2>/dev/null; then
-        echo "[01-os-prep] Repo Microsoft non raggiungibile — skip pyodbc/MSSQL (wizard chiederà installazione manuale)"
-    else
-        curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /usr/share/keyrings/microsoft-archive-keyring.gpg
+    if curl --silent --output /dev/null --fail --max-time 5 https://packages.microsoft.com 2>/dev/null; then
         OS_VERSION="$(lsb_release -rs 2>/dev/null || echo 22.04)"
-        OS_CODENAME="$(lsb_release -is 2>/dev/null | tr A-Z a-z || echo ubuntu)"
-        echo "deb [arch=amd64,arm64,armhf signed-by=/usr/share/keyrings/microsoft-archive-keyring.gpg] https://packages.microsoft.com/${OS_CODENAME}/${OS_VERSION}/prod ${OS_CODENAME%%-*}-$(lsb_release -cs) main" \
-            > /etc/apt/sources.list.d/mssql-release.list 2>/dev/null || true
-        apt-get update -qq || true
-        ACCEPT_EULA=Y apt-get install -y -qq msodbcsql18 unixodbc-dev || \
-            echo "[01-os-prep] msodbcsql18 install fallito — wizard MSSQL non disponibile (potrai usare PostgreSQL come gestionale)"
+        OS_DIST="$(lsb_release -is 2>/dev/null | tr A-Z a-z || echo ubuntu)"
+        OS_CODENAME="$(lsb_release -cs 2>/dev/null || echo jammy)"
+        # Se Ubuntu 24.04 (noble): MS repo non c'è, ricado a 22.04 jammy
+        if [[ "$OS_VERSION" == "24.04" ]]; then
+            OS_VERSION="22.04"
+            OS_CODENAME="jammy"
+            echo "[01-os-prep] Microsoft repo per 24.04 non disponibile — fallback a 22.04 (msodbcsql compatibile)"
+        fi
+        curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor --yes -o /usr/share/keyrings/microsoft-archive-keyring.gpg 2>/dev/null
+        echo "deb [arch=amd64,arm64,armhf signed-by=/usr/share/keyrings/microsoft-archive-keyring.gpg] https://packages.microsoft.com/${OS_DIST}/${OS_VERSION}/prod ${OS_CODENAME} main" \
+            > /etc/apt/sources.list.d/mssql-release.list
+        if apt-get update -qq 2>&1 | grep -q "does not have a Release"; then
+            rm -f /etc/apt/sources.list.d/mssql-release.list
+            apt-get update -qq 2>/dev/null
+            echo "[01-os-prep] WARN: repo Microsoft non disponibile per questa OS, msodbcsql skipped (PG OK)"
+        else
+            ACCEPT_EULA=Y apt-get install -y -qq msodbcsql18 unixodbc-dev 2>/dev/null || \
+                echo "[01-os-prep] WARN: msodbcsql18 install fallito"
+        fi
+    else
+        echo "[01-os-prep] Repo Microsoft non raggiungibile — skip pyodbc/MSSQL"
     fi
 fi
 
