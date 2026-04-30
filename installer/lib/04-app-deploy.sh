@@ -98,7 +98,16 @@ if [[ ! -f "$LISTENER_SECRETS" ]] || ! grep -q "^RELAY_API_KEY=" "$LISTENER_SECR
 fi
 
 # === 6. Migrations admin (al primo start dell'app è automatico, ma forziamo qui) ===
-sudo -u domarc-relay "$APP_DIR/.venv/bin/python3" -c "
+# Carichiamo le env vars del secrets.env nel sub-process per il path corretto del DB.
+ENV_LINES=""
+if [[ -f "$SECRETS_FILE" ]]; then
+    while IFS= read -r line; do
+        [[ "$line" =~ ^[[:space:]]*# ]] && continue
+        [[ -z "${line// }" ]] && continue
+        ENV_LINES="$ENV_LINES $line"
+    done < "$SECRETS_FILE"
+fi
+sudo -u domarc-relay env $ENV_LINES "$APP_DIR/.venv/bin/python3" -c "
 from domarc_relay_admin.config import load_config
 from domarc_relay_admin.storage import get_storage
 storage = get_storage(load_config())
