@@ -67,7 +67,7 @@ def create_app(config: AppConfig | None = None, *, init_db: bool = True) -> Flas
     # Customer source
     from .customer_sources import get_customer_source
     try:
-        customer_source = get_customer_source(cfg)
+        customer_source = get_customer_source(cfg, storage=storage)
     except Exception as exc:  # noqa: BLE001
         logging.warning("Customer source init fallito (continua con stub): %s", exc)
         from .customer_sources.base import CustomerSource
@@ -106,6 +106,7 @@ def create_app(config: AppConfig | None = None, *, init_db: bool = True) -> Flas
     from .routes.activity import activity_bp
     from .routes.queue import queue_bp
     from .routes.customer_groups import customer_groups_bp
+    from .routes.integrations import integrations_bp
     from .tenants import tenants_bp, register_tenant_middleware
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -132,6 +133,7 @@ def create_app(config: AppConfig | None = None, *, init_db: bool = True) -> Flas
     app.register_blueprint(activity_bp)
     app.register_blueprint(queue_bp)
     app.register_blueprint(customer_groups_bp)
+    app.register_blueprint(integrations_bp)
     app.register_blueprint(tenants_bp)
 
     # Manual auto-generato: rigenera all'avvio (best-effort, ignora errori).

@@ -15,8 +15,12 @@ from .base import Customer, CustomerSource
 __all__ = ["Customer", "CustomerSource", "get_customer_source"]
 
 
-def get_customer_source(config) -> CustomerSource:
-    """Factory: ritorna l'adapter customer source in base a config.customer_source.backend."""
+def get_customer_source(config, storage=None) -> CustomerSource:
+    """Factory: ritorna l'adapter customer source in base a config.customer_source.backend.
+
+    `storage` opzionale: se passato, il backend `postgres` legge la config dai
+    settings dell'admin (UI Integrations) invece che dalle env vars.
+    """
     backend = config.customer_source.backend
     if backend == "yaml":
         from .yaml_source import YamlCustomerSource
@@ -32,7 +36,7 @@ def get_customer_source(config) -> CustomerSource:
         return StormshieldCustomerSource(config.customer_source)
     if backend == "postgres":
         from .postgres_source import PostgresCustomerSource
-        cs = PostgresCustomerSource(config)
+        cs = PostgresCustomerSource(config, storage=storage)
         cs.start_sync_thread()  # primo sync blocking allo startup, poi periodico
         return cs
     raise ValueError(f"customer_source backend non supportato: {backend}")

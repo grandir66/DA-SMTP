@@ -70,13 +70,41 @@ class PgConfig:
             sync_interval_sec=int(os.environ.get("GESTIONALE_PG_SYNC_INTERVAL_SEC", "300")),
         )
 
+    @classmethod
+    def from_settings(cls, storage) -> "PgConfig":
+        """Carica config dal DB settings (UI integrations) con fallback env."""
+        env = cls.from_env()
+        def _get(k: str, default: str) -> str:
+            v = storage.get_setting(k)
+            return v if v is not None else default
+        try:
+            return cls(
+                host=_get("customer_source.pg.host", env.host),
+                port=int(_get("customer_source.pg.port", str(env.port))),
+                user=_get("customer_source.pg.user", env.user),
+                password=_get("customer_source.pg.password", env.password),
+                stormshield_db=_get("customer_source.pg.stormshield_db", env.stormshield_db),
+                solution_db=_get("customer_source.pg.solution_db", env.solution_db),
+                solution_user=_get("customer_source.pg.solution_user", env.solution_user),
+                solution_password=_get("customer_source.pg.solution_password", env.solution_password),
+                sync_interval_sec=int(_get("customer_source.pg.sync_interval_sec", str(env.sync_interval_sec))),
+            )
+        except Exception:  # noqa: BLE001
+            return env
+
 
 class PostgresCustomerSource(CustomerSource):
     """Customer source backed by local cache, populated by periodic PG sync."""
 
-    def __init__(self, app_config) -> None:
-        self._cfg = PgConfig.from_env()
+    def __init__(self, app_config, storage=None) -> None:
+        # Se ho lo storage, leggo prima da settings (UI integrations);
+        # altrimenti fallback env.
+        if storage is not None:
+            self._cfg = PgConfig.from_settings(storage)
+        else:
+            self._cfg = PgConfig.from_env()
         self._db_path = app_config.db_path
+        self._storage = storage
         self._sync_thread: threading.Thread | None = None
         self._sync_stop = threading.Event()
         self._lock = threading.Lock()

@@ -90,6 +90,7 @@
                     {% endif %}
                     <a href="{{ url_for('health.system_dashboard') }}" class="{% if ep == 'health.system_dashboard' %}active{% endif %}"><i class="fas fa-heart-pulse"></i> Health sistema</a>
                     {% if session.role in ('admin', 'superadmin') %}
+                    <a href="{{ url_for('integrations.index') }}" class="{% if ep.startswith('integrations') %}active{% endif %}" style="color:#2563eb;"><i class="fas fa-plug"></i> Integrazioni</a>
                     <a href="{{ url_for('settings.settings_view') }}" class="{% if ep.startswith('settings') %}active{% endif %}"><i class="fas fa-sliders"></i> Settings</a>
                     <a href="{{ url_for('secrets_modules.api_keys_list') }}" class="{% if ep.startswith('secrets_modules.api') %}active{% endif %}"><i class="fas fa-key"></i> Chiavi API</a>
                     <a href="{{ url_for('secrets_modules.modules_list') }}" class="{% if ep.startswith('secrets_modules.module') %}active{% endif %}"><i class="fas fa-cube"></i> Moduli Python</a>

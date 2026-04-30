@@ -1,0 +1,321 @@
+{% extends "admin/_base.html" %}
+{% block title %}Integrazioni — Domarc SMTP Relay{% endblock %}
+
+{% block extra_head %}
+<style>
+.int-section { background:#fff; border:1px solid #cbd5e1; border-radius:8px; margin-bottom:1.2rem; }
+.int-section > header { padding:0.8rem 1.1rem; background:linear-gradient(180deg,#fafbfd,#f4f6fa);
+    border-bottom:1px solid #cbd5e1; display:flex; align-items:center; gap:0.6rem; }
+.int-section > header h3 { margin:0; font-size:1rem; color:#0b2a4a; }
+.int-section .body { padding:1rem 1.1rem; }
+.int-row { display:grid; grid-template-columns:240px 1fr; gap:0.8rem; align-items:start; margin-bottom:0.7rem; }
+.int-row label { padding-top:0.4rem; font-weight:500; color:#0b2a4a; font-size:0.88rem; }
+.int-row label small { display:block; color:#94a3b8; font-weight:normal; font-size:0.75rem; }
+.int-row input[type=text], .int-row input[type=password], .int-row input[type=number],
+.int-row select { width:100%; max-width:480px; padding:0.4rem 0.6rem; border:1px solid #cbd5e1;
+    border-radius:5px; font-family:inherit; font-size:0.88rem; }
+.int-row input.mono { font-family:ui-monospace, Menlo, monospace; }
+.int-test-result { padding:0.6rem 0.9rem; border-radius:6px; margin-top:0.6rem; font-size:0.85rem; display:none; }
+.int-test-result.ok { background:#d1fae5; color:#047857; border:1px solid #a7f3d0; }
+.int-test-result.fail { background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; }
+.int-test-result pre { margin:0.4rem 0 0; font-size:0.8rem; white-space:pre-wrap; word-break:break-word; }
+.int-actions { display:flex; gap:0.5rem; padding-top:0.5rem; border-top:1px solid #f1f5f9; margin-top:0.7rem; }
+.int-status-card { background:#f8fafc; border:1px solid #e2e8f0; border-left:3px solid #3b82f6;
+    padding:0.6rem 0.9rem; border-radius:0 5px 5px 0; font-size:0.85rem; margin-bottom:0.8rem; }
+.int-status-card.warn { border-left-color:#f59e0b; }
+.int-status-card.fresh { border-left-color:#10b981; }
+.int-status-card .label { font-size:0.72rem; text-transform:uppercase; letter-spacing:0.04em; color:#64748b; }
+.int-status-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:0.5rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="dr-section">
+    <h2 style="margin:0;"><i class="fas fa-plug"></i> Integrazioni esterne</h2>
+    <p style="color:#64748b; font-size:0.88rem; margin:0.4rem 0;">
+        Configura le 3 connessioni del relay verso il mondo esterno: <strong>DB clienti</strong>
+        (per il customer source), <strong>API ticket</strong> (per la creazione automatica nel manager),
+        <strong>provider AI</strong> (per le regole con action <code>ai_classify</code>).
+        Tutti i campi sono modificabili senza riavvio (il backend pesca al volo dai settings).
+        I secret sono persistiti cifrati con Fernet.
+    </p>
+</section>
+
+<form method="post" action="{{ url_for('integrations.save') }}" id="intForm">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    {# ============================== CUSTOMER SOURCE ============================== #}
+    <section class="int-section">
+        <header>
+            <i class="fas fa-database" style="color:#2563eb;"></i>
+            <h3>Customer source — Database clienti</h3>
+        </header>
+        <div class="body">
+            {% if cs_health %}
+            <div class="int-status-card {% if cs_health.stale_warning %}warn{% elif cs_health.last_sync %}fresh{% endif %}">
+                <div class="int-status-grid">
+                    <div>
+                        <div class="label">Backend attivo</div>
+                        <strong>{{ cs_health.get('backend','—') }}</strong>
+                    </div>
+                    <div>
+                        <div class="label">Clienti in cache</div>
+                        <strong>{{ cs_health.get('cache_count', 0) }}</strong>
+                    </div>
+                    <div>
+                        <div class="label">Ultimo sync</div>
+                        <strong>{{ cs_health.get('last_sync') or '—' }}</strong>
+                        {% if cs_health.get('last_sync_age_seconds') is not none %}
+                            <small style="display:block; color:#64748b;">{{ cs_health.last_sync_age_seconds }}s fa</small>
+                        {% endif %}
+                    </div>
+                    <div>
+                        <div class="label">Sync thread</div>
+                        <strong>{{ '✓ attivo' if cs_health.get('sync_thread_alive') else '✗ inattivo' }}</strong>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="int-row">
+                <label>Backend
+                    <small>tipo customer source</small>
+                </label>
+                <div>
+                    <select name="customer_source__backend">
+                        {% for opt in values['customer_source.backend'].options %}
+                        <option value="{{ opt }}" {% if values['customer_source.backend'].value == opt %}selected{% endif %}>{{ opt }}</option>
+                        {% endfor %}
+                    </select>
+                    <small style="color:#64748b;">
+                        <strong>postgres</strong>: legge direttamente da PG, sync periodico.
+                        <strong>stormshield</strong>: chiama API del manager esterno.
+                    </small>
+                </div>
+            </div>
+
+            <div class="int-row">
+                <label>Host PG</label>
+                <input type="text" name="customer_source__pg__host" value="{{ values['customer_source.pg.host'].value }}" class="mono">
+            </div>
+            <div class="int-row">
+                <label>Porta PG</label>
+                <input type="number" name="customer_source__pg__port" value="{{ values['customer_source.pg.port'].value }}" min="1" max="65535">
+            </div>
+            <div class="int-row">
+                <label>User PG (default)
+                    <small>per stormshield_db</small>
+                </label>
+                <input type="text" name="customer_source__pg__user" value="{{ values['customer_source.pg.user'].value }}" class="mono">
+            </div>
+            <div class="int-row">
+                <label>Password PG (default)
+                    <small>vuoto = invariata</small>
+                </label>
+                <input type="password" name="customer_source__pg__password" placeholder="{{ values['customer_source.pg.password'].display or '(vuoto)' }}" autocomplete="new-password">
+            </div>
+            <div class="int-row">
+                <label>DB stormshield</label>
+                <input type="text" name="customer_source__pg__stormshield_db" value="{{ values['customer_source.pg.stormshield_db'].value }}" class="mono">
+            </div>
+            <div class="int-row">
+                <label>DB solution
+                    <small>contiene tabella clienti</small>
+                </label>
+                <input type="text" name="customer_source__pg__solution_db" value="{{ values['customer_source.pg.solution_db'].value }}" class="mono">
+            </div>
+            <div class="int-row">
+                <label>User solution
+                    <small>credenziali separate per accedere a clienti</small>
+                </label>
+                <input type="text" name="customer_source__pg__solution_user" value="{{ values['customer_source.pg.solution_user'].value }}" class="mono">
+            </div>
+            <div class="int-row">
+                <label>Password solution
+                    <small>vuoto = invariata</small>
+                </label>
+                <input type="password" name="customer_source__pg__solution_password" placeholder="{{ values['customer_source.pg.solution_password'].display or '(vuoto)' }}" autocomplete="new-password">
+            </div>
+            <div class="int-row">
+                <label>Sync interval (sec)
+                    <small>default 300 = 5 min</small>
+                </label>
+                <input type="number" name="customer_source__pg__sync_interval_sec" value="{{ values['customer_source.pg.sync_interval_sec'].value }}" min="30" max="86400" style="max-width:160px;">
+            </div>
+
+            <div class="int-actions">
+                <button type="button" class="dr-btn dr-btn-primary" onclick="testEndpoint('customer-source','cs-result')">
+                    <i class="fas fa-circle-check"></i> Test connessione
+                </button>
+                <button type="button" class="dr-btn" onclick="syncNow()">
+                    <i class="fas fa-rotate"></i> Sync ora
+                </button>
+            </div>
+            <div id="cs-result" class="int-test-result"></div>
+        </div>
+    </section>
+
+    {# ============================== TICKET API ============================== #}
+    <section class="int-section">
+        <header>
+            <i class="fas fa-ticket" style="color:#a855f7;"></i>
+            <h3>Ticket API — Manager esterno</h3>
+        </header>
+        <div class="body">
+            <p style="color:#64748b; font-size:0.85rem; margin:0 0 0.7rem;">
+                Endpoint dove il listener invia le richieste <code>create_ticket</code>.
+            </p>
+            <div class="int-row">
+                <label>Base URL
+                    <small>senza trailing slash</small>
+                </label>
+                <input type="text" name="ticket_api__base_url" value="{{ values['ticket_api.base_url'].value }}" class="mono">
+            </div>
+            <div class="int-row">
+                <label>API key (X-API-Key)
+                    <small>vuoto = invariata</small>
+                </label>
+                <input type="password" name="ticket_api__api_key" placeholder="{{ values['ticket_api.api_key'].display or '(vuoto)' }}" autocomplete="new-password">
+            </div>
+            <div class="int-row">
+                <label>Timeout (sec)</label>
+                <input type="number" name="ticket_api__timeout_sec" value="{{ values['ticket_api.timeout_sec'].value }}" min="1" max="300" style="max-width:120px;">
+            </div>
+            <div class="int-row">
+                <label>Max retry</label>
+                <input type="number" name="ticket_api__max_retries" value="{{ values['ticket_api.max_retries'].value }}" min="0" max="10" style="max-width:120px;">
+            </div>
+            <div class="int-row">
+                <label>Verifica TLS
+                    <small>attiva per cert ufficiale</small>
+                </label>
+                <label style="font-weight:normal;">
+                    <input type="checkbox" name="ticket_api__verify_tls" value="true" {% if values['ticket_api.verify_tls'].value in ['true','1','yes'] %}checked{% endif %}>
+                    abilita verifica certificato
+                </label>
+            </div>
+
+            <div class="int-actions">
+                <button type="button" class="dr-btn dr-btn-primary" onclick="testEndpoint('ticket-api','ta-result')">
+                    <i class="fas fa-circle-check"></i> Test API health
+                </button>
+            </div>
+            <div id="ta-result" class="int-test-result"></div>
+        </div>
+    </section>
+
+    {# ============================== AI ============================== #}
+    <section class="int-section">
+        <header>
+            <i class="fas fa-robot" style="color:#7c3aed;"></i>
+            <h3>AI provider — Anthropic Claude</h3>
+        </header>
+        <div class="body">
+            <p style="color:#64748b; font-size:0.85rem; margin:0 0 0.7rem;">
+                API key e modello default per le regole con action <code>ai_classify</code>.
+                Provider configurati in dettaglio in <a href="{{ url_for('ai.providers_list') if false else '/ai/providers' }}">AI → Provider</a>.
+            </p>
+            <div class="int-row">
+                <label>Anthropic API key
+                    <small>format sk-ant-... — vuoto = invariata</small>
+                </label>
+                <input type="password" name="ai__anthropic__api_key" placeholder="{{ values['ai.anthropic.api_key'].display or '(vuoto)' }}" autocomplete="new-password" class="mono">
+            </div>
+            <div class="int-row">
+                <label>Modello default</label>
+                <input type="text" name="ai__default_model" value="{{ values['ai.default_model'].value }}" class="mono" style="max-width:280px;">
+            </div>
+            <div class="int-row">
+                <label>Timeout (sec)
+                    <small>chiamata sync nel listener</small>
+                </label>
+                <input type="number" name="ai__timeout_sec" value="{{ values['ai.timeout_sec'].value }}" min="1" max="60" style="max-width:120px;">
+            </div>
+            <div class="int-row">
+                <label>Budget giornaliero (USD)
+                    <small>oltre questo, l'AI viene sospesa</small>
+                </label>
+                <input type="number" name="ai__daily_budget_usd" value="{{ values['ai.daily_budget_usd'].value }}" min="0" max="10000" step="0.5" style="max-width:140px;">
+            </div>
+
+            <div class="int-actions">
+                <button type="button" class="dr-btn dr-btn-primary" onclick="testEndpoint('ai','ai-result')">
+                    <i class="fas fa-circle-check"></i> Test ping Claude
+                </button>
+            </div>
+            <div id="ai-result" class="int-test-result"></div>
+        </div>
+    </section>
+
+    <div style="display:flex; gap:0.6rem; max-width:900px; padding:1rem 0;">
+        <button type="submit" class="dr-btn dr-btn-primary">
+            <i class="fas fa-save"></i> Salva tutte le modifiche
+        </button>
+        <a href="{{ url_for('integrations.index') }}" class="dr-btn">Annulla</a>
+        <span style="flex:1;"></span>
+        <small style="color:#64748b; align-self:center;">
+            ⚠ Cambio backend customer source richiede riavvio admin.
+        </small>
+    </div>
+</form>
+
+<script>
+function getCsrf() { return document.querySelector('input[name="csrf_token"]').value; }
+
+async function testEndpoint(target, resultId) {
+    const out = document.getElementById(resultId);
+    out.style.display = 'block';
+    out.className = 'int-test-result';
+    out.innerHTML = '<i class="fas fa-spinner fa-spin"></i> test in corso...';
+    try {
+        // Salva prima i campi modificati così il test usa i valori freschi
+        // (il save backend ignora i secret vuoti, quindi è safe)
+        const form = new FormData(document.getElementById('intForm'));
+        form.append('_test_only', '1');
+        await fetch('{{ url_for("integrations.save") }}', {
+            method: 'POST', body: form,
+            redirect: 'manual',
+        });
+
+        // Poi lancia il test
+        const r = await fetch('{{ url_for("integrations.index") }}test/' + target, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': getCsrf() },
+        });
+        const data = await r.json();
+        if (data.ok) {
+            out.className = 'int-test-result ok';
+            out.innerHTML = '<strong>✓ Test riuscito</strong><pre>' + JSON.stringify(data, null, 2) + '</pre>';
+        } else {
+            out.className = 'int-test-result fail';
+            out.innerHTML = '<strong>✗ Test fallito</strong><pre>' + JSON.stringify(data, null, 2) + '</pre>';
+        }
+    } catch (err) {
+        out.className = 'int-test-result fail';
+        out.innerHTML = '<strong>✗ Errore di rete</strong><pre>' + err.message + '</pre>';
+    }
+}
+
+async function syncNow() {
+    const out = document.getElementById('cs-result');
+    out.style.display = 'block';
+    out.className = 'int-test-result';
+    out.innerHTML = '<i class="fas fa-spinner fa-spin"></i> sync in corso...';
+    try {
+        const r = await fetch('{{ url_for("integrations.sync_customer_source_now") }}', {
+            method: 'POST', headers: { 'X-CSRFToken': getCsrf() },
+        });
+        const data = await r.json();
+        out.className = 'int-test-result ' + (data.success ? 'ok' : 'fail');
+        out.innerHTML = '<strong>' + (data.success ? '✓ Sync completato' : '✗ Sync fallito') + '</strong>'
+            + '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+        if (data.success) {
+            setTimeout(() => location.reload(), 2000);
+        }
+    } catch (err) {
+        out.className = 'int-test-result fail';
+        out.innerHTML = '<strong>✗ Errore</strong><pre>' + err.message + '</pre>';
+    }
+}
+</script>
+{% endblock %}
