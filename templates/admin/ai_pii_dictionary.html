@@ -13,6 +13,7 @@
 <div class="dr-card" style="background:#fff; border:1px solid #cbd5e1; border-radius:8px; padding:1rem; max-width:900px;">
     <h3 style="margin:0 0 0.5rem; color:var(--dr-primary);">Aggiungi voce</h3>
     <form method="post" style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <select name="kind" style="padding:0.4rem 0.6rem; border:1px solid #cbd5e1; border-radius:5px;">
             <option value="person">person</option>
             <option value="org">org</option>

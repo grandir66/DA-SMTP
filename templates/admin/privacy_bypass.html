@@ -58,6 +58,7 @@
     <div class="pb-card">
         <h3 style="margin:0 0 0.5rem; color:var(--dr-primary);">Aggiungi mittente in privacy bypass</h3>
         <form method="post" action="{{ url_for('privacy_bypass.quick_add_address', kind='from') }}" class="pb-quick-add">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="email" name="email" placeholder="ceo@cliente.it" required list="from-suggestions">
             <datalist id="from-suggestions">
                 {% for a in candidate_from %}<option value="{{ a.email_address }}">{% endfor %}
@@ -81,6 +82,7 @@
                 <td>
                     <form method="post" action="{{ url_for('privacy_bypass.toggle_address', kind='from', addr_id=a.id) }}"
                           onsubmit="return confirm('Rimuovere privacy bypass per {{ a.email_address }}?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <input type="hidden" name="on" value="0">
                         <input type="hidden" name="reason" value="rimosso">
                         <button class="dr-btn dr-btn-danger" style="width:auto; padding:0.2rem 0.5rem;">
@@ -103,6 +105,7 @@
     <div class="pb-card">
         <h3 style="margin:0 0 0.5rem; color:var(--dr-primary);">Aggiungi destinatario in privacy bypass</h3>
         <form method="post" action="{{ url_for('privacy_bypass.quick_add_address', kind='to') }}" class="pb-quick-add">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="email" name="email" placeholder="legale@studio.it" required list="to-suggestions">
             <datalist id="to-suggestions">
                 {% for a in candidate_to %}<option value="{{ a.email_address }}">{% endfor %}
@@ -126,6 +129,7 @@
                 <td>
                     <form method="post" action="{{ url_for('privacy_bypass.toggle_address', kind='to', addr_id=a.id) }}"
                           onsubmit="return confirm('Rimuovere privacy bypass per {{ a.email_address }}?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <input type="hidden" name="on" value="0">
                         <input type="hidden" name="reason" value="rimosso">
                         <button class="dr-btn dr-btn-danger" style="width:auto; padding:0.2rem 0.5rem;">
@@ -148,6 +152,7 @@
     <div class="pb-card">
         <h3 style="margin:0 0 0.5rem; color:var(--dr-primary);">Aggiungi dominio in privacy bypass</h3>
         <form method="post" action="{{ url_for('privacy_bypass.upsert_domain') }}" class="pb-quick-add">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="text" name="domain" placeholder="studio-legale.it" required>
             <select name="scope">
                 <option value="both">scope: entrambi (from + to)</option>
@@ -180,6 +185,7 @@
                 <td>
                     <form method="post" action="{{ url_for('privacy_bypass.delete_domain', domain_id=d.id) }}" style="display:inline;"
                           onsubmit="return confirm('Eliminare dominio {{ d.domain }} dalla privacy bypass list? Operazione tracciata.');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button class="dr-btn dr-btn-danger" style="width:auto; padding:0.2rem 0.5rem;" title="Elimina (solo superadmin)">
                             <i class="fas fa-trash"></i>
                         </button>

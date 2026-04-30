@@ -459,6 +459,30 @@ def _try_aggregate_error_cluster(storage, evt: dict) -> None:
         logger.debug("Error aggregator skip: %s", exc)
 
 
+_EMAIL_RE = __import__("re").compile(
+    r"^[a-z0-9._%+-]+@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$"
+)
+
+
+def _is_valid_email(addr: str | None) -> bool:
+    """Validation strict di indirizzo email (RFC 5321 friendly).
+
+    Difese contro:
+    - `user@domain@evil` (più @)
+    - `@domain` o `user@`  (manca local o domain)
+    - dominio senza TLD `user@host`
+    - caratteri non permessi
+    """
+    if not addr or not isinstance(addr, str):
+        return False
+    a = addr.strip().lower()
+    if a.count("@") != 1:
+        return False
+    if len(a) > 254:
+        return False
+    return bool(_EMAIL_RE.match(a))
+
+
 def _upsert_address_from_event(storage, evt: dict) -> None:
     """Aggiorna addresses_from + addresses_to dai dati dell'evento.
 
@@ -469,6 +493,10 @@ def _upsert_address_from_event(storage, evt: dict) -> None:
     """
     from_addr = (evt.get("from_address") or "").strip().lower()
     to_addr = (evt.get("to_address") or "").strip().lower()
+    if from_addr and not _is_valid_email(from_addr):
+        from_addr = ""
+    if to_addr and not _is_valid_email(to_addr):
+        to_addr = ""
     tenant_id = int(evt.get("tenant_id") or 1)
     codcli = evt.get("codice_cliente")
     try:

@@ -15,6 +15,7 @@
 
 <div style="display:grid; grid-template-columns:1fr 1.2fr; gap:1rem; max-width:1100px;">
     <form method="post" class="dr-card" style="background:#fff; border:1px solid #cbd5e1; border-radius:8px; padding:1rem;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <h3 style="margin:0 0 0.7rem; color:var(--dr-primary);">Evento</h3>
         <div class="dr-form-row">
             <label>From</label>

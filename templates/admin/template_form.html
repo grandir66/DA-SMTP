@@ -23,6 +23,7 @@
 </section>
 
 <form method="post" action="" style="max-width:900px;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 <section class="dr-card">
     <div class="tf-row">
         <label>Nome *</label>

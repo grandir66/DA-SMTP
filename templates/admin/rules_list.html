@@ -71,10 +71,12 @@
                         <a href="{{ url_for('rules.group_form_view', group_id=g.id) }}" class="dr-btn" title="Modifica gruppo"><i class="fas fa-pen"></i></a>
                         <a href="{{ url_for('rules.child_form_view', group_id=g.id) }}" class="dr-btn" title="Aggiungi figlio"><i class="fas fa-plus"></i></a>
                         <form method="post" action="{{ url_for('rules.toggle_view', rule_id=g.id) }}" style="display:inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <button class="dr-btn" title="Toggle attivo"><i class="fas fa-power-off"></i></button>
                         </form>
                         <form method="post" action="{{ url_for('rules.delete_view', rule_id=g.id) }}" style="display:inline;"
                               onsubmit="return confirm('Eliminare il gruppo «{{ g.group_label or g.name }}» e tutti i suoi figli ({{ item.children|length }})?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <button class="dr-btn dr-btn-danger" title="Elimina gruppo + figli"><i class="fas fa-trash"></i></button>
                         </form>
                     </span>
@@ -123,10 +125,12 @@
                             <a href="{{ url_for('rules.child_form_view', group_id=g.id, child_id=c.id) }}" class="dr-btn" title="Modifica"><i class="fas fa-pen"></i></a>
                             <a href="{{ url_for('rules.simulate_view', rule_id=c.id) }}" class="dr-btn" title="Simula"><i class="fas fa-vial"></i></a>
                             <form method="post" action="{{ url_for('rules.toggle_view', rule_id=c.id) }}" style="display:inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 <button class="dr-btn" title="Toggle"><i class="fas fa-power-off"></i></button>
                             </form>
                             <form method="post" action="{{ url_for('rules.delete_view', rule_id=c.id) }}" style="display:inline;"
                                   onsubmit="return confirm('Eliminare «{{ c.name }}»?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 <button class="dr-btn dr-btn-danger" title="Elimina"><i class="fas fa-trash"></i></button>
                             </form>
                         </span>
@@ -175,13 +179,16 @@
                     <a href="{{ url_for('rules.simulate_view', rule_id=r.id) }}" class="dr-btn" title="Simula"><i class="fas fa-vial"></i></a>
                     <form method="post" action="{{ url_for('rules.promote_view', rule_id=r.id) }}" style="display:inline;"
                           onsubmit="return promptPromote(event, {{ r.id }});">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button class="dr-btn" title="Promuovi a gruppo"><i class="fas fa-folder-tree"></i></button>
                     </form>
                     <form method="post" action="{{ url_for('rules.toggle_view', rule_id=r.id) }}" style="display:inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button class="dr-btn" title="Toggle"><i class="fas fa-power-off"></i></button>
                     </form>
                     <form method="post" action="{{ url_for('rules.delete_view', rule_id=r.id) }}" style="display:inline;"
                           onsubmit="return confirm('Eliminare «{{ r.name }}»?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button class="dr-btn dr-btn-danger" title="Elimina"><i class="fas fa-trash"></i></button>
                     </form>
                 </span>

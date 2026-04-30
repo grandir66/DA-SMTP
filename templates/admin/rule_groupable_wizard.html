@@ -61,6 +61,7 @@
 
     <form method="post" action="{{ url_for('rules.groupable_promote_view') }}" style="margin-top:1rem;"
           onsubmit="return confirm('Promuovere {{ cluster.size }} regole al gruppo «' + this.group_label.value + '»? Operazione atomica.');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="text" name="group_label" value="{{ cluster.suggested_label }}"
                style="padding:0.45rem 0.6rem; border:1px solid #cbd5e1; border-radius:5px; min-width:300px;"
                placeholder="Etichetta del nuovo gruppo">

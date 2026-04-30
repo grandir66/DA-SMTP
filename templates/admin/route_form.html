@@ -6,6 +6,7 @@
     <h2>{% if is_new %}Nuovo alias intercept{% else %}{{ record.local_part }}@{{ record.domain }}{% endif %}</h2>
 </section>
 <form method="post">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 <div class="dr-section">
     <div class="dr-form-row"><label>Local part *</label><input type="text" name="local_part" required value="{{ record.local_part or '' }}" placeholder="info"></div>
     <div class="dr-form-row"><label>Dominio *</label><input type="text" name="domain" required value="{{ record.domain or '' }}" placeholder="acme.it"></div>

@@ -68,6 +68,16 @@ def index():
 
     last_event_seen = events_recent[0]["received_at"] if events_recent else None
 
+    # Health critico: dispatch dead-letter recenti (ticket non creati malgrado retry)
+    dispatch_dead_24h = 0
+    try:
+        for e in events_recent:
+            pm = e.get("payload_metadata")
+            if isinstance(pm, dict) and pm.get("dispatch_dead"):
+                dispatch_dead_24h += 1
+    except Exception:  # noqa: BLE001
+        pass
+
     return render_template(
         "admin/dashboard.html",
         storage_health=storage.health(),
@@ -81,6 +91,7 @@ def index():
             "auth_codes_active": len(auth_codes),
             "occurrences_active": len(occurrences),
             "occurrences_with_ticket": occ_with_ticket,
+            "dispatch_dead_24h": dispatch_dead_24h,
         },
         stats={
             "hourly_series": hourly_series,

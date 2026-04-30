@@ -65,6 +65,7 @@
             <h3 style="margin:0 0 0.6rem; color:#047857;"><i class="fas fa-check"></i> Accetta</h3>
             <p style="font-size:0.85rem;">Crea automaticamente la regola in <code>rules</code> con <code>created_by='ai_proposal_{{ proposal.id }}'</code>.</p>
             <form method="post">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="action" value="accept">
                 <div class="dr-form-row">
                     <label>Priority</label>
@@ -84,6 +85,7 @@
             <h3 style="margin:0 0 0.6rem; color:#991b1b;"><i class="fas fa-xmark"></i> Rifiuta</h3>
             <p style="font-size:0.85rem;">La proposta viene archiviata. Il proposer NON la rigenererà (dedup via fingerprint).</p>
             <form method="post" onsubmit="return confirm('Rifiutare la proposta? Non sarà più rigenerata.');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="action" value="reject">
                 <div class="dr-form-row">
                     <label>Motivo</label>

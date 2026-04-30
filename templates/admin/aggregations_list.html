@@ -32,11 +32,13 @@
             <td style="white-space:nowrap;">
                 <a href="{{ url_for('aggregations.form_view', agg_id=a.id) }}" class="dr-btn" style="width:auto; padding:0.2rem 0.5rem;" title="Modifica"><i class="fas fa-pen"></i></a>
                 <form method="post" action="{{ url_for('aggregations.toggle_view', agg_id=a.id) }}" style="display:inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button class="dr-btn" style="width:auto; padding:0.2rem 0.5rem;" title="{% if a.enabled %}Disabilita{% else %}Attiva{% endif %}">
                         <i class="fas fa-{% if a.enabled %}toggle-on{% else %}toggle-off{% endif %}"></i>
                     </button>
                 </form>
                 <form method="post" action="{{ url_for('aggregations.duplicate_view', agg_id=a.id) }}" style="display:inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button class="dr-btn" style="width:auto; padding:0.2rem 0.5rem;" title="Duplica"><i class="fas fa-clone"></i></button>
                 </form>
                 <a href="{{ url_for('aggregations.occurrences_view') }}?aggregation_id={{ a.id }}" class="dr-btn" style="width:auto; padding:0.2rem 0.5rem;" title="Occurrences di questa regola">
@@ -44,6 +46,7 @@
                 </a>
                 <form method="post" action="{{ url_for('aggregations.delete_view', agg_id=a.id) }}" style="display:inline;"
                       onsubmit="return confirm('Eliminare {{ a.name }}? Le occurrences associate saranno cancellate.');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button class="dr-btn dr-btn-danger" style="width:auto; padding:0.2rem 0.5rem;" title="Elimina"><i class="fas fa-trash"></i></button>
                 </form>
             </td>

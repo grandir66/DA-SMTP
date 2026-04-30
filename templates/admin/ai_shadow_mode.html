@@ -83,6 +83,7 @@
         {% endif %}
         <form method="post" {% if not ready_to_go_live %}style="opacity:0.55;"{% endif %}
               onsubmit="return confirm('Confermi il passaggio a LIVE mode? Le mail saranno gestite dall\\'IA in produzione.');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="target" value="live">
             <div class="dr-form-row">
                 <label>Note (opzionale)</label>
@@ -104,6 +105,7 @@
             Utile in caso di anomalie o per re-osservare dopo aggiornamenti del prompt template.
         </p>
         <form method="post" onsubmit="return confirm('Rientrare in SHADOW mode? Le decisioni IA non saranno più applicate.');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="target" value="shadow">
             <div class="dr-form-row">
                 <label>Motivo</label>

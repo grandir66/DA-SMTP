@@ -9,6 +9,7 @@
         </a>
         <form method="post" action="{{ url_for('profiles.refresh_holidays') }}" style="display:inline;"
               onsubmit="return confirm('Ricalcolare festività italiane (anno corrente + prossimo) sui profili con auto-update?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button class="dr-btn" style="width:auto;" title="Ricalcola Pasqua + festività fisse italiane">
                 <i class="fas fa-rotate"></i> Refresh festività
             </button>
@@ -104,6 +105,7 @@
                     <a href="{{ url_for('profiles.form_view', profile_id=p.id) }}" class="dr-btn" style="width:auto; padding:0.2rem 0.5rem;" title="Modifica"><i class="fas fa-pen"></i></a>
                     <form method="post" action="{{ url_for('profiles.delete_view', profile_id=p.id) }}" style="display:inline;"
                           onsubmit="return confirm('Eliminare il profilo «{{ p.name }}»?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button class="dr-btn dr-btn-danger" style="width:auto; padding:0.2rem 0.5rem;" title="Elimina"><i class="fas fa-trash"></i></button>
                     </form>
                 </td>

@@ -21,6 +21,7 @@
             <td>
                 <a href="{{ url_for('domains.domain_form', domain_id=d.id) }}" class="dr-btn"><i class="fas fa-pen"></i></a>
                 <form method="post" action="{{ url_for('domains.domain_delete', domain_id=d.id) }}" style="display:inline;" onsubmit="return confirm('Eliminare {{ d.domain }}?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button class="dr-btn dr-btn-danger"><i class="fas fa-trash"></i></button>
                 </form>
             </td>

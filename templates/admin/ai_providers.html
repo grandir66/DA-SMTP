@@ -39,6 +39,7 @@
             {% if session.role == 'superadmin' %}
             <form method="post" action="{{ url_for('ai.provider_delete', provider_id=p.id) }}" style="display:inline;"
                   onsubmit="return confirm('Eliminare il provider {{ p.name }}?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button class="dr-btn dr-btn-danger" style="width:auto; padding:0.2rem 0.5rem;">
                     <i class="fas fa-trash"></i>
                 </button>

@@ -36,6 +36,7 @@
     </a>
     {% if session.role in ('admin', 'superadmin') %}
     <form method="post" action="{{ url_for('manual.regenerate') }}" style="display:inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button class="dr-btn" style="width:auto;" title="Rigenera il manuale">
             <i class="fas fa-rotate"></i> Rigenera
         </button>

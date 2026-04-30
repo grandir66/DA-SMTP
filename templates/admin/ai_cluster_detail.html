@@ -36,6 +36,7 @@
                 e il sistema apre un ticket aggregato (TBD nel listener).
             </p>
             <form method="post">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="action" value="update_threshold">
                 <div class="dr-form-row">
                     <label>Threshold</label>
@@ -55,6 +56,7 @@
             <h3 style="margin:0 0 0.6rem; color:var(--dr-primary);"><i class="fas fa-flag-checkered"></i> Azioni manuali</h3>
             {% if cluster.state != 'recovered' %}
             <form method="post" onsubmit="return confirm('Marcare il cluster come recovered? Eventuali ticket aperti restano ma il cluster non aggregherà più.');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="action" value="force_recovered">
                 <button type="submit" class="dr-btn" style="width:auto; background:#10b981; color:#fff;">
                     <i class="fas fa-check"></i> Marca recovered
@@ -62,6 +64,7 @@
             </form>
             {% endif %}
             <form method="post" style="margin-top:0.5rem;" onsubmit="return confirm('Archiviare definitivamente il cluster?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="action" value="archive">
                 <button type="submit" class="dr-btn dr-btn-danger" style="width:auto;">
                     <i class="fas fa-archive"></i> Archivia

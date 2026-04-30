@@ -9,6 +9,7 @@
     </p>
 </section>
 <form method="post">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 <div class="dr-section">
     {% for s in settings %}
     <div class="dr-form-row">

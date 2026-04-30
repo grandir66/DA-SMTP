@@ -22,6 +22,7 @@
         </form>
         <form method="post" action="{{ url_for('aggregations.occurrences_reset_all') }}"
               onsubmit="return confirm('Resettare TUTTE le occurrences{% if filter_aggregation_id %} di questa regola{% endif %}?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             {% if filter_aggregation_id %}
             <input type="hidden" name="aggregation_id" value="{{ filter_aggregation_id }}">
             {% endif %}
@@ -70,12 +71,14 @@
             <td style="white-space:nowrap;">
                 <form method="post" action="{{ url_for('aggregations.occurrence_reset', occ_id=o.id) }}" style="display:inline;"
                       onsubmit="return confirm('Resettare counter?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button class="dr-btn" style="width:auto; padding:0.2rem 0.5rem;" title="Reset counter">
                         <i class="fas fa-rotate-left"></i>
                     </button>
                 </form>
                 <form method="post" action="{{ url_for('aggregations.occurrence_delete', occ_id=o.id) }}" style="display:inline;"
                       onsubmit="return confirm('Eliminare la riga?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button class="dr-btn dr-btn-danger" style="width:auto; padding:0.2rem 0.5rem;" title="Elimina">
                         <i class="fas fa-trash"></i>
                     </button>

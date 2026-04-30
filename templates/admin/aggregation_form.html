@@ -41,6 +41,7 @@
 </section>
 
 <form method="post" action="" id="aggForm">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
 <details class="agg-card" open>
     <summary><i class="fas fa-tag"></i> 1. Identificazione <small>nome, descrizione, stato</small></summary>

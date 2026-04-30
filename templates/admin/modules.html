@@ -44,6 +44,7 @@
                 {% if not m.installed %}
                 <form method="post" action="{{ url_for('secrets_modules.module_install', code=m.code) }}" style="display:inline;"
                       {% if m.depends_on and not m.depends_satisfied %}onsubmit="return confirm('La dipendenza {{ m.depends_on }} non è installata. Procedere comunque?');"{% else %}onsubmit="return confirm('Installare il modulo «{{ m.code }}» (~{{ m.size_mb }} MB)? Operazione registrata in audit log.');"{% endif %}>
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button class="dr-btn dr-btn-primary" style="width:auto; padding:0.2rem 0.6rem;">
                         <i class="fas fa-download"></i> Installa
                     </button>
@@ -51,6 +52,7 @@
                 {% else %}
                 <form method="post" action="{{ url_for('secrets_modules.module_install', code=m.code) }}" style="display:inline;"
                       onsubmit="return confirm('Aggiornare il modulo «{{ m.code }}»? Operazione registrata in audit log.');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button class="dr-btn" style="width:auto; padding:0.2rem 0.5rem;" title="Aggiorna alla versione più recente">
                         <i class="fas fa-arrow-up"></i>
                     </button>
@@ -58,6 +60,7 @@
                 {% if m.optional %}
                 <form method="post" action="{{ url_for('secrets_modules.module_uninstall', code=m.code) }}" style="display:inline;"
                       onsubmit="return confirm('Disinstallare il modulo «{{ m.code }}»? Le feature collegate smetteranno di funzionare.');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button class="dr-btn dr-btn-danger" style="width:auto; padding:0.2rem 0.5rem;">
                         <i class="fas fa-trash"></i>
                     </button>

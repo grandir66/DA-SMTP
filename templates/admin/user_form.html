@@ -27,6 +27,7 @@
 </section>
 
 <form method="post" action="" style="max-width:800px;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 <section class="dr-card">
     <div class="uf-row">
         <label>Username *</label>
@@ -99,6 +100,7 @@
         {% if not is_new and not is_self %}
         <form method="post" action="{{ url_for('users.delete_view', user_id=record.id) }}" style="display:inline;"
               onsubmit="return confirm('Eliminare l\'utente {{ record.username }}?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button class="dr-btn dr-btn-danger" style="width:auto;"><i class="fas fa-trash"></i> Elimina</button>
         </form>
         {% endif %}

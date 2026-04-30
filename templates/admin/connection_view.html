@@ -15,6 +15,7 @@
     <p>Chiave da inserire come <code>STORMSHIELD_RELAY_API_KEY</code> (o <code>DOMARC_RELAY_API_KEY</code>) nel <code>secrets.env</code> del listener:</p>
     <pre style="background:#0f172a; color:#e2e8f0; padding:0.9rem; border-radius:6px; word-break:break-all;">{{ api_key }}</pre>
     <form method="post" action="{{ url_for('connection.regen_key') }}" onsubmit="return confirm('Rigenerare la chiave? Il listener perderà l\'autenticazione finché non aggiorni il suo secrets.env.');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button class="dr-btn dr-btn-danger" style="width:auto;"><i class="fas fa-rotate"></i> Rigenera chiave</button>
     </form>
 </div>

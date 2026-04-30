@@ -46,6 +46,7 @@
                 <a href="{{ url_for('templates.form_view', template_id=t.id) }}" class="dr-btn" style="width:auto; padding:0.2rem 0.5rem;" title="Modifica"><i class="fas fa-pen"></i></a>
                 <form method="post" action="{{ url_for('templates.delete_view', template_id=t.id) }}" style="display:inline;"
                       onsubmit="return confirm('Eliminare {{ t.name }}?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button class="dr-btn dr-btn-danger" style="width:auto; padding:0.2rem 0.5rem;" title="Elimina"><i class="fas fa-trash"></i></button>
                 </form>
             </td>

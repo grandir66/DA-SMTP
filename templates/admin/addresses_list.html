@@ -13,12 +13,32 @@
 {% endblock %}
 
 {% block content %}
+<section class="dr-section" style="margin-bottom:0.5rem;">
+    {# Preserva i filtri q+domain quando si naviga tra i due tab #}
+    {% set qs = {'q': search, 'domain': domain_filter} %}
+    <div style="display:flex; gap:0; border-bottom:1px solid #cbd5e1;">
+        <a href="{{ url_for('addresses.from_list', **qs) }}"
+           style="padding:0.55rem 1rem; text-decoration:none; font-weight:600; font-size:0.9rem;
+                  border-bottom:3px solid {% if kind=='from' %}#2563eb{% else %}transparent{% endif %};
+                  color:{% if kind=='from' %}#1e3a8a{% else %}#64748b{% endif %};">
+            <i class="fas fa-paper-plane"></i> Mittenti
+        </a>
+        <a href="{{ url_for('addresses.to_list', **qs) }}"
+           style="padding:0.55rem 1rem; text-decoration:none; font-weight:600; font-size:0.9rem;
+                  border-bottom:3px solid {% if kind=='to' %}#2563eb{% else %}transparent{% endif %};
+                  color:{% if kind=='to' %}#1e3a8a{% else %}#64748b{% endif %};">
+            <i class="fas fa-envelope-open"></i> Destinatari
+        </a>
+    </div>
+</section>
+
 <section class="dr-section">
     <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
         <h2 style="margin:0;"><i class="fas fa-{% if kind=='from' %}paper-plane{% else %}envelope-open{% endif %}"></i> {{ title }} ({{ rows|length }})</h2>
         {% if kind == 'from' %}
         <form method="post" action="{{ url_for('addresses.auto_match_codcli') }}" style="display:inline;"
               onsubmit="return confirm('Esegui auto-match codcli su tutti i mittenti senza codcli (cerca i domini nei clienti)?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button class="dr-btn dr-btn-primary" style="width:auto;" title="Cerca i domini dei mittenti nei clienti per popolare codcli">
                 <i class="fas fa-link"></i> Auto-match codcli
             </button>
@@ -93,6 +113,7 @@
             <td><small class="mono">{{ a.domain or '—' }}</small></td>
             <td>
                 <form method="post" action="{{ url_for('addresses.address_set_codcli', kind=kind, addr_id=a.id) }}" style="display:inline-flex; gap:0.3rem;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="text" name="codice_cliente" value="{{ a.codice_cliente or '' }}" style="width:90px; padding:0.2rem 0.4rem; font-size:0.82rem;">
                     <button class="dr-btn" style="padding:0.2rem 0.5rem;" title="Salva"><i class="fas fa-save"></i></button>
                 </form>
@@ -118,6 +139,7 @@
                 </a>
                 <form method="post" action="{{ url_for('addresses.address_delete', kind=kind, addr_id=a.id) }}" style="display:inline;"
                       onsubmit="return confirm('Eliminare?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button class="dr-btn dr-btn-danger" style="width:auto; padding:0.2rem 0.5rem;" title="Elimina"><i class="fas fa-trash"></i></button>
                 </form>
             </td>

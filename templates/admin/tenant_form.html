@@ -6,6 +6,7 @@
     <h2>{% if is_new %}<i class="fas fa-plus-circle"></i> Nuovo tenant{% else %}<i class="fas fa-pen"></i> {{ record.ragione_sociale }}{% if is_default %} (default){% endif %}{% endif %}</h2>
 </section>
 <form method="post" style="max-width:800px;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 <div class="dr-section">
     <div class="dr-form-row">
         <label>Codice *</label>

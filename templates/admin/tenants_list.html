@@ -38,6 +38,7 @@
                 {% if t.id != 1 %}
                 <form method="post" action="{{ url_for('tenants.delete_view', tenant_id=t.id) }}" style="display:inline;"
                       onsubmit="return confirm('Eliminare {{ t.codice }}?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button class="dr-btn dr-btn-danger"><i class="fas fa-trash"></i></button>
                 </form>
                 {% endif %}

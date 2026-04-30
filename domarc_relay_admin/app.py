@@ -39,6 +39,21 @@ def create_app(config: AppConfig | None = None, *, init_db: bool = True) -> Flas
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
     app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=8)
     app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024  # 10 MB upload limit (allegati template)
+    # CSRF Protection (Flask-WTF). Token validato su ogni POST/PUT/DELETE delle
+    # blueprint UI (form HTML), esentiamo solo le route API protette da X-API-Key
+    # (vedi /api/v1/relay/*). I form HTML devono includere `{{ csrf_token() }}`.
+    app.config["WTF_CSRF_TIME_LIMIT"] = 8 * 3600  # 8h, allineato a session lifetime
+    app.config["WTF_CSRF_SSL_STRICT"] = False  # behind reverse proxy
+    try:
+        from flask_wtf.csrf import CSRFProtect
+        csrf = CSRFProtect(app)
+        # API endpoints sono autenticati via X-API-Key, non hanno cookie session.
+        # Esenzione totale del blueprint api.
+        from .routes.api import api_bp as _api_bp
+        csrf.exempt(_api_bp)
+        app.extensions["domarc_csrf"] = csrf
+    except Exception as exc:  # noqa: BLE001
+        logging.warning("Flask-WTF CSRF non disponibile: %s — running senza protection", exc)
 
     # Storage init (può applicare migrazioni se init_db=True)
     from .storage import get_storage

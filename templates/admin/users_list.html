@@ -70,6 +70,7 @@
                 {% if u.id != session.user_id %}
                 <form method="post" action="{{ url_for('users.delete_view', user_id=u.id) }}" style="display:inline;"
                       onsubmit="return confirm('Eliminare l\'utente {{ u.username }}?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button class="dr-btn dr-btn-danger" style="width:auto; padding:0.2rem 0.5rem;" title="Elimina">
                         <i class="fas fa-trash"></i>
                     </button>

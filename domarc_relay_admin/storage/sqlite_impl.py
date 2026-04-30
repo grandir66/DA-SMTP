@@ -932,7 +932,14 @@ class SqliteStorage(Storage):
                         subject, message_id, codice_cliente, action_taken, rule_id, ticket_id,
                         payload_metadata, body_text, body_html, body_expires_at)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                   ON CONFLICT (relay_event_uuid) DO NOTHING""",
+                   ON CONFLICT (relay_event_uuid) DO UPDATE SET
+                       -- Re-flush dal listener (es. quando dispatch_dead viene aggiornato):
+                       -- merge dei campi che il listener arricchisce a posteriori. Body
+                       -- e indirizzi NON vengono sovrascritti (sono dati immutabili
+                       -- dell'evento originale).
+                       payload_metadata = excluded.payload_metadata,
+                       action_taken = COALESCE(excluded.action_taken, events.action_taken),
+                       ticket_id = COALESCE(excluded.ticket_id, events.ticket_id)""",
                 (
                     int(data.get("tenant_id", 1)),
                     str(data["relay_event_uuid"]),

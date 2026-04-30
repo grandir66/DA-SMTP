@@ -37,6 +37,7 @@
                 <i class="fas fa-pen"></i>
             </a>
             <form method="post" action="{{ url_for('secrets_modules.api_key_toggle', key_id=k.id) }}" style="display:inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button class="dr-btn" style="width:auto; padding:0.2rem 0.5rem;" title="Toggle">
                     <i class="fas fa-power-off"></i>
                 </button>
@@ -44,6 +45,7 @@
             {% if session.role == 'superadmin' %}
             <form method="post" action="{{ url_for('secrets_modules.api_key_delete', key_id=k.id) }}" style="display:inline;"
                   onsubmit="return confirm('Eliminare la chiave «{{ k.name }}»? Operazione irreversibile.');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button class="dr-btn dr-btn-danger" style="width:auto; padding:0.2rem 0.5rem;">
                     <i class="fas fa-trash"></i>
                 </button>

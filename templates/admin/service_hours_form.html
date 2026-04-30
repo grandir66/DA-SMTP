@@ -43,6 +43,7 @@
 </section>
 
 <form method="post" action="" style="max-width:1100px;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 <section class="dr-card">
     <div class="sh-row">
         <label>Codice cliente *</label>

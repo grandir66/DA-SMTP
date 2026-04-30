@@ -25,6 +25,7 @@
         {% endif %}
         {% endwith %}
         <form method="post" class="dr-login-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <label>
                 <span><i class="fas fa-user"></i> Username</span>
                 <input type="text" name="username" required autofocus autocomplete="username">

@@ -1,0 +1,36 @@
+{# Sub-nav per la sezione Operazioni — 4 viste correlate del flusso mail.
+   Da includere all'inizio del block content di:
+   - events_list.html
+   - activity_live.html
+   - queue_index.html
+   - routes_list.html
+#}
+<section class="dr-section" style="margin-bottom:0.5rem;">
+    {% set ep_now = request.endpoint or '' %}
+    <div style="display:flex; gap:0; border-bottom:1px solid #cbd5e1; flex-wrap:wrap;">
+        <a href="{{ url_for('events.list_view') }}"
+           style="padding:0.55rem 1rem; text-decoration:none; font-weight:600; font-size:0.9rem;
+                  border-bottom:3px solid {% if ep_now.startswith('events') %}#2563eb{% else %}transparent{% endif %};
+                  color:{% if ep_now.startswith('events') %}#1e3a8a{% else %}#64748b{% endif %};">
+            <i class="fas fa-stream"></i> Storico eventi
+        </a>
+        <a href="{{ url_for('activity.view') }}"
+           style="padding:0.55rem 1rem; text-decoration:none; font-weight:600; font-size:0.9rem;
+                  border-bottom:3px solid {% if ep_now.startswith('activity') %}#10b981{% else %}transparent{% endif %};
+                  color:{% if ep_now.startswith('activity') %}#047857{% else %}#64748b{% endif %};">
+            <i class="fas fa-bolt"></i> Live feed
+        </a>
+        <a href="{{ url_for('queue.index') }}"
+           style="padding:0.55rem 1rem; text-decoration:none; font-weight:600; font-size:0.9rem;
+                  border-bottom:3px solid {% if ep_now.startswith('queue') %}#d97706{% else %}transparent{% endif %};
+                  color:{% if ep_now.startswith('queue') %}#92400e{% else %}#64748b{% endif %};">
+            <i class="fas fa-conveyor-belt"></i> Code & Quarantena
+        </a>
+        <a href="{{ url_for('routes.routes_list') }}"
+           style="padding:0.55rem 1rem; text-decoration:none; font-weight:600; font-size:0.9rem;
+                  border-bottom:3px solid {% if ep_now.startswith('routes') %}#a855f7{% else %}transparent{% endif %};
+                  color:{% if ep_now.startswith('routes') %}#6b21a8{% else %}#64748b{% endif %};">
+            <i class="fas fa-route"></i> Mail intercettate
+        </a>
+    </div>
+</section>
