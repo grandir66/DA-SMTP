@@ -15,9 +15,9 @@ if ! ufw status | grep -q "Status: active"; then
     ufw allow 22/tcp comment 'SSH'
 fi
 
-ufw allow 80/tcp comment 'HTTP (Let'\''s Encrypt + redirect)' >/dev/null
-ufw allow ${ADMIN_PORT:-443}/tcp comment 'HTTPS admin' >/dev/null
-ufw allow ${SMTP_PORT:-25}/tcp comment 'SMTP listener' >/dev/null
+ufw allow 80/tcp comment "HTTP redirect" >/dev/null
+ufw allow ${ADMIN_PORT:-443}/tcp comment "HTTPS admin" >/dev/null
+ufw allow ${SMTP_PORT:-25}/tcp comment "SMTP listener" >/dev/null
 
 # Opzionale: se admin port diverso da 443, aprire anche 443 per redirect HTTPS standard
 if [[ "${ADMIN_PORT:-443}" != "443" ]]; then
