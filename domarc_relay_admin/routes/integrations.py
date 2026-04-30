@@ -53,6 +53,8 @@ PARAMS = {
     "customer_source.pg.solution_user":  ("customer_source", "text", "solution_user"),
     "customer_source.pg.solution_password": ("customer_source", "secret", ""),
     "customer_source.pg.sync_interval_sec": ("customer_source", "int", "300"),
+    "customer_source.pg.sslmode":           ("customer_source", "select", "prefer",
+                                                ["disable", "allow", "prefer", "require", "verify-ca", "verify-full"]),
 
     # Ticket API
     "ticket_api.base_url":               ("ticket_api", "text", "https://manager.domarc.it"),
@@ -60,6 +62,8 @@ PARAMS = {
     "ticket_api.timeout_sec":            ("ticket_api", "int", "10"),
     "ticket_api.max_retries":            ("ticket_api", "int", "3"),
     "ticket_api.verify_tls":             ("ticket_api", "bool", "false"),
+    "ticket_api.health_path":            ("ticket_api", "text", "/api/v1/tickets/?limit=1"),
+    "ticket_api.create_path":            ("ticket_api", "text", "/api/v1/tickets/"),
 
     # AI provider
     "ai.anthropic.api_key":              ("ai", "secret", ""),
@@ -202,6 +206,7 @@ def test_customer_source():
     solution_db = _read_param("customer_source.pg.solution_db")
     solution_user = _read_param("customer_source.pg.solution_user") or user
     solution_password = _read_param("customer_source.pg.solution_password") or password
+    sslmode = _read_param("customer_source.pg.sslmode") or "prefer"
 
     results = {"stormshield": None, "solution": None}
 
@@ -209,7 +214,8 @@ def test_customer_source():
     try:
         t0 = time.monotonic()
         conn = psycopg2.connect(host=host, port=port, database=stormshield_db,
-                                  user=user, password=password, connect_timeout=5)
+                                  user=user, password=password,
+                                  sslmode=sslmode, connect_timeout=5)
         cur = conn.cursor()
         cur.execute("SELECT current_database(), current_user, "
                      "(SELECT COUNT(*) FROM customer_settings) AS n_settings, "
@@ -229,7 +235,7 @@ def test_customer_source():
         t0 = time.monotonic()
         conn = psycopg2.connect(host=host, port=port, database=solution_db,
                                   user=solution_user, password=solution_password,
-                                  connect_timeout=5)
+                                  sslmode=sslmode, connect_timeout=5)
         cur = conn.cursor()
         cur.execute("SELECT current_database(), current_user, "
                      "(SELECT COUNT(*) FROM clienti WHERE COALESCE(aescluso,FALSE)=FALSE)")
@@ -259,23 +265,46 @@ def test_ticket_api():
     api_key = _read_param("ticket_api.api_key")
     timeout = int(_read_param("ticket_api.timeout_sec") or 10)
     verify = (_read_param("ticket_api.verify_tls") or "false").lower() in ("true", "1", "yes")
+    health_path = _read_param("ticket_api.health_path") or "/api/v1/tickets/?limit=1"
 
     if not base_url or not api_key:
-        return jsonify({"ok": False, "error": "base_url o api_key vuoti"}), 400
-
-    try:
-        t0 = time.monotonic()
-        r = httpx.get(f"{base_url}/api/v1/health",
-                       headers={"X-API-Key": api_key},
-                       verify=verify, timeout=timeout)
         return jsonify({
-            "ok": 200 <= r.status_code < 300,
-            "status_code": r.status_code,
-            "response": r.text[:300],
-            "duration_ms": int((time.monotonic() - t0) * 1000),
-        })
-    except Exception as exc:  # noqa: BLE001
-        return jsonify({"ok": False, "error": str(exc)[:300]}), 500
+            "ok": False,
+            "info": "Compila base_url + api_key del manager esterno e clicca 'Salva tutte le modifiche' prima di testare.",
+            "missing": [k for k, v in {"base_url": base_url, "api_key": api_key}.items() if not v],
+        }), 400
+
+    # Provo prima health_path configurato, poi fallback a path tipici
+    candidates = [health_path]
+    if health_path != "/api/v1/tickets/?limit=1":
+        candidates.append("/api/v1/tickets/?limit=1")
+    if health_path != "/api/v1/health":
+        candidates.append("/api/v1/health")
+
+    last = None
+    for path in candidates:
+        try:
+            t0 = time.monotonic()
+            r = httpx.get(f"{base_url}{path}",
+                           headers={"X-API-Key": api_key},
+                           verify=verify, timeout=timeout)
+            last = {
+                "tried_path": path,
+                "status_code": r.status_code,
+                "response": r.text[:300],
+                "duration_ms": int((time.monotonic() - t0) * 1000),
+            }
+            if 200 <= r.status_code < 300:
+                last["ok"] = True
+                return jsonify(last)
+        except Exception as exc:  # noqa: BLE001
+            last = {"tried_path": path, "error": str(exc)[:300]}
+    # Tutti i tentativi hanno fallito
+    last["ok"] = False
+    last["all_paths_tried"] = candidates
+    last["hint"] = ("Verifica che il path sia corretto (campo 'Health path'). "
+                    "Path standard del manager Domarc: /api/v1/tickets/?limit=1")
+    return jsonify(last)
 
 
 @integrations_bp.route("/test/ai", methods=["POST"])
@@ -286,8 +315,16 @@ def test_ai():
     model = _read_param("ai.default_model") or "claude-haiku-4-5"
     timeout = int(_read_param("ai.timeout_sec") or 5)
 
-    if not api_key or not api_key.startswith("sk-ant-"):
-        return jsonify({"ok": False, "error": "api_key vuota o non valida (atteso prefix sk-ant-)"}), 400
+    if not api_key:
+        return jsonify({
+            "ok": False,
+            "info": "Compila la API key Anthropic (formato sk-ant-...) e clicca 'Salva' prima di testare.",
+        }), 400
+    if not api_key.startswith("sk-ant-"):
+        return jsonify({
+            "ok": False,
+            "error": f"api_key non valida (deve iniziare con 'sk-ant-', ricevuto prefix '{api_key[:8]}...')",
+        }), 400
 
     try:
         import anthropic

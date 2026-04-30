@@ -137,6 +137,16 @@
                 <input type="password" name="customer_source__pg__solution_password" placeholder="{{ values['customer_source.pg.solution_password'].display or '(vuoto)' }}" autocomplete="new-password">
             </div>
             <div class="int-row">
+                <label>SSL mode
+                    <small><strong>prefer</strong> consigliato; <strong>disable</strong> per server interni senza TLS</small>
+                </label>
+                <select name="customer_source__pg__sslmode" style="max-width:200px;">
+                    {% for opt in values['customer_source.pg.sslmode'].options %}
+                    <option value="{{ opt }}" {% if values['customer_source.pg.sslmode'].value == opt %}selected{% endif %}>{{ opt }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="int-row">
                 <label>Sync interval (sec)
                     <small>default 300 = 5 min</small>
                 </label>
@@ -193,6 +203,18 @@
                     <input type="checkbox" name="ticket_api__verify_tls" value="true" {% if values['ticket_api.verify_tls'].value in ['true','1','yes'] %}checked{% endif %}>
                     abilita verifica certificato
                 </label>
+            </div>
+            <div class="int-row">
+                <label>Health path
+                    <small>endpoint usato dal test (default <code>/api/v1/tickets/?limit=1</code>)</small>
+                </label>
+                <input type="text" name="ticket_api__health_path" value="{{ values['ticket_api.health_path'].value }}" class="mono" style="max-width:380px;">
+            </div>
+            <div class="int-row">
+                <label>Create path
+                    <small>endpoint usato dal listener per <code>create_ticket</code></small>
+                </label>
+                <input type="text" name="ticket_api__create_path" value="{{ values['ticket_api.create_path'].value }}" class="mono" style="max-width:380px;">
             </div>
 
             <div class="int-actions">
@@ -268,28 +290,25 @@ async function testEndpoint(target, resultId) {
     out.className = 'int-test-result';
     out.innerHTML = '<i class="fas fa-spinner fa-spin"></i> test in corso...';
     try {
-        // Salva prima i campi modificati così il test usa i valori freschi
-        // (il save backend ignora i secret vuoti, quindi è safe)
+        // Salva PRIMA i valori del form (i secret vuoti vengono ignorati,
+        // ma i secret valorizzati ora vengono salvati e usati dal test).
         const form = new FormData(document.getElementById('intForm'));
-        form.append('_test_only', '1');
         await fetch('{{ url_for("integrations.save") }}', {
             method: 'POST', body: form,
             redirect: 'manual',
         });
 
-        // Poi lancia il test
+        // Poi lancia il test (legge dai settings appena salvati).
         const r = await fetch('{{ url_for("integrations.index") }}test/' + target, {
             method: 'POST',
             headers: { 'X-CSRFToken': getCsrf() },
         });
         const data = await r.json();
-        if (data.ok) {
-            out.className = 'int-test-result ok';
-            out.innerHTML = '<strong>✓ Test riuscito</strong><pre>' + JSON.stringify(data, null, 2) + '</pre>';
-        } else {
-            out.className = 'int-test-result fail';
-            out.innerHTML = '<strong>✗ Test fallito</strong><pre>' + JSON.stringify(data, null, 2) + '</pre>';
-        }
+        const isOk = data.ok === true;
+        const isInfo = data.info && !data.error;  // missing fields → info, non error
+        out.className = 'int-test-result ' + (isOk ? 'ok' : (isInfo ? 'fail' : 'fail'));
+        const title = isOk ? '✓ Test riuscito' : (isInfo ? 'ℹ Configurazione incompleta' : '✗ Test fallito');
+        out.innerHTML = '<strong>' + title + '</strong><pre>' + JSON.stringify(data, null, 2) + '</pre>';
     } catch (err) {
         out.className = 'int-test-result fail';
         out.innerHTML = '<strong>✗ Errore di rete</strong><pre>' + err.message + '</pre>';

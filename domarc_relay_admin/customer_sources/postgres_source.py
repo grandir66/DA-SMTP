@@ -54,6 +54,7 @@ class PgConfig:
     solution_db: str = "solution"
     solution_user: str = ""
     solution_password: str = ""
+    sslmode: str = "prefer"
     sync_interval_sec: int = 300
 
     @classmethod
@@ -67,6 +68,7 @@ class PgConfig:
             solution_db=os.environ.get("GESTIONALE_PG_SOLUTION_DB", "solution"),
             solution_user=os.environ.get("GESTIONALE_PG_SOLUTION_USER", ""),
             solution_password=os.environ.get("GESTIONALE_PG_SOLUTION_PASSWORD", ""),
+            sslmode=os.environ.get("GESTIONALE_PG_SSLMODE", "prefer"),
             sync_interval_sec=int(os.environ.get("GESTIONALE_PG_SYNC_INTERVAL_SEC", "300")),
         )
 
@@ -87,6 +89,7 @@ class PgConfig:
                 solution_db=_get("customer_source.pg.solution_db", env.solution_db),
                 solution_user=_get("customer_source.pg.solution_user", env.solution_user),
                 solution_password=_get("customer_source.pg.solution_password", env.solution_password),
+                sslmode=_get("customer_source.pg.sslmode", env.sslmode),
                 sync_interval_sec=int(_get("customer_source.pg.sync_interval_sec", str(env.sync_interval_sec))),
             )
         except Exception:  # noqa: BLE001
@@ -372,7 +375,9 @@ class PostgresCustomerSource(CustomerSource):
             password = self._cfg.password
         return psycopg2.connect(
             host=self._cfg.host, port=self._cfg.port, database=database,
-            user=user, password=password, connect_timeout=10,
+            user=user, password=password,
+            sslmode=self._cfg.sslmode or "prefer",
+            connect_timeout=10,
         )
 
     def _load_customer_settings(self, psycopg2) -> dict[str, dict[str, Any]]:
