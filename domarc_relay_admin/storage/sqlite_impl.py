@@ -1255,28 +1255,43 @@ class SqliteStorage(Storage):
 
     def issue_auth_code(self, *, tenant_id: int, codice_cliente: str | None,
                         rule_id: int | None, ttl_hours: int,
-                        note: str | None = None) -> dict[str, Any]:
+                        note: str | None = None,
+                        event_uuid: str | None = None) -> dict[str, Any]:
+        """Emette codice MONOUSO. Cap TTL difensivo a 24h se la setting
+        `h24.code_one_shot_ttl_hours` lo prevede (priority piano H24).
+
+        `event_uuid`: opzionale, link all'evento originale per threading
+        della conversation quando il codice viene poi usato (Fase H24-C).
+        """
         import secrets
-        import string
         from datetime import datetime as _dt, timedelta as _td
-        ttl = max(1, min(int(ttl_hours), 720))
+        # Cap TTL difensivo: prendi min(richiesto, setting H24)
+        h24_cap = self.get_setting("h24.code_one_shot_ttl_hours")
+        try:
+            cap_h = int(h24_cap) if h24_cap else 24
+        except (TypeError, ValueError):
+            cap_h = 24
+        ttl = max(1, min(int(ttl_hours), cap_h, 720))
         valid_until = (_dt.utcnow() + _td(hours=ttl)).strftime("%Y-%m-%d %H:%M:%S")
-        alphabet = string.ascii_uppercase + string.digits
+        alphabet = self._h24_readable_alphabet()
         with self.transaction() as conn:
             for _ in range(8):
                 code = "".join(secrets.choice(alphabet) for _ in range(6))
                 try:
                     cur = conn.execute(
                         """INSERT INTO authorization_codes
-                               (tenant_id, code, codice_cliente, rule_id, valid_until, note)
-                           VALUES (?, ?, ?, ?, ?, ?)""",
-                        (int(tenant_id), code, codice_cliente, rule_id, valid_until, note),
+                               (tenant_id, code, codice_cliente, rule_id,
+                                valid_until, note, event_uuid)
+                           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                        (int(tenant_id), code, codice_cliente, rule_id,
+                         valid_until, note, event_uuid),
                     )
                     return {
                         "ok": True,
                         "id": int(cur.lastrowid or 0),
                         "code": code,
                         "valid_until": valid_until,
+                        "ttl_hours": ttl,
                     }
                 except sqlite3.IntegrityError:
                     continue
@@ -2604,6 +2619,338 @@ class SqliteStorage(Storage):
                     WHERE m.tenant_id = ? AND g.enabled = 1""",
                 (int(tenant_id),),
             ).fetchall()]
+
+    # ============================================================= H24 =====
+    # Codici autorizzazione intervento urgente a pagamento.
+    # - Codici MONOUSO: tabella `authorization_codes` (esistente, esteso con
+    #   event_uuid in migration 022). Atomic consume via UPDATE…RETURNING.
+    # - Codici PERMANENTI: tabella `customer_h24_codes` con audit
+    #   `customer_h24_codes_usage`. Validazione atomica race-safe.
+    # - Mailbox di rientro multi-brand: `smtp_relay_h24_targets` (lookup
+    #   per dominio mittente).
+
+    # --- Alfabeto + helper generazione ---------------------------------------
+    @staticmethod
+    def _h24_readable_alphabet() -> str:
+        """Alfabeto leggibile senza ambiguità I/O/0/1 (32 caratteri)."""
+        return "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+
+    # --- Atomic consume codici monouso ---------------------------------------
+    def validate_oneshot_code(self, code: str, *,
+                               consume: bool = False,
+                               used_by: str | None = None,
+                               tenant_id: int = 1) -> dict[str, Any]:
+        """Valida (e opzionalmente consuma atomicamente) un codice monouso.
+
+        Ritorna dict con:
+          - valid: bool
+          - reason: 'ok' | 'not_found' | 'already_used' | 'expired'
+          - code_info: row dict se valido, altrimenti minimal info
+        """
+        from datetime import datetime as _dt
+        candidate = (code or "").strip().upper()
+        if not candidate:
+            return {"valid": False, "reason": "not_found", "code_info": None}
+        now_str = _dt.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+        with self.transaction() as conn:
+            row = conn.execute(
+                "SELECT * FROM authorization_codes WHERE code = ? AND tenant_id = ?",
+                (candidate, int(tenant_id)),
+            ).fetchone()
+            if row is None:
+                return {"valid": False, "reason": "not_found", "code_info": None}
+            d = dict(row)
+            if d.get("used_at"):
+                return {"valid": False, "reason": "already_used", "code_info": d}
+            if d.get("valid_until") and d["valid_until"] < now_str:
+                return {"valid": False, "reason": "expired", "code_info": d}
+            if consume:
+                # Consume atomico: protegge da double-spend race
+                cur = conn.execute(
+                    """UPDATE authorization_codes
+                          SET used_at = datetime('now'), used_by = ?
+                        WHERE id = ?
+                          AND used_at IS NULL
+                          AND valid_until > datetime('now')""",
+                    (used_by or "h24", d["id"]),
+                )
+                if cur.rowcount == 0:
+                    # Race: qualcun altro l'ha consumato tra SELECT e UPDATE
+                    return {"valid": False, "reason": "already_used", "code_info": d}
+                d["used_at"] = now_str
+                d["used_by"] = used_by
+            return {"valid": True, "reason": "ok", "code_info": d}
+
+    def invalidate_oneshot_code(self, code: str, *,
+                                  reason: str = "aborted",
+                                  tenant_id: int = 1) -> bool:
+        """Marca un codice come consumato senza apertura ticket (es. invio
+        auto-reply fallito): evita che resti utilizzabile."""
+        with self.transaction() as conn:
+            cur = conn.execute(
+                """UPDATE authorization_codes
+                      SET used_at = datetime('now'), used_by = ?
+                    WHERE code = ? AND tenant_id = ? AND used_at IS NULL""",
+                (f"invalidated:{reason}"[:100], code, int(tenant_id)),
+            )
+            return cur.rowcount > 0
+
+    # --- CRUD codici PERMANENTI -----------------------------------------------
+    def create_h24_code(self, *, tenant_id: int = 1,
+                          codice_cliente: str,
+                          label: str | None = None,
+                          code: str | None = None,
+                          prefix: str = "H24-",
+                          created_by: str | None = None,
+                          note: str | None = None) -> dict[str, Any]:
+        """Crea codice permanente. Auto-genera se code is None.
+        Retry su collisione UNIQUE (max 8 tentativi).
+        """
+        import secrets
+        codcli = (codice_cliente or "").strip().upper()
+        if not codcli:
+            raise ValueError("codice_cliente obbligatorio")
+        alphabet = self._h24_readable_alphabet()
+        with self.transaction() as conn:
+            for attempt in range(8):
+                if code is None:
+                    suffix = "".join(secrets.choice(alphabet) for _ in range(12))
+                    candidate = f"{prefix}{suffix}"
+                else:
+                    candidate = code.strip().upper()
+                try:
+                    cur = conn.execute(
+                        """INSERT INTO customer_h24_codes
+                               (tenant_id, code, codice_cliente, label,
+                                created_by, note)
+                           VALUES (?, ?, ?, ?, ?, ?)""",
+                        (int(tenant_id), candidate, codcli, label,
+                         created_by, note),
+                    )
+                    return {
+                        "ok": True,
+                        "id": int(cur.lastrowid or 0),
+                        "code": candidate,
+                        "codice_cliente": codcli,
+                    }
+                except sqlite3.IntegrityError:
+                    if code is not None:
+                        raise ValueError(f"Codice '{candidate}' già esistente")
+                    continue
+            raise ValueError("Impossibile generare codice univoco dopo 8 tentativi")
+
+    def list_h24_codes(self, *, tenant_id: int = 1,
+                          codice_cliente: str | None = None,
+                          only_active: bool = False,
+                          limit: int = 500) -> list[dict[str, Any]]:
+        """Lista codici permanenti con `used_count` e `last_used_at`."""
+        where = ["c.tenant_id = ?"]
+        params: list[Any] = [int(tenant_id)]
+        if codice_cliente:
+            where.append("c.codice_cliente = ?")
+            params.append(codice_cliente.strip().upper())
+        if only_active:
+            where.append("c.enabled = 1 AND c.revoked_at IS NULL")
+        sql = f"""
+            SELECT c.*,
+                   (SELECT COUNT(*) FROM customer_h24_codes_usage u
+                     WHERE u.h24_code_id = c.id) AS used_count,
+                   (SELECT MAX(u.used_at) FROM customer_h24_codes_usage u
+                     WHERE u.h24_code_id = c.id) AS last_used_at
+              FROM customer_h24_codes c
+             WHERE {" AND ".join(where)}
+             ORDER BY c.created_at DESC
+             LIMIT ?
+        """
+        params.append(int(limit))
+        with self._connect() as conn:
+            return [dict(r) for r in conn.execute(sql, params).fetchall()]
+
+    def get_h24_code(self, code_id: int) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                """SELECT c.*,
+                          (SELECT COUNT(*) FROM customer_h24_codes_usage u
+                            WHERE u.h24_code_id = c.id) AS used_count,
+                          (SELECT MAX(u.used_at) FROM customer_h24_codes_usage u
+                            WHERE u.h24_code_id = c.id) AS last_used_at
+                     FROM customer_h24_codes c WHERE c.id = ?""",
+                (int(code_id),),
+            ).fetchone()
+            return dict(row) if row else None
+
+    def revoke_h24_code(self, code_id: int, *,
+                          revoked_by: str,
+                          reason: str | None = None) -> bool:
+        """Revoca idempotente (re-revoca = no-op, revoked_at non sovrascritto)."""
+        with self.transaction() as conn:
+            cur = conn.execute(
+                """UPDATE customer_h24_codes
+                      SET revoked_at = datetime('now'),
+                          revoked_by = ?,
+                          revoked_reason = ?,
+                          enabled = 0
+                    WHERE id = ? AND revoked_at IS NULL""",
+                (revoked_by, reason, int(code_id)),
+            )
+            return cur.rowcount > 0
+
+    def get_h24_code_usages(self, code_id: int, *,
+                              limit: int = 200) -> list[dict[str, Any]]:
+        with self._connect() as conn:
+            return [dict(r) for r in conn.execute(
+                """SELECT * FROM customer_h24_codes_usage
+                    WHERE h24_code_id = ?
+                    ORDER BY used_at DESC LIMIT ?""",
+                (int(code_id), int(limit)),
+            ).fetchall()]
+
+    def validate_h24_customer_code(self, code: str, *,
+                                      tenant_id: int = 1,
+                                      event_uuid: str | None = None,
+                                      from_address: str | None = None,
+                                      subject: str | None = None,
+                                      inbound_alias: str | None = None) -> dict[str, Any]:
+        """Valida codice PERMANENTE e registra l'uso atomicamente.
+
+        Ritorna dict con:
+          - valid: bool
+          - reason: 'ok' | 'not_found' | 'revoked' | 'disabled'
+          - code_info: row dict
+          - usage_id: id riga in customer_h24_codes_usage (se valido)
+        """
+        candidate = (code or "").strip().upper()
+        if not candidate:
+            return {"valid": False, "reason": "not_found", "code_info": None}
+        with self.transaction() as conn:
+            row = conn.execute(
+                "SELECT * FROM customer_h24_codes WHERE code = ? AND tenant_id = ?",
+                (candidate, int(tenant_id)),
+            ).fetchone()
+            if row is None:
+                return {"valid": False, "reason": "not_found", "code_info": None}
+            d = dict(row)
+            if d.get("revoked_at"):
+                return {"valid": False, "reason": "revoked", "code_info": d}
+            if not d.get("enabled"):
+                return {"valid": False, "reason": "disabled", "code_info": d}
+            # Registra uso (audit)
+            cur = conn.execute(
+                """INSERT INTO customer_h24_codes_usage
+                       (h24_code_id, event_uuid, from_address, subject, inbound_alias)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (d["id"], event_uuid, from_address, subject, inbound_alias),
+            )
+            return {
+                "valid": True,
+                "reason": "ok",
+                "code_info": d,
+                "usage_id": int(cur.lastrowid or 0),
+            }
+
+    def update_h24_usage_ticket(self, usage_id: int,
+                                  ticket_id: str | None) -> bool:
+        with self.transaction() as conn:
+            cur = conn.execute(
+                "UPDATE customer_h24_codes_usage SET ticket_id = ? WHERE id = ?",
+                (ticket_id, int(usage_id)),
+            )
+            return cur.rowcount > 0
+
+    def list_unreported_h24_usages(self, *, limit: int = 500) -> list[dict[str, Any]]:
+        """Per la rendicontazione futura verso il manager. Restituisce gli
+        usage non ancora reported_to_manager_at."""
+        with self._connect() as conn:
+            return [dict(r) for r in conn.execute(
+                """SELECT u.*, c.code, c.codice_cliente, c.label
+                     FROM customer_h24_codes_usage u
+                     JOIN customer_h24_codes c ON c.id = u.h24_code_id
+                    WHERE u.reported_to_manager_at IS NULL
+                    ORDER BY u.used_at ASC LIMIT ?""",
+                (int(limit),),
+            ).fetchall()]
+
+    def mark_h24_usages_reported(self, usage_ids: list[int]) -> int:
+        if not usage_ids:
+            return 0
+        placeholders = ",".join("?" * len(usage_ids))
+        with self.transaction() as conn:
+            cur = conn.execute(
+                f"""UPDATE customer_h24_codes_usage
+                       SET reported_to_manager_at = datetime('now')
+                     WHERE id IN ({placeholders})
+                       AND reported_to_manager_at IS NULL""",
+                [int(x) for x in usage_ids],
+            )
+            return cur.rowcount or 0
+
+    # --- CRUD smtp_relay_h24_targets (mailbox di rientro multi-brand) -------
+    def list_h24_targets(self, *, tenant_id: int = 1,
+                          only_enabled: bool = False) -> list[dict[str, Any]]:
+        where = ["tenant_id = ?"]
+        params: list[Any] = [int(tenant_id)]
+        if only_enabled:
+            where.append("enabled = 1")
+        with self._connect() as conn:
+            return [dict(r) for r in conn.execute(
+                f"""SELECT * FROM smtp_relay_h24_targets
+                     WHERE {" AND ".join(where)}
+                     ORDER BY source_domain""",
+                params,
+            ).fetchall()]
+
+    def get_h24_target_by_domain(self, source_domain: str, *,
+                                    tenant_id: int = 1) -> dict[str, Any] | None:
+        d = (source_domain or "").strip().lower()
+        if not d:
+            return None
+        with self._connect() as conn:
+            row = conn.execute(
+                """SELECT * FROM smtp_relay_h24_targets
+                     WHERE tenant_id = ? AND source_domain = ? AND enabled = 1""",
+                (int(tenant_id), d),
+            ).fetchone()
+            return dict(row) if row else None
+
+    def upsert_h24_target(self, *, tenant_id: int = 1,
+                            target_id: int | None = None,
+                            source_domain: str,
+                            h24_alias: str,
+                            urgent_fee_eur: int | None = None,
+                            note: str | None = None,
+                            enabled: bool = True) -> int:
+        sd = (source_domain or "").strip().lower()
+        ha = (h24_alias or "").strip().lower()
+        if not sd or "@" in sd:
+            raise ValueError("source_domain non valido (deve essere un dominio, non email)")
+        if "@" not in ha:
+            raise ValueError("h24_alias deve essere un'email completa (es. h24@domarc.it)")
+        with self.transaction() as conn:
+            if target_id:
+                conn.execute(
+                    """UPDATE smtp_relay_h24_targets SET
+                           source_domain = ?, h24_alias = ?,
+                           urgent_fee_eur = ?, note = ?, enabled = ?,
+                           updated_at = datetime('now')
+                       WHERE id = ?""",
+                    (sd, ha, urgent_fee_eur, note,
+                     1 if enabled else 0, int(target_id)),
+                )
+                return int(target_id)
+            cur = conn.execute(
+                """INSERT INTO smtp_relay_h24_targets
+                       (tenant_id, source_domain, h24_alias, urgent_fee_eur,
+                        note, enabled)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (int(tenant_id), sd, ha, urgent_fee_eur, note,
+                 1 if enabled else 0),
+            )
+            return int(cur.lastrowid or 0)
+
+    def delete_h24_target(self, target_id: int) -> None:
+        with self.transaction() as conn:
+            conn.execute("DELETE FROM smtp_relay_h24_targets WHERE id = ?",
+                          (int(target_id),))
 
 
 # ============================================================= HELPERS ===

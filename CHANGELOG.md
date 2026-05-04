@@ -4,6 +4,38 @@
 Tutte le modifiche rilevanti a questo progetto vengono documentate in questo file.
 Il formato è basato su [Keep a Changelog](https://keepachangelog.com/it/1.1.0/).
 
+## [Unreleased] — 2026-05-04
+
+### Aggiunte — H24 Fase A: schema + CRUD codici (permanenti + monouso) + targets multi-brand
+
+Fondamenta della feature "intervento urgente a pagamento via codice in oggetto mail" (apertura ticket H24 a pagamento via codice nel subject mail di rientro).
+
+- **Migration 022 `022_h24_authorization_flow`**:
+  - Tabella `customer_h24_codes`: codici PERMANENTI riusabili per cliente (revocabili da admin).
+  - Tabella `customer_h24_codes_usage`: audit trail di ogni uso, con campo `reported_to_manager_at` predisposto per rendicontazione futura.
+  - Tabella `smtp_relay_h24_targets`: mapping multi-brand `source_domain` → `h24_alias` (es. `datia.it` → `h24@datia.it`).
+  - ALTER `authorization_codes` ADD COLUMN `event_uuid` per threading conversazione del rientro monouso.
+  - Settings seed: `h24.default_inbound_alias`, `h24.default_urgent_fee_eur`, `h24.code_one_shot_ttl_hours` (cap 24h), `h24.permanent_code_prefix`, `h24.subject_extract_regex` (vuoto = default hardcoded sicuro).
+
+- **Storage `SqliteStorage`** (sezione `# H24 #`, ~280 righe nuove):
+  - `create_h24_code(codice_cliente, code=None, prefix='H24-', ...)`: auto-genera con alfabeto leggibile senza I/O/0/1 (32 char ABCDEFGHJKLMNPQRSTUVWXYZ23456789), retry su collisione.
+  - `list_h24_codes(only_active, codice_cliente, ...)`: lista con `used_count` e `last_used_at` calcolati via subquery.
+  - `get_h24_code(code_id)`, `revoke_h24_code(code_id, revoked_by, reason)` (idempotente), `get_h24_code_usages(code_id)`.
+  - `validate_h24_customer_code(code, event_uuid, from_address, subject, inbound_alias)`: atomico (BEGIN IMMEDIATE + INSERT usage in transazione, race-safe contro revoche concorrenti).
+  - `update_h24_usage_ticket(usage_id, ticket_id)`, `list_unreported_h24_usages`, `mark_h24_usages_reported` (per Fase E rendicontazione manager).
+  - `list_h24_targets`, `get_h24_target_by_domain`, `upsert_h24_target`, `delete_h24_target`.
+  - `validate_oneshot_code(code, consume=True, used_by)`: consume atomico via `UPDATE … WHERE used_at IS NULL AND valid_until > NOW()` (race-safe).
+  - `invalidate_oneshot_code(code, reason)`: marca consumato senza ticket (es. invio auto-reply fallito).
+
+- **`issue_auth_code` aggiornato**:
+  - Accetta `event_uuid` per il threading.
+  - Cap difensivo TTL: `min(richiesto, settings.h24.code_one_shot_ttl_hours, 720h)`.
+  - Alfabeto leggibile uniforme (no I/O/0/1).
+
+Test smoke 10/10 PASS: CRUD permanenti (create auto+custom, list, validate happy/sconosciuto/revocato, revoca idempotente, audit usage), multi-brand lookup, atomic consume oneshot, cap TTL 72h→24h.
+
+Prossime fasi: B (extractor + endpoint validate API) → C (action listener `create_authorized_ticket`) → D (UI admin + 3 template) → E (scheduler cleanup + flush manager) → F (test e2e pilota datia.it).
+
 ## [Unreleased]
 
 ### Aggiunte — Timer mode per error_aggregations (delay_minutes)
