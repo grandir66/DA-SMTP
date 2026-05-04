@@ -759,4 +759,73 @@ Non inviare mai test verso `info@`, `monitoring@` o altri indirizzi generici
 
 ---
 
-*Ultimo aggiornamento: 2026-04-29 — post Rule Engine v2 (migration 010, Fasi 1-4 della roadmap).*
+## 9. Novità v0.9 (Migration 022/025/026/027)
+
+### 9.1 Recipient groups + autodiscovery (Migration 025)
+
+Tre tabelle nuove:
+
+| Tabella | Scopo |
+|---|---|
+| `recipient_groups` | Anagrafica gruppi destinatari (gemello `customer_groups`) |
+| `recipient_group_members` | Mapping email → group_id |
+| `recipients` | Autodiscovery: indirizzi destinatari visti dal listener |
+
+Endpoint API: `GET /api/v1/relay/recipient-groups/active` (sync listener).
+
+UI:
+- bulk action su `/addresses-to` (checkbox + "Aggiungi a gruppo" / "Crea gruppo")
+- `/recipient-groups/` per gestione gruppi (riusa pattern customer_groups)
+
+### 9.2 Regole con destinazione su gruppo (Migration 027)
+
+Nuovi campi su `rules`:
+
+| Campo | Tipo | Note |
+|---|---|---|
+| `match_to_group_id` | INTEGER FK → recipient_groups | Alternativa esclusiva a `match_to_regex`. Validazione lato form. |
+| `forward_to_emails` | TEXT | Lista email separate da `;` o `,` o whitespace. Override degli rcpt originali nell'azione `forward`. |
+| `forward_to_group_id` | INTEGER FK → recipient_groups | Espanso in N rcpt al momento del forward. |
+
+Listener:
+- popola `event['recipient_groups']` = `{email_lower: [group_ids]}` per match O(1)
+- `do_forward` accetta `rule.forward_to_emails` / `rule.forward_to_group_id` come override degli rcpt MIME originali
+
+### 9.3 Tracking codici monouso esteso (Migration 026)
+
+Colonne aggiunte a `authorization_codes`:
+
+| Campo | Quando |
+|---|---|
+| `sent_to_email` | Set quando il listener manda il template auto-reply (`do_auto_reply`) |
+| `sent_at` | Timestamp invio |
+| `accepted_at` | Set quando il codice viene consumato (mail di rientro) |
+| `accepted_by_email` | Mittente che ha accettato (può differire dal `sent_to_email` originale) |
+| `state` | `pending` / `accepted` / `expired` / `canceled` |
+
+UI `/auth-codes` mostra il **ciclo di vita completo** (generato → spedito → accettato).
+
+### 9.4 Tracking codici permanenti completo (Migration 026)
+
+Colonne aggiunte a `customer_h24_codes_usage`:
+
+- `body_excerpt` (max 4000 char)
+- `from_email` (normalizzato)
+
+UI `/h24-codes/usages/<id>` mostra tabella cronologica con drill-down body cliccabile.
+
+### 9.5 Template `always_billable_no_contract` (id 12)
+
+Override automatico nel listener (`actions.py:do_auto_reply`): se `customer.contract_active=False`, sostituisce qualunque template della regola con questo dedicato. Messaggio: "ogni intervento è a pagamento, contattaci per attivare contratto".
+
+### 9.6 Bug fix RFC 2047 doppio encoding
+
+`parser.py:_decode_mime_header()` decodifica una sola volta in entrata via `email.header.decode_header` + `make_header`. Risolve i casi in cui il subject delle risposte appariva con blob `=?UTF-8?B?...?=` in chiaro.
+
+### 9.7 Sort cliccabile sulle tabelle
+
+`static/js/sortable.js`: tutte le tabelle `.dr-table` / `.fw-table` con almeno 2 righe hanno headers cliccabili. Auto-detection del tipo (text/num/date) basato sul titolo della colonna. Ordinamento locale italiano (case-insensitive).
+
+---
+
+*Ultimo aggiornamento: 2026-05-05 — Migration 022/025/026/027, refactor recipient groups in addresses-to, sort tabelle.*

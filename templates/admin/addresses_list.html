@@ -9,6 +9,51 @@
     .addr-stat-card .value { font-size:1.4rem; font-weight:600; color:#0b2a4a; line-height:1.1; padding-top:0.2rem; }
     .addr-stat-card.warn { border-left:3px solid #f59e0b; }
     .addr-stat-card.ok { border-left:3px solid #10b981; }
+
+    /* Sort cliccabile */
+    .dr-table thead th.sortable {
+        cursor: pointer; user-select: none; position: relative;
+    }
+    .dr-table thead th.sortable:hover { background: #f1f5f9; }
+    .dr-table thead th.sortable::after {
+        content: " ⇅"; color: #94a3b8; font-size: 0.7rem; opacity: 0.6;
+    }
+    .dr-table thead th.sortable.sort-asc::after { content: " ▲"; color: var(--primary-dark); opacity: 1; }
+    .dr-table thead th.sortable.sort-desc::after { content: " ▼"; color: var(--primary-dark); opacity: 1; }
+
+    /* Bulk action bar (sticky) */
+    .bulk-bar {
+        position: sticky; top: 0; z-index: 10;
+        background: #0b2a4a; color: white;
+        padding: 0.6rem 1rem; border-radius: 6px; margin-bottom: 0.6rem;
+        display: none; align-items: center; gap: 0.8rem; flex-wrap: wrap;
+    }
+    .bulk-bar.active { display: flex; }
+    .bulk-bar button {
+        background: #f6c23e; color: #1a1a1a; border: none;
+        padding: 0.4rem 0.9rem; border-radius: 4px; cursor: pointer;
+        font-weight: 600; font-size: 0.85rem;
+    }
+    .bulk-bar button.danger { background: #ef4444; color: white; }
+
+    /* Modali */
+    .modal-bg {
+        display: none; position: fixed; inset: 0;
+        background: rgba(0,0,0,0.5); z-index: 100;
+        align-items: center; justify-content: center;
+    }
+    .modal-bg.active { display: flex; }
+    .modal-box {
+        background: white; border-radius: 8px; padding: 1.5rem;
+        max-width: 540px; width: 92%; max-height: 90vh; overflow: auto;
+    }
+    .modal-box h3 { margin-top: 0; color: #0b2a4a; }
+    .modal-box label { display: block; margin: 0.6rem 0 0.2rem; font-size: 0.85rem; font-weight: 600; }
+    .modal-box input, .modal-box textarea, .modal-box select {
+        width: 100%; padding: 0.5rem; border: 1px solid #cbd5e1;
+        border-radius: 4px; font-size: 0.9rem; box-sizing: border-box;
+    }
+    .modal-box .btns { margin-top: 1rem; display: flex; gap: 0.5rem; justify-content: flex-end; }
 </style>
 {% endblock %}
 
@@ -44,14 +89,21 @@
             </button>
         </form>
         {% endif %}
+        {% if kind == 'to' %}
+        <a href="{{ url_for('recipient_groups.list_view') }}" class="dr-btn"
+           style="width:auto;" title="Gestisci gruppi destinatari">
+            <i class="fas fa-people-group"></i> Gestisci gruppi destinatari
+        </a>
+        {% endif %}
     </div>
     <p class="dr-hint">
         {% if kind == 'from' %}
         Anagrafica dei <strong>mittenti esterni</strong> visti dal listener. Il <code>codcli</code>
         viene auto-derivato dal dominio: puoi sovrascriverlo manualmente qui sotto.
         {% else %}
-        Anagrafica dei <strong>destinatari</strong> intercettati (utili per riconoscere alias non
-        mappati e creare nuove routes).
+        Anagrafica dei <strong>destinatari</strong> intercettati. Seleziona uno o più indirizzi
+        per aggiungerli a un <strong>gruppo destinatari</strong> (usato nelle regole come
+        criterio di match o target di forward).
         {% endif %}
     </p>
 </section>
@@ -92,25 +144,45 @@
     </form>
 </section>
 
+{% if kind == 'to' %}
+<div class="bulk-bar" id="bulkBar">
+    <span><strong id="bulkCount">0</strong> destinatari selezionati</span>
+    <button type="button" onclick="openAddToGroup()">
+        <i class="fas fa-plus"></i> Aggiungi a gruppo esistente
+    </button>
+    <button type="button" onclick="openCreateGroup()">
+        <i class="fas fa-people-group"></i> Crea nuovo gruppo
+    </button>
+    <button type="button" class="danger" onclick="clearSelection()">✕ Annulla selezione</button>
+</div>
+{% endif %}
+
 <div class="dr-table-wrap">
-<table class="dr-table">
+<table class="dr-table" id="addrTable">
     <thead>
         <tr>
-            <th>Email</th>
-            <th>Dominio</th>
+            {% if kind == 'to' %}
+            <th style="width:36px;"><input type="checkbox" id="selAll" onchange="toggleAll(this)"></th>
+            {% endif %}
+            <th class="sortable" data-col="email" data-type="text">Email</th>
+            <th class="sortable" data-col="domain" data-type="text">Dominio</th>
             <th>Codcli</th>
             {% if kind == 'from' %}<th>Origine</th>{% endif %}
-            <th class="num">Visto</th>
-            <th>Prima</th>
-            <th>Ultima</th>
+            <th class="sortable num" data-col="seen" data-type="num">Visto</th>
+            <th class="sortable" data-col="first" data-type="text">Prima</th>
+            <th class="sortable" data-col="last" data-type="text">Ultima</th>
             <th></th>
         </tr>
     </thead>
     <tbody>
         {% for a in rows %}
         <tr>
-            <td class="mono">{{ a.email_address }}</td>
-            <td><small class="mono">{{ a.domain or '—' }}</small></td>
+            {% if kind == 'to' %}
+            <td><input type="checkbox" class="bulk-cb" value="{{ a.email_address }}"
+                       onchange="updateBulkBar()"></td>
+            {% endif %}
+            <td class="mono" data-col="email">{{ a.email_address }}</td>
+            <td data-col="domain"><small class="mono">{{ a.domain or '—' }}</small></td>
             <td>
                 <form method="post" action="{{ url_for('addresses.address_set_codcli', kind=kind, addr_id=a.id) }}" style="display:inline-flex; gap:0.3rem;">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -129,9 +201,9 @@
                 {% endif %}
             </td>
             {% endif %}
-            <td class="num">{{ a.seen_count }}</td>
-            <td><small>{{ a.first_seen_at }}</small></td>
-            <td><small>{{ a.last_seen_at }}</small></td>
+            <td class="num" data-col="seen">{{ a.seen_count }}</td>
+            <td data-col="first"><small>{{ a.first_seen_at }}</small></td>
+            <td data-col="last"><small>{{ a.last_seen_at }}</small></td>
             <td style="white-space:nowrap;">
                 <a href="{{ url_for('rules.form_view') }}?prefill_from={{ a.email_address|urlencode }}"
                    class="dr-btn" style="width:auto; padding:0.2rem 0.5rem;" title="Crea regola da questo indirizzo">
@@ -145,9 +217,142 @@
             </td>
         </tr>
         {% else %}
-        <tr><td colspan="{% if kind=='from' %}8{% else %}7{% endif %}" class="dr-empty">Nessun indirizzo registrato. La lista si popola automaticamente quando il listener processa email.</td></tr>
+        {% set colspan = 8 if kind == 'from' else 8 %}
+        <tr><td colspan="{{ colspan }}" class="dr-empty">Nessun indirizzo registrato. La lista si popola automaticamente quando il listener processa email.</td></tr>
         {% endfor %}
     </tbody>
 </table>
 </div>
+
+{% if kind == 'to' %}
+<!-- Modale: aggiungi a gruppo esistente -->
+<div class="modal-bg" id="addToGroupModal">
+    <div class="modal-box">
+        <h3><i class="fas fa-plus"></i> Aggiungi al gruppo destinatari</h3>
+        <form method="post" action="{{ url_for('addresses.bulk_add_to_recipient_group') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div id="addToGroupEmails"></div>
+            <label>Gruppo destinatari</label>
+            <select name="group_id" required>
+                <option value="">— seleziona —</option>
+                {% for g in (recipient_groups or []) %}
+                <option value="{{ g.id }}">{{ g.name }} ({{ g.member_count }} membri)</option>
+                {% endfor %}
+            </select>
+            <div class="btns">
+                <button type="button" class="dr-btn" onclick="closeModal('addToGroupModal')">Annulla</button>
+                <button type="submit" class="dr-btn dr-btn-primary">Aggiungi</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modale: crea nuovo gruppo dalla selezione -->
+<div class="modal-bg" id="createGroupModal">
+    <div class="modal-box">
+        <h3><i class="fas fa-people-group"></i> Crea nuovo gruppo destinatari</h3>
+        <form method="post" action="{{ url_for('addresses.bulk_create_recipient_group') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div id="createGroupEmails"></div>
+            <label>Codice (slug)</label>
+            <input type="text" name="code" required pattern="[a-z0-9_-]+" placeholder="tecnici_no_fo">
+            <label>Nome visualizzato</label>
+            <input type="text" name="name" required placeholder="Tecnici no fuori orario">
+            <label>Descrizione (opz.)</label>
+            <textarea name="description" rows="2" placeholder="Indirizzi tecnici da escludere dalle notifiche fuori orario"></textarea>
+            <label>Colore badge (opz.)</label>
+            <input type="color" name="color" value="#6366f1">
+            <div class="btns">
+                <button type="button" class="dr-btn" onclick="closeModal('createGroupModal')">Annulla</button>
+                <button type="submit" class="dr-btn dr-btn-primary">Crea gruppo</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+<script>
+// === Sort cliccabile sulle intestazioni ===
+(function() {
+    const table = document.getElementById('addrTable');
+    if (!table) return;
+    const headers = table.querySelectorAll('th.sortable');
+    headers.forEach(th => {
+        th.addEventListener('click', () => sortTable(th));
+    });
+    function sortTable(th) {
+        const col = th.dataset.col;
+        const type = th.dataset.type || 'text';
+        const tbody = table.querySelector('tbody');
+        const rows = Array.from(tbody.querySelectorAll('tr')).filter(r => !r.querySelector('.dr-empty'));
+        if (!rows.length) return;
+        const asc = !th.classList.contains('sort-asc');
+        // reset altri th
+        headers.forEach(h => h.classList.remove('sort-asc', 'sort-desc'));
+        th.classList.toggle('sort-asc', asc);
+        th.classList.toggle('sort-desc', !asc);
+        rows.sort((a, b) => {
+            const ca = (a.querySelector(`[data-col="${col}"]`) || {}).textContent || '';
+            const cb = (b.querySelector(`[data-col="${col}"]`) || {}).textContent || '';
+            let cmp;
+            if (type === 'num') {
+                cmp = (parseFloat(ca) || 0) - (parseFloat(cb) || 0);
+            } else {
+                cmp = ca.trim().localeCompare(cb.trim(), 'it', {sensitivity: 'base'});
+            }
+            return asc ? cmp : -cmp;
+        });
+        rows.forEach(r => tbody.appendChild(r));
+    }
+})();
+
+{% if kind == 'to' %}
+// === Bulk selection ===
+function getSelected() {
+    return Array.from(document.querySelectorAll('.bulk-cb:checked')).map(c => c.value);
+}
+function updateBulkBar() {
+    const n = getSelected().length;
+    const bar = document.getElementById('bulkBar');
+    if (!bar) return;
+    document.getElementById('bulkCount').textContent = n;
+    bar.classList.toggle('active', n > 0);
+}
+function toggleAll(cb) {
+    document.querySelectorAll('.bulk-cb').forEach(b => b.checked = cb.checked);
+    updateBulkBar();
+}
+function clearSelection() {
+    document.querySelectorAll('.bulk-cb, #selAll').forEach(b => b.checked = false);
+    updateBulkBar();
+}
+function _injectEmails(container) {
+    const sel = getSelected();
+    container.innerHTML = '';
+    for (const e of sel) {
+        const i = document.createElement('input');
+        i.type = 'hidden'; i.name = 'email'; i.value = e;
+        container.appendChild(i);
+    }
+}
+function openAddToGroup() {
+    if (!getSelected().length) return alert('Seleziona almeno un destinatario.');
+    _injectEmails(document.getElementById('addToGroupEmails'));
+    document.getElementById('addToGroupModal').classList.add('active');
+}
+function openCreateGroup() {
+    if (!getSelected().length) return alert('Seleziona almeno un destinatario.');
+    _injectEmails(document.getElementById('createGroupEmails'));
+    document.getElementById('createGroupModal').classList.add('active');
+}
+function closeModal(id) {
+    document.getElementById(id).classList.remove('active');
+}
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+        document.querySelectorAll('.modal-bg.active').forEach(m => m.classList.remove('active'));
+    }
+});
+{% endif %}
+</script>
 {% endblock %}

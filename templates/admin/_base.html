@@ -71,7 +71,6 @@
                 <div class="dr-nav-menu">
                     <a href="{{ url_for('customers.list_view') }}" class="{% if ep.startswith('customers') %}active{% endif %}"><i class="fas fa-users"></i> Clienti</a>
                     <a href="{{ url_for('customer_groups.list_view') }}" class="{% if ep.startswith('customer_groups') %}active{% endif %}"><i class="fas fa-layer-group"></i> Gruppi clienti</a>
-                    <a href="{{ url_for('recipients.list_view') }}" class="{% if ep.startswith('recipients') %}active{% endif %}"><i class="fas fa-envelope-open"></i> Destinatari (autodiscovery)</a>
                     <a href="{{ url_for('recipient_groups.list_view') }}" class="{% if ep.startswith('recipient_groups') %}active{% endif %}"><i class="fas fa-people-group"></i> Gruppi destinatari</a>
                     <a href="{{ url_for('addresses.from_list') }}" class="{% if ep.startswith('addresses') %}active{% endif %}"><i class="fas fa-at"></i> Indirizzi (mittenti/destinatari)</a>
                     <a href="{{ url_for('domains.domains_list') }}" class="{% if ep.startswith('domains') %}active{% endif %}"><i class="fas fa-globe"></i> Domini</a>
@@ -146,5 +145,6 @@
     <footer class="dr-footer">
         Domarc SMTP Relay Admin v{{ DOMARC_RELAY_VERSION }} · open core (MIT)
     </footer>
+    <script src="{{ url_for('static', filename='js/sortable.js') }}"></script>
 </body>
 </html>

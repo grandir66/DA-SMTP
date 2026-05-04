@@ -5,9 +5,12 @@ Usa Playwright (chromium headless) per fare login e screenshottare le
 viste chiave. I file PNG vengono salvati in ``docs/manuale_utente/img/``.
 
 Esecuzione:
-    python3 scripts/capture_user_manual_screenshots.py
+    DOMARC_PASS=<pwd> python3 scripts/capture_user_manual_screenshots.py
 
-Richiede: server attivo su https://manager-dev.domarc.it:8443.
+Variabili d'ambiente:
+    DOMARC_BASE_URL  default https://localhost
+    DOMARC_USER      default admin
+    DOMARC_PASS      OBBLIGATORIA
 """
 from __future__ import annotations
 
@@ -17,12 +20,13 @@ from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
-BASE_URL = os.environ.get("DOMARC_BASE_URL", "https://manager-dev.domarc.it:8443")
+BASE_URL = os.environ.get("DOMARC_BASE_URL", "https://localhost")
 USERNAME = os.environ.get("DOMARC_USER", "admin")
-PASSWORD = os.environ.get("DOMARC_PASS", "")  # NON hardcodato: passa via env
+PASSWORD = os.environ.get("DOMARC_PASS", "")
 OUT_DIR = Path(__file__).resolve().parent.parent / "docs" / "manuale_utente" / "img"
 
-# Lista (path_relativo, filename, descrizione, eventuale azione_post_load)
+# Lista (path_relativo, filename, descrizione)
+# Mantieni numerazione stabile per non rompere link nel manuale.
 PAGES: list[tuple[str, str, str]] = [
     ("/", "01_dashboard.png", "Dashboard principale"),
     ("/rules", "02_rules_list.png", "Elenco regole"),
@@ -41,12 +45,21 @@ PAGES: list[tuple[str, str, str]] = [
     ("/templates", "15_templates.png", "Template di reply"),
     ("/users", "16_users.png", "Utenti & ruoli"),
     ("/manual", "17_technical_manual.png", "Manuale tecnico auto-generato"),
+    # Nuove pagine — Migration 022/025/026/027
+    ("/addresses-to", "18_addresses_to.png", "Destinatari noti — bulk action gruppi"),
+    ("/recipient-groups/", "19_recipient_groups.png", "Gruppi destinatari"),
+    ("/h24-codes", "20_h24_codes_list.png", "Codici permanenti H24"),
+    ("/h24-targets", "21_h24_targets.png", "Mailbox di rientro H24 (multi-brand)"),
+    ("/auth-codes", "22_auth_codes_lifecycle.png", "Codici monouso — ciclo di vita"),
+    ("/customer-groups/", "23_customer_groups.png", "Gruppi clienti"),
+    ("/privacy-bypass/", "24_privacy_bypass.png", "Privacy bypass list"),
+    ("/rules/new", "25_rule_form_new.png", "Form regola — match + forward gruppi"),
 ]
 
 
 def main() -> int:
     if not PASSWORD:
-        print("[ERROR] Password admin non impostata: esporta DOMARC_PASS=<pwd>",
+        print("[ERROR] DOMARC_PASS non impostata: esporta DOMARC_PASS=<pwd>",
               file=sys.stderr)
         return 2
     OUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -86,9 +99,8 @@ def main() -> int:
         for path, fname, desc in PAGES:
             url = f"{BASE_URL}{path}"
             try:
-                page.goto(url, wait_until="networkidle", timeout=15000)
-                # Aspetta che eventuali JS finiscano
-                page.wait_for_timeout(800)
+                page.goto(url, wait_until="networkidle", timeout=20000)
+                page.wait_for_timeout(900)
                 out = OUT_DIR / fname
                 page.screenshot(path=str(out), full_page=True)
                 print(f"[ok] {fname} ← {desc}")

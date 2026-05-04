@@ -218,13 +218,83 @@ def to_list():
     if domain_filter:
         rows = [r for r in rows if (r.get("domain") or "").lower() == domain_filter]
     all_rows = _storage().list_addresses("to", tenant_id=_tid())
+    # Lista gruppi destinatari (per bulk action — Migration 027)
+    try:
+        recipient_groups = _storage().list_recipient_groups(tenant_id=_tid(),
+                                                              only_enabled=True)
+    except Exception:  # noqa: BLE001
+        recipient_groups = []
     return render_template("admin/addresses_list.html",
                            rows=rows, kind="to",
                            title="Destinatari noti",
                            search=q,
                            domain_filter=domain_filter,
                            no_codcli=False,
-                           stats=_addresses_stats(all_rows))
+                           stats=_addresses_stats(all_rows),
+                           recipient_groups=recipient_groups)
+
+
+@addresses_bp.route("/addresses-to/bulk/add-to-group", methods=["POST"])
+@login_required(role="operator")
+def bulk_add_to_recipient_group():
+    """Aggiunge destinatari selezionati a un gruppo destinatari esistente."""
+    storage = _storage()
+    emails = request.form.getlist("email")
+    group_id = (request.form.get("group_id") or "").strip()
+    if not emails:
+        flash("Nessun destinatario selezionato.", "error")
+        return redirect(url_for("addresses.to_list"))
+    if not group_id:
+        flash("Selezionare un gruppo.", "error")
+        return redirect(url_for("addresses.to_list"))
+    try:
+        gid = int(group_id)
+    except ValueError:
+        flash("group_id non valido.", "error")
+        return redirect(url_for("addresses.to_list"))
+    g_obj = storage.get_recipient_group(gid)
+    if not g_obj or g_obj["tenant_id"] != _tid():
+        from flask import abort
+        abort(404)
+    added = storage.add_recipients_to_group(
+        gid, emails,
+        tenant_id=_tid(),
+        actor=session.get("username") or "?",
+    )
+    flash(f"✓ {added} destinatari aggiunti al gruppo «{g_obj['name']}».", "success")
+    return redirect(url_for("recipient_groups.detail_view", group_id=gid))
+
+
+@addresses_bp.route("/addresses-to/bulk/create-group", methods=["POST"])
+@login_required(role="operator")
+def bulk_create_recipient_group():
+    """Crea un nuovo gruppo destinatari dalla selezione."""
+    storage = _storage()
+    emails = request.form.getlist("email")
+    code = (request.form.get("code") or "").strip()
+    name = (request.form.get("name") or "").strip()
+    description = (request.form.get("description") or "").strip() or None
+    color = (request.form.get("color") or "").strip() or None
+    if not emails:
+        flash("Nessun destinatario selezionato.", "error")
+        return redirect(url_for("addresses.to_list"))
+    if not code or not name:
+        flash("Code e nome sono obbligatori.", "error")
+        return redirect(url_for("addresses.to_list"))
+    actor = session.get("username") or "?"
+    try:
+        gid = storage.upsert_recipient_group(
+            tenant_id=_tid(), code=code, name=name,
+            description=description, color=color, enabled=True, actor=actor,
+        )
+        added = storage.add_recipients_to_group(
+            gid, emails, tenant_id=_tid(), actor=actor,
+        )
+        flash(f"✓ Gruppo «{name}» creato con {added} membri.", "success")
+        return redirect(url_for("recipient_groups.detail_view", group_id=gid))
+    except ValueError as exc:
+        flash(f"Errore: {exc}", "error")
+        return redirect(url_for("addresses.to_list"))
 
 
 @addresses_bp.route("/addresses-<kind>/<int:addr_id>/codcli", methods=["POST"])

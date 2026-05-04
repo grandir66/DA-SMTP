@@ -107,7 +107,7 @@ def create_app(config: AppConfig | None = None, *, init_db: bool = True) -> Flas
     from .routes.activity import activity_bp
     from .routes.queue import queue_bp
     from .routes.customer_groups import customer_groups_bp
-    from .routes.recipients import recipients_bp, recipient_groups_bp
+    from .routes.recipients import recipient_groups_bp
     from .routes.integrations import integrations_bp
     from .tenants import tenants_bp, register_tenant_middleware
     app.register_blueprint(auth_bp)
@@ -136,7 +136,6 @@ def create_app(config: AppConfig | None = None, *, init_db: bool = True) -> Flas
     app.register_blueprint(activity_bp)
     app.register_blueprint(queue_bp)
     app.register_blueprint(customer_groups_bp)
-    app.register_blueprint(recipients_bp)
     app.register_blueprint(recipient_groups_bp)
     app.register_blueprint(integrations_bp)
     app.register_blueprint(tenants_bp)
