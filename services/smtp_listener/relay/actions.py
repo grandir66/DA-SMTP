@@ -734,24 +734,42 @@ def do_create_authorized_ticket(
     else:
         codcli_source = "non identificato (mittente sconosciuto in archivio)"
 
-    # Recupera urgent_fee dalla setting (action_map override)
+    # === Billable check ===
+    # I codici PERMANENTI sono parte del contratto H24 attivo del cliente:
+    # NESSUN addebito aggiuntivo (intervento incluso). I codici MONOUSO
+    # sono attivazioni straordinarie a pagamento.
+    is_billable = (val.kind == "oneshot")
+
+    # Recupera urgent_fee (per oneshot) — per permanent resta 0 nel ticket
     urgent_fee = action_map.get("urgent_fee")
     if not urgent_fee:
         try:
             urgent_fee = int(storage.get_setting("h24.default_urgent_fee_eur") or "250")
         except (TypeError, ValueError):
             urgent_fee = 250
+    effective_fee = urgent_fee if is_billable else 0
+
     settore = (action_map.get("settore") or "S").strip() or "S"
     urgenza = (action_map.get("urgenza") or "URGENTE").strip() or "URGENTE"
 
+    if is_billable:
+        title = "=== APERTURA TICKET URGENTE H24 (a pagamento) ==="
+        billing_line = f"Importo addebitato: {urgent_fee} EUR + IVA"
+    else:
+        title = "=== APERTURA TICKET URGENTE H24 (incluso nel contratto) ==="
+        billing_line = (
+            "Addebito: NESSUNO — intervento incluso nel contratto H24 "
+            "attivo del cliente (codice anagrafico permanente)."
+        )
+
     note_lines = [
-        f"=== APERTURA TICKET URGENTE H24 (a pagamento) ===",
+        title,
         f"",
         f"Aperto per conto di: {parsed.from_address}",
         f"Cliente: {final_codcli or 'NON IDENTIFICATO'} ({codcli_source})",
         f"Codice autorizzazione: {val.code}",
-        f"Tipo codice: {val.kind} ({'riusabile' if val.kind == 'permanent' else 'monouso'})",
-        f"Importo addebitato: {urgent_fee} EUR + IVA",
+        f"Tipo codice: {val.kind} ({'riusabile, contrattuale' if val.kind == 'permanent' else 'monouso, straordinario'})",
+        billing_line,
         f"Mailbox di rientro: {inbound_alias or '(non determinato)'}",
     ]
     if val.kind == "oneshot" and code_info.get("event_uuid"):
@@ -759,15 +777,16 @@ def do_create_authorized_ticket(
     if val.kind == "permanent" and code_info.get("label"):
         note_lines.append(f"Etichetta codice permanente: {code_info['label']}")
     if val.kind == "permanent" and val.usage_id:
-        note_lines.append(f"Usage record (audit fatturazione): id {val.usage_id}")
+        note_lines.append(f"Usage record (audit utilizzi H24): id {val.usage_id}")
 
     body_prefix = "\n".join(note_lines) + "\n\n=== Body originale del rientro ===\n\n"
     original_body = (parsed.body_text or parsed.body_html or "")[:7000]
 
+    subject_prefix = "[H24 PAGAMENTO]" if is_billable else "[H24 contrattuale]"
     payload: dict[str, Any] = {
         "channel": "email_h24_authorized",
         "external_id": f"h24-{val.kind}-{val.code}-{event_uuid[:12]}",
-        "subject": f"[H24 PAGAMENTO] {parsed.subject or '(senza oggetto)'}",
+        "subject": f"{subject_prefix} {parsed.subject or '(senza oggetto)'}",
         "body": body_prefix + original_body,
         "from_address": parsed.from_address,
         "to_address": parsed.primary_to,
@@ -777,9 +796,10 @@ def do_create_authorized_ticket(
         "urgenza": urgenza,
         "metadata": {
             "h24_kind": val.kind,
+            "h24_billable": is_billable,
             "h24_code": val.code,
             "h24_usage_id": val.usage_id,
-            "h24_urgent_fee_eur": urgent_fee,
+            "h24_urgent_fee_eur": effective_fee,  # 0 per permanent (no addebito)
             "h24_inbound_alias": inbound_alias,
             "h24_event_uuid_origin": code_info.get("event_uuid"),
             "h24_codcli_source": codcli_source,
@@ -802,7 +822,8 @@ def do_create_authorized_ticket(
                 extra_ctx={
                     "h24_code": val.code,
                     "h24_kind": val.kind,
-                    "urgent_fee": urgent_fee,
+                    "h24_billable": is_billable,
+                    "urgent_fee": effective_fee,  # 0 per permanent
                     "ticket_id": None,  # ancora pending dispatch
                 },
                 label="h24_ack",
