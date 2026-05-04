@@ -79,21 +79,23 @@
 <div class="rf-grid">
 
     <style>
-        /* Balloon/tooltip per ogni label del form rule */
+        /* Balloon/tooltip per ogni label del form rule.
+           Apertura A DESTRA della freccia (non sopra) per evitare che vada
+           fuori viewport o che sia coperto dall'header sticky. */
         .rf-tip { position: relative; display: inline-block; margin-left: 0.4rem;
                   color: #2563eb; cursor: help; font-size: 0.8rem; }
         .rf-tip:hover .rf-tip-balloon { visibility: visible; opacity: 1; }
         .rf-tip-balloon {
             visibility: hidden; opacity: 0; transition: opacity 0.15s;
-            position: absolute; bottom: 130%; left: 50%; transform: translateX(-50%);
+            position: absolute; left: calc(100% + 10px); top: 50%; transform: translateY(-50%);
             background: #0b2a4a; color: #fff; font-size: 0.78rem; line-height: 1.4;
             padding: 8px 12px; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);
             white-space: normal; width: 320px; max-width: 90vw; z-index: 1000;
             font-weight: 400; text-align: left;
         }
         .rf-tip-balloon::after {
-            content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
-            border: 6px solid transparent; border-top-color: #0b2a4a;
+            content: ''; position: absolute; top: 50%; right: 100%; transform: translateY(-50%);
+            border: 6px solid transparent; border-right-color: #0b2a4a;
         }
         .rf-tip-balloon code { background: rgba(255,255,255,0.15); padding: 1px 4px; border-radius: 2px; }
     </style>
