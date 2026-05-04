@@ -1,9 +1,54 @@
 {% extends "admin/_base.html" %}
-{% block title %}Codici autorizzazione{% endblock %}
+{% block title %}Codici monouso (autorizzazione){% endblock %}
 {% block content %}
+<style>
+.lifecycle {
+    display: flex; flex-direction: column; gap: 0.2rem;
+    font-size: 0.78rem; color: #555;
+}
+.lifecycle .step {
+    display: flex; align-items: center; gap: 0.4rem;
+}
+.lifecycle .step.done { color: #065f46; font-weight: 500; }
+.lifecycle .step.pending { color: #92400e; }
+.lifecycle .step.expired { color: #991b1b; }
+.state-pill {
+    padding: 0.1rem 0.5rem; border-radius: 9px;
+    font-size: 0.7rem; font-weight: 600; text-transform: uppercase;
+}
+.state-pill.pending { background: #fef3c7; color: #92400e; }
+.state-pill.accepted { background: #d1fae5; color: #065f46; }
+.state-pill.expired { background: #fee2e2; color: #991b1b; }
+.state-pill.canceled { background: #e2e8f0; color: #475569; }
+.code-cell {
+    font-family: ui-monospace, monospace; font-size: 1rem;
+    font-weight: 600; color: var(--primary-dark);
+}
+.email-pill {
+    font-family: ui-monospace, monospace; font-size: 0.75rem;
+    background: #e0e7ff; color: #4338ca;
+    padding: 0.05rem 0.4rem; border-radius: 4px;
+}
+.legend {
+    background: #fffbeb; border-left: 3px solid #f6c23e;
+    padding: 0.6rem 0.9rem; border-radius: 6px;
+    font-size: 0.82rem; color: #555; margin-bottom: 0.8rem;
+}
+</style>
 <section class="dr-section">
-    <h2><i class="fas fa-key"></i> Codici autorizzazione</h2>
-    <form method="post" action="{{ url_for('auth_codes.issue_view') }}" style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:end; padding-top:0.5rem;">
+    <h2><i class="fas fa-key"></i> Codici monouso (autorizzazione)</h2>
+
+    <div class="legend">
+        <strong>Ciclo di vita</strong> di ogni codice:
+        <span class="state-pill pending">PENDING</span>: generato e spedito al mittente, in attesa di consumo →
+        <span class="state-pill accepted">ACCEPTED</span>: codice riconsegnato in oggetto e ticket aperto →
+        <span class="state-pill expired">EXPIRED</span>: TTL scaduto senza consumo.
+        <br>
+        Per ogni codice è tracciato a chi è stato spedito, da chi è stato consumato, e quando.
+    </div>
+
+    <form method="post" action="{{ url_for('auth_codes.issue_view') }}"
+          style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:end; padding-top:0.5rem;">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div><small>Cliente</small><br><input type="text" name="codice_cliente" placeholder="opzionale"></div>
         <div><small>TTL (h)</small><br><input type="number" name="ttl_hours" value="48" min="1" max="720" style="width:90px;"></div>
@@ -24,26 +69,83 @@
 
 <div class="dr-table-wrap">
 <table class="dr-table">
-    <thead><tr><th>Codice</th><th>Cliente</th><th>Generato</th><th>Valido fino</th><th>Usato</th><th>Note</th><th></th></tr></thead>
+    <thead>
+        <tr>
+            <th>Codice</th>
+            <th>Stato</th>
+            <th>Cliente</th>
+            <th>Ciclo di vita</th>
+            <th>Note</th>
+            <th></th>
+        </tr>
+    </thead>
     <tbody>
         {% for c in codes %}
         <tr>
-            <td><code style="font-weight:600; font-size:1rem;">{{ c.code }}</code></td>
-            <td>{{ c.codice_cliente or '—' }}</td>
-            <td><small>{{ c.generated_at }}</small></td>
-            <td><small>{{ c.valid_until }}</small></td>
-            <td>{% if c.used_at %}<small>{{ c.used_at }} ({{ c.used_by or '?' }})</small>{% else %}<span class="dr-badge dr-badge-ok">attivo</span>{% endif %}</td>
+            <td>
+                <span class="code-cell">{{ c.code }}</span>
+                {% if c.event_uuid %}<br><small style="color:#94a3b8;">evt: {{ c.event_uuid[:8] }}…</small>{% endif %}
+            </td>
+            <td>
+                {% set st = c.state or ('accepted' if c.used_at else 'pending') %}
+                <span class="state-pill {{ st }}">{{ st }}</span>
+            </td>
+            <td>
+                {% if c.codice_cliente %}
+                <strong>{{ c.codice_cliente }}</strong>
+                {% else %}
+                <small style="color:#94a3b8;">non assegnato</small>
+                {% endif %}
+            </td>
+            <td>
+                <div class="lifecycle">
+                    <div class="step done">
+                        <i class="fas fa-circle-check"></i>
+                        <span>Generato il {{ (c.generated_at or '')|truncate(16, true, '') }}</span>
+                    </div>
+                    {% if c.sent_at %}
+                    <div class="step done">
+                        <i class="fas fa-paper-plane"></i>
+                        <span>Spedito a <span class="email-pill">{{ c.sent_to_email or '?' }}</span>
+                              il {{ (c.sent_at or '')|truncate(16, true, '') }}</span>
+                    </div>
+                    {% else %}
+                    <div class="step pending">
+                        <i class="fas fa-circle-question"></i>
+                        <span>Non ancora spedito</span>
+                    </div>
+                    {% endif %}
+                    {% if c.accepted_at or c.used_at %}
+                    <div class="step done">
+                        <i class="fas fa-check-double"></i>
+                        <span>Accettato da
+                            <span class="email-pill">{{ c.accepted_by_email or c.used_by or '?' }}</span>
+                            il {{ (c.accepted_at or c.used_at or '')|truncate(16, true, '') }}</span>
+                    </div>
+                    {% elif st == 'expired' %}
+                    <div class="step expired">
+                        <i class="fas fa-circle-xmark"></i>
+                        <span>Scaduto il {{ (c.valid_until or '')|truncate(16, true, '') }}</span>
+                    </div>
+                    {% else %}
+                    <div class="step pending">
+                        <i class="fas fa-clock"></i>
+                        <span>In attesa di consumo (scade {{ (c.valid_until or '')|truncate(16, true, '') }})</span>
+                    </div>
+                    {% endif %}
+                </div>
+            </td>
             <td><small>{{ c.note or '' }}</small></td>
             <td>
                 <form method="post" action="{{ url_for('auth_codes.delete_view', code_id=c.id) }}" style="display:inline;"
-                      onsubmit="return confirm('Eliminare il codice?');">
+                      onsubmit="return confirm('Eliminare il codice {{ c.code }}?');">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <button class="dr-btn dr-btn-danger"><i class="fas fa-trash"></i></button>
+                    <button class="dr-btn dr-btn-danger" title="Elimina"><i class="fas fa-trash"></i></button>
                 </form>
             </td>
         </tr>
         {% else %}
-        <tr><td colspan="7" class="dr-empty">Nessun codice emesso.</td></tr>
+        <tr><td colspan="6" class="dr-empty">Nessun codice emesso.</td></tr>
         {% endfor %}
     </tbody>
 </table>

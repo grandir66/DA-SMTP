@@ -405,7 +405,9 @@ class SqliteStorage(Storage):
                           match_at_hours = ?, match_in_service = ?, match_contract_active = ?,
                           match_known_customer = ?, match_has_exception_today = ?,
                           match_customer_groups = ?,
-                          match_tag = ?, action = ?, action_map = ?, severity = ?,
+                          match_tag = ?,
+                          match_to_group_id = ?, forward_to_emails = ?, forward_to_group_id = ?,
+                          action = ?, action_map = ?, severity = ?,
                           continue_after_match = ?,
                           parent_id = ?, is_group = ?, group_label = ?,
                           exclusive_match = ?, continue_in_group = ?, exit_group_continue = ?,
@@ -431,6 +433,9 @@ class SqliteStorage(Storage):
                         _bint(data.get("match_has_exception_today")),
                         data.get("match_customer_groups") or None,
                         data.get("match_tag") or None,
+                        int(data["match_to_group_id"]) if data.get("match_to_group_id") else None,
+                        data.get("forward_to_emails") or None,
+                        int(data["forward_to_group_id"]) if data.get("forward_to_group_id") else None,
                         action_value,
                         action_map,
                         data.get("severity") or None,
@@ -451,11 +456,16 @@ class SqliteStorage(Storage):
                         match_from_regex, match_to_regex, match_subject_regex, match_body_regex,
                         match_to_domain, match_from_domain, match_at_hours, match_in_service,
                         match_contract_active, match_known_customer, match_has_exception_today,
-                        match_customer_groups, match_tag, action, action_map, severity,
+                        match_customer_groups, match_tag,
+                        match_to_group_id, forward_to_emails, forward_to_group_id,
+                        action, action_map, severity,
                         continue_after_match, created_by,
                         parent_id, is_group, group_label,
                         exclusive_match, continue_in_group, exit_group_continue)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                           ?, ?, ?,
+                           ?, ?, ?,
+                           ?, ?,
                            ?, ?, ?, ?, ?, ?)""",
                 (
                     int(tenant_id),
@@ -478,6 +488,9 @@ class SqliteStorage(Storage):
                     _bint(data.get("match_has_exception_today")),
                     data.get("match_customer_groups") or None,
                     data.get("match_tag") or None,
+                    int(data["match_to_group_id"]) if data.get("match_to_group_id") else None,
+                    data.get("forward_to_emails") or None,
+                    int(data["forward_to_group_id"]) if data.get("forward_to_group_id") else None,
                     action_value,
                     action_map,
                     data.get("severity") or None,
@@ -2813,7 +2826,8 @@ class SqliteStorage(Storage):
                                       event_uuid: str | None = None,
                                       from_address: str | None = None,
                                       subject: str | None = None,
-                                      inbound_alias: str | None = None) -> dict[str, Any]:
+                                      inbound_alias: str | None = None,
+                                      body_excerpt: str | None = None) -> dict[str, Any]:
         """Valida codice PERMANENTE e registra l'uso atomicamente.
 
         Ritorna dict con:
@@ -2821,10 +2835,16 @@ class SqliteStorage(Storage):
           - reason: 'ok' | 'not_found' | 'revoked' | 'disabled'
           - code_info: row dict
           - usage_id: id riga in customer_h24_codes_usage (se valido)
+
+        Migration 026: oltre a from_address/subject/inbound_alias, salva anche
+        body_excerpt (troncato 4000 char) e from_email (canonico).
         """
         candidate = (code or "").strip().upper()
         if not candidate:
             return {"valid": False, "reason": "not_found", "code_info": None}
+        # Tronca body excerpt a 4000 char
+        if body_excerpt and len(body_excerpt) > 4000:
+            body_excerpt = body_excerpt[:4000] + "...[truncated]"
         with self.transaction() as conn:
             row = conn.execute(
                 "SELECT * FROM customer_h24_codes WHERE code = ? AND tenant_id = ?",
@@ -2837,12 +2857,15 @@ class SqliteStorage(Storage):
                 return {"valid": False, "reason": "revoked", "code_info": d}
             if not d.get("enabled"):
                 return {"valid": False, "reason": "disabled", "code_info": d}
-            # Registra uso (audit)
+            # Registra uso (audit) — Migration 026: include body_excerpt + from_email
             cur = conn.execute(
                 """INSERT INTO customer_h24_codes_usage
-                       (h24_code_id, event_uuid, from_address, subject, inbound_alias)
-                   VALUES (?, ?, ?, ?, ?)""",
-                (d["id"], event_uuid, from_address, subject, inbound_alias),
+                       (h24_code_id, event_uuid, from_address, from_email,
+                        subject, inbound_alias, body_excerpt)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (d["id"], event_uuid, from_address,
+                 (from_address or "").strip().lower() or None,
+                 subject, inbound_alias, body_excerpt),
             )
             return {
                 "valid": True,
@@ -3023,6 +3046,236 @@ class SqliteStorage(Storage):
         with self.transaction() as conn:
             conn.execute("DELETE FROM smtp_relay_h24_targets WHERE id = ?",
                           (int(target_id),))
+
+    # ============================================================
+    # Recipient Groups + Autodiscovery (Migration 025)
+    # ============================================================
+
+    def list_recipient_groups(self, *, tenant_id: int = 1,
+                                 only_enabled: bool = False) -> list[dict[str, Any]]:
+        sql = ["SELECT g.*, "
+               "       (SELECT COUNT(*) FROM recipient_group_members m "
+               "         WHERE m.group_id = g.id) AS member_count "
+               "  FROM recipient_groups g "
+               " WHERE g.tenant_id = ?"]
+        params: list[Any] = [int(tenant_id)]
+        if only_enabled:
+            sql.append(" AND g.enabled = 1")
+        sql.append(" ORDER BY g.name COLLATE NOCASE")
+        with self._connect() as conn:
+            return [dict(r) for r in conn.execute("".join(sql), params).fetchall()]
+
+    def get_recipient_group(self, group_id: int) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                """SELECT g.*,
+                          (SELECT COUNT(*) FROM recipient_group_members m
+                            WHERE m.group_id = g.id) AS member_count
+                     FROM recipient_groups g WHERE g.id = ?""",
+                (int(group_id),),
+            ).fetchone()
+            return dict(row) if row else None
+
+    def upsert_recipient_group(self, *, group_id: int | None = None,
+                                  tenant_id: int = 1, code: str, name: str,
+                                  description: str | None = None,
+                                  color: str | None = None,
+                                  enabled: bool = True,
+                                  actor: str | None = None) -> int:
+        code = (code or "").strip().lower()
+        name = (name or "").strip()
+        if not code:
+            raise ValueError("code obbligatorio")
+        if not name:
+            raise ValueError("name obbligatorio")
+        with self.transaction() as conn:
+            if group_id:
+                conn.execute(
+                    """UPDATE recipient_groups
+                          SET code=?, name=?, description=?, color=?,
+                              enabled=?, updated_at=datetime('now')
+                        WHERE id=? AND tenant_id=?""",
+                    (code, name, description, color, 1 if enabled else 0,
+                     int(group_id), int(tenant_id)),
+                )
+                return int(group_id)
+            cur = conn.execute(
+                """INSERT INTO recipient_groups
+                       (tenant_id, code, name, description, color, enabled, created_by)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (int(tenant_id), code, name, description, color,
+                 1 if enabled else 0, actor),
+            )
+            return int(cur.lastrowid)
+
+    def delete_recipient_group(self, group_id: int) -> None:
+        with self.transaction() as conn:
+            conn.execute("DELETE FROM recipient_groups WHERE id = ?",
+                         (int(group_id),))
+
+    def list_recipient_group_members(self, group_id: int) -> list[dict[str, Any]]:
+        with self._connect() as conn:
+            return [dict(r) for r in conn.execute(
+                """SELECT * FROM recipient_group_members
+                    WHERE group_id = ? ORDER BY email COLLATE NOCASE""",
+                (int(group_id),),
+            ).fetchall()]
+
+    def replace_recipient_group_members(self, group_id: int, emails: list[str],
+                                           *, tenant_id: int = 1,
+                                           actor: str | None = None) -> int:
+        emails_norm = sorted({(e or "").strip().lower()
+                               for e in emails if e and "@" in e})
+        with self.transaction() as conn:
+            conn.execute(
+                "DELETE FROM recipient_group_members WHERE group_id = ?",
+                (int(group_id),),
+            )
+            for em in emails_norm:
+                conn.execute(
+                    """INSERT OR IGNORE INTO recipient_group_members
+                           (tenant_id, group_id, email, added_by)
+                       VALUES (?, ?, ?, ?)""",
+                    (int(tenant_id), int(group_id), em, actor),
+                )
+            return len(emails_norm)
+
+    def add_recipients_to_group(self, group_id: int, emails: list[str],
+                                   *, tenant_id: int = 1,
+                                   actor: str | None = None) -> int:
+        added = 0
+        with self.transaction() as conn:
+            for em in emails:
+                em = (em or "").strip().lower()
+                if not em or "@" not in em:
+                    continue
+                cur = conn.execute(
+                    """INSERT OR IGNORE INTO recipient_group_members
+                           (tenant_id, group_id, email, added_by)
+                       VALUES (?, ?, ?, ?)""",
+                    (int(tenant_id), int(group_id), em, actor),
+                )
+                added += cur.rowcount
+        return added
+
+    def list_recipients(self, *, tenant_id: int = 1,
+                          q: str | None = None,
+                          domain: str | None = None,
+                          limit: int = 500) -> list[dict[str, Any]]:
+        where = ["tenant_id = ?"]
+        params: list[Any] = [int(tenant_id)]
+        if q:
+            where.append("(email LIKE ? OR last_subject LIKE ? OR last_from LIKE ?)")
+            qq = f"%{q.strip().lower()}%"
+            params.extend([qq, qq, qq])
+        if domain:
+            where.append("domain = ?")
+            params.append(domain.strip().lower())
+        sql = f"""SELECT * FROM recipients
+                   WHERE {" AND ".join(where)}
+                   ORDER BY last_seen_at DESC LIMIT ?"""
+        params.append(int(limit))
+        with self._connect() as conn:
+            return [dict(r) for r in conn.execute(sql, params).fetchall()]
+
+    def upsert_recipient(self, email: str, *, tenant_id: int = 1,
+                           last_subject: str | None = None,
+                           last_from: str | None = None) -> None:
+        email = (email or "").strip().lower()
+        if not email or "@" not in email:
+            return
+        domain = email.rsplit("@", 1)[-1]
+        with self.transaction() as conn:
+            conn.execute(
+                """INSERT INTO recipients
+                       (email, tenant_id, domain, first_seen_at, last_seen_at,
+                        occurrences, last_subject, last_from)
+                   VALUES (?, ?, ?, datetime('now'), datetime('now'), 1, ?, ?)
+                   ON CONFLICT(email) DO UPDATE SET
+                       last_seen_at = datetime('now'),
+                       occurrences = recipients.occurrences + 1,
+                       last_subject = COALESCE(excluded.last_subject, recipients.last_subject),
+                       last_from = COALESCE(excluded.last_from, recipients.last_from)""",
+                (email, int(tenant_id), domain, last_subject, last_from),
+            )
+
+    def get_recipient_groups_by_email(self, email: str, *,
+                                          tenant_id: int = 1) -> list[dict[str, Any]]:
+        em = (email or "").strip().lower()
+        if not em:
+            return []
+        with self._connect() as conn:
+            return [dict(r) for r in conn.execute(
+                """SELECT g.* FROM recipient_groups g
+                     JOIN recipient_group_members m ON m.group_id = g.id
+                    WHERE m.email = ? AND g.tenant_id = ? AND g.enabled = 1""",
+                (em, int(tenant_id)),
+            ).fetchall()]
+
+    # ============================================================
+    # Codici monouso — tracking esteso (Migration 026)
+    # ============================================================
+
+    def mark_authorization_code_sent(self, code: str, *, sent_to_email: str) -> bool:
+        with self.transaction() as conn:
+            cur = conn.execute(
+                """UPDATE authorization_codes
+                      SET sent_to_email = ?,
+                          sent_at = COALESCE(sent_at, datetime('now'))
+                    WHERE code = ?""",
+                ((sent_to_email or "").strip().lower(), code.strip().upper()),
+            )
+            return cur.rowcount > 0
+
+    def mark_authorization_code_accepted(self, code: str, *,
+                                            accepted_by_email: str) -> bool:
+        with self.transaction() as conn:
+            cur = conn.execute(
+                """UPDATE authorization_codes
+                      SET accepted_at = datetime('now'),
+                          accepted_by_email = ?,
+                          state = 'accepted'
+                    WHERE code = ? AND state IN ('pending', 'accepted')""",
+                ((accepted_by_email or "").strip().lower(), code.strip().upper()),
+            )
+            return cur.rowcount > 0
+
+    def expire_pending_authorization_codes(self) -> int:
+        with self.transaction() as conn:
+            cur = conn.execute(
+                """UPDATE authorization_codes
+                      SET state = 'expired'
+                    WHERE state = 'pending'
+                      AND datetime(valid_until) < datetime('now')"""
+            )
+            return cur.rowcount
+
+    # ============================================================
+    # Codici permanenti — log utilizzi esteso (Migration 026)
+    # ============================================================
+
+    def insert_h24_code_usage_full(self, *, h24_code_id: int,
+                                       event_uuid: str | None = None,
+                                       ticket_id: str | None = None,
+                                       from_email: str | None = None,
+                                       subject: str | None = None,
+                                       body_excerpt: str | None = None,
+                                       inbound_alias: str | None = None,
+                                       note: str | None = None) -> int:
+        """Log completo utilizzo codice permanente con dettaglio mail richiesta."""
+        if body_excerpt and len(body_excerpt) > 4000:
+            body_excerpt = body_excerpt[:4000] + "...[truncated]"
+        with self.transaction() as conn:
+            cur = conn.execute(
+                """INSERT INTO customer_h24_codes_usage
+                       (h24_code_id, event_uuid, ticket_id, from_address,
+                        from_email, subject, inbound_alias, body_excerpt, note)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (int(h24_code_id), event_uuid, ticket_id,
+                 from_email, from_email, subject, inbound_alias,
+                 body_excerpt, note),
+            )
+            return int(cur.lastrowid)
 
 
 # ============================================================= HELPERS ===

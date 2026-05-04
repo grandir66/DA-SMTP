@@ -282,6 +282,56 @@
                 </span></span></label>
                 <input type="text" name="match_to_domain" value="{{ record.match_to_domain or '' }}" placeholder="es. domarc.it">
             </div>
+            <div class="rf-row">
+                <label>To gruppo destinatari<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
+                    <strong>Alternativa esclusiva</strong> a "To regex": la regola scatta
+                    se uno dei destinatari della mail è membro del gruppo selezionato.
+                    Utile per regole tipo "tecnici no fuori orario → catchall".
+                    <br><br>
+                    <strong>Non si può usare insieme a "To regex"</strong>:
+                    se entrambi sono valorizzati, il salvataggio fallisce.
+                    <br><br>
+                    Gestisci i gruppi destinatari da
+                    <a href="{{ url_for('recipient_groups.list_view') }}">/recipient-groups</a>.
+                </span></span></label>
+                <select name="match_to_group_id">
+                    <option value="">— nessuno —</option>
+                    {% for rg in (recipient_groups or []) %}
+                    <option value="{{ rg.id }}"
+                        {% if record.match_to_group_id == rg.id %}selected{% endif %}>
+                        {{ rg.name }} ({{ rg.member_count }} membri)
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="rf-row" style="grid-column: 1 / -1;">
+                <label>Forward — destinatari<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
+                    Per l'azione <code>forward</code>: lista di indirizzi destinatari
+                    separati da <code>;</code>, <code>,</code> o newline. Esempio:
+                    <code>assistenza-h24@datia.it; backup@altro.com</code>.
+                    <br><br>
+                    Alternativa: scegli un <strong>Forward gruppo</strong> qui sotto;
+                    il listener espande i membri del gruppo al momento dell'invio.
+                </span></span></label>
+                <textarea name="forward_to_emails" rows="2"
+                          placeholder="assistenza-h24@datia.it; backup@altro.com"
+                          style="font-family:ui-monospace,monospace; font-size:0.85rem;">{{ record.forward_to_emails or '' }}</textarea>
+            </div>
+            <div class="rf-row">
+                <label>Forward gruppo<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
+                    Alternativa alla lista email: scegli un gruppo destinatari
+                    e il listener invia a tutti i membri.
+                </span></span></label>
+                <select name="forward_to_group_id">
+                    <option value="">— nessuno —</option>
+                    {% for rg in (recipient_groups or []) %}
+                    <option value="{{ rg.id }}"
+                        {% if record.forward_to_group_id == rg.id %}selected{% endif %}>
+                        {{ rg.name }} ({{ rg.member_count }} membri)
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
             <div style="grid-column: 1 / -1; margin-top:0.5rem; padding:0.7rem 0.9rem; background:#f0fdf4; border-left:3px solid #10b981; border-radius:0 6px 6px 0;">
                 <h4 style="margin:0 0 0.4rem 0; color:#065f46; font-size:0.92rem;">
                     <i class="fas fa-clock"></i> Match temporale (rispetto al profilo orari del cliente)

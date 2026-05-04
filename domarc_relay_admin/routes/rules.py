@@ -88,6 +88,17 @@ def form_view(rule_id: int | None = None):
 
     if request.method == "POST":
         data = _parse_form(request.form)
+        # Validazione: match_to_regex e match_to_group_id sono mutuamente esclusivi
+        if data.get("match_to_regex") and data.get("match_to_group_id"):
+            flash("Impossibile usare match_to_regex e match_to_group_id contemporaneamente. "
+                  "Scegli una delle due modalità.", "error")
+            return render_template("admin/rule_form.html", is_new=is_new,
+                                     record={**(record or {}), **data},
+                                     templates=templates, from_event_id=from_event_id,
+                                     known_domains=known_domains,
+                                     customer_groups=[],
+                                     recipient_groups=_storage().list_recipient_groups(
+                                         tenant_id=_tid(), only_enabled=True))
         try:
             if not is_new:
                 data["id"] = rule_id
@@ -108,6 +119,8 @@ def form_view(rule_id: int | None = None):
     real_groups = _storage().list_customer_groups(tenant_id=_tid())
     db_path = current_app.extensions["domarc_config"].db_path
     customer_groups = merge_with_virtuals(real_groups, db_path, _tid())
+    recipient_groups = _storage().list_recipient_groups(tenant_id=_tid(),
+                                                          only_enabled=True)
 
     return render_template(
         "admin/rule_form.html",
@@ -117,6 +130,7 @@ def form_view(rule_id: int | None = None):
         from_event_id=from_event_id,
         known_domains=known_domains,
         customer_groups=customer_groups,
+        recipient_groups=recipient_groups,
         ai_active_bindings=ai_active_bindings,
         ai_providers=ai_providers_map,
         ai_global_status=ai_global_status,
@@ -429,6 +443,8 @@ def child_form_view(group_id: int, child_id: int | None = None):
     ai_active_bindings, ai_providers_map, ai_global_status, ai_recent_decisions = \
         _build_ai_form_context(child_id)
 
+    recipient_groups = _storage().list_recipient_groups(tenant_id=_tid(),
+                                                          only_enabled=True)
     return render_template(
         "admin/rule_child_form.html",
         is_new=is_new,
@@ -436,6 +452,7 @@ def child_form_view(group_id: int, child_id: int | None = None):
         parent=parent,
         templates=templates,
         effective_action_map=effective_action_map,
+        recipient_groups=recipient_groups,
         ai_active_bindings=ai_active_bindings,
         ai_providers=ai_providers_map,
         ai_global_status=ai_global_status,
@@ -591,8 +608,30 @@ def _parse_form(form) -> dict:
             sorted(set(g.strip() for g in form.getlist("match_customer_groups") if g.strip()))
         ) or None,
         "match_tag": form.get("match_tag"),
+        # Recipient groups (Migration 027)
+        # NOTA: match_to_regex e match_to_group_id sono mutuamente esclusivi
+        "match_to_group_id": _to_int(form.get("match_to_group_id")),
+        "forward_to_emails": _normalize_emails_list(form.get("forward_to_emails")),
+        "forward_to_group_id": _to_int(form.get("forward_to_group_id")),
         "action": form.get("action"),
         "action_map": action_map if action_map else None,
         "severity": form.get("severity"),
         "continue_after_match": (form.get("continue_after_match") or "").lower() in ("on", "true", "1"),
     }
+
+
+def _to_int(v):
+    try:
+        return int(v) if v not in (None, "", "0") else None
+    except (ValueError, TypeError):
+        return None
+
+
+def _normalize_emails_list(raw):
+    """Lista email separate da ; , whitespace o newline → string ';'-separated."""
+    import re as _re
+    if not raw:
+        return None
+    parts = [p.strip().lower() for p in _re.split(r"[\s,;]+", raw or "") if p.strip()]
+    valid = [p for p in parts if "@" in p]
+    return ";".join(valid) if valid else None

@@ -1,0 +1,192 @@
+{% extends "admin/_base.html" %}
+{% block title %}{{ 'Nuovo' if not group else group.name }} — Gruppo destinatari{% endblock %}
+{% block content %}
+<style>
+.wrap { padding: 1rem 1.4rem; }
+.form-row { display: grid; grid-template-columns: 1fr 1fr 1fr 100px 80px; gap: 0.8rem; margin-bottom: 1rem; }
+.form-row label { font-size: 0.8rem; color: #555; font-weight: 600; display: block; margin-bottom: 0.2rem; }
+.form-row input, .form-row textarea {
+    padding: 0.5rem; border: 1px solid #cbd5e1; border-radius: 4px;
+    font-size: 0.9rem; width: 100%; box-sizing: border-box;
+}
+.section {
+    background: #f8fafc; padding: 1rem; border-radius: 6px;
+    margin-bottom: 1rem;
+}
+.section h3 {
+    margin-top: 0; color: var(--primary-dark); font-size: 1rem;
+}
+.suggestions {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 0.4rem; max-height: 360px; overflow-y: auto;
+    border: 1px solid #e2e8f0; padding: 0.5rem; border-radius: 4px;
+    background: white;
+}
+.sugg-row { padding: 0.3rem; display: flex; align-items: center; gap: 0.4rem; }
+.sugg-row.member { background: #d1fae5; }
+.sugg-row label {
+    font-family: ui-monospace, monospace; font-size: 0.82rem;
+    cursor: pointer; flex: 1;
+}
+.filters-bar {
+    display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap;
+    margin-bottom: 0.6rem;
+}
+.filters-bar input { padding: 0.35rem 0.55rem; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.85rem; }
+.live-counter { font-size: 0.78rem; color: #64748b; }
+.member-list-textarea {
+    width: 100%; min-height: 100px; padding: 0.6rem;
+    border: 1px solid #cbd5e1; border-radius: 4px;
+    font-family: ui-monospace, monospace; font-size: 0.85rem;
+    box-sizing: border-box;
+}
+</style>
+
+<div class="wrap">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+        <h1 style="margin:0;">
+            {% if group %}✏️ {{ group.name }}{% else %}✨ Nuovo gruppo destinatari{% endif %}
+        </h1>
+        <a href="{{ url_for('recipient_groups.list_view') }}" class="dr-btn">
+            <i class="fas fa-arrow-left"></i> Torna alla lista
+        </a>
+    </div>
+
+    <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div class="section">
+            <h3>Anagrafica</h3>
+            <div class="form-row">
+                <div>
+                    <label>Codice (slug)</label>
+                    <input type="text" name="code" required pattern="[a-z0-9_-]+"
+                           value="{{ group.code if group else '' }}"
+                           placeholder="tecnici_no_fo">
+                </div>
+                <div>
+                    <label>Nome</label>
+                    <input type="text" name="name" required
+                           value="{{ group.name if group else '' }}"
+                           placeholder="Tecnici no fuori orario">
+                </div>
+                <div>
+                    <label>Descrizione</label>
+                    <input type="text" name="description"
+                           value="{{ group.description if group else '' }}"
+                           placeholder="Indirizzi da non disturbare fuori orario">
+                </div>
+                <div>
+                    <label>Colore</label>
+                    <input type="color" name="color"
+                           value="{{ group.color or '#6366f1' }}">
+                </div>
+                <div>
+                    <label>Stato</label>
+                    <label style="font-weight:normal; padding-top:0.4rem;">
+                        <input type="checkbox" name="enabled" value="1"
+                               {% if not group or group.enabled %}checked{% endif %}>
+                        Attivo
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        {% if group %}
+        <div class="section">
+            <h3>Membri (indirizzi destinatari)</h3>
+
+            <div style="margin-bottom: 0.7rem;">
+                <label style="font-size:0.85rem; font-weight:600; color:#555;">
+                    Aggiungi indirizzi liberi (separati da spazio, virgola, ; o newline):
+                </label>
+                <textarea name="members_raw" class="member-list-textarea"
+                          placeholder="mario@datia.it, luca@datia.it&#10;paolo@cliente.it; assistenza@altro.com"></textarea>
+            </div>
+
+            <div class="filters-bar">
+                <input type="text" id="suggFilter" placeholder="🔍 Filtra suggerimenti..."
+                       oninput="filterSuggestions()" style="flex:1;">
+                <span class="live-counter" id="memberCount">— membri</span>
+                <button type="button" class="dr-btn" onclick="checkAll(true)">✓ Spunta visibili</button>
+                <button type="button" class="dr-btn" onclick="checkAll(false)">✕ Deseleziona visibili</button>
+            </div>
+
+            <small style="color:#94a3b8; display:block; margin-bottom:0.3rem;">
+                Suggerimenti dall'autodiscovery (top 500 più recenti). Le caselle verdi sono già membri.
+            </small>
+
+            <div class="suggestions" id="suggList">
+                {% for r in available_recipients %}
+                {% set is_member = r.email in (member_emails or set()) %}
+                <div class="sugg-row {% if is_member %}member{% endif %}" data-email="{{ r.email }}">
+                    <input type="checkbox" name="members" value="{{ r.email }}"
+                           id="m_{{ loop.index }}"
+                           {% if is_member %}checked{% endif %}
+                           onchange="updateMemberCount()">
+                    <label for="m_{{ loop.index }}">
+                        {{ r.email }}
+                        <small style="color:#94a3b8;">({{ r.occurrences }}x)</small>
+                    </label>
+                </div>
+                {% endfor %}
+                {% if not available_recipients %}
+                <p style="color:#94a3b8; padding:1rem; text-align:center;">
+                    Nessun suggerimento ancora. L'autodiscovery popola i destinatari automaticamente
+                    al passaggio delle prime mail.
+                </p>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        <div style="display:flex; gap:0.6rem; align-items:center; padding:0.5rem 0;">
+            <button type="submit" class="dr-btn dr-btn-primary">
+                <i class="fas fa-save"></i> {{ 'Salva modifiche' if group else 'Crea gruppo' }}
+            </button>
+            <a href="{{ url_for('recipient_groups.list_view') }}" class="dr-btn">Annulla</a>
+
+            {% if group %}
+            <span style="flex:1;"></span>
+            <button type="button" class="dr-btn"
+                    style="color:#dc2626; border-color:#dc2626;"
+                    onclick="if(confirm('Eliminare definitivamente il gruppo «{{ group.name }}»?')) document.getElementById('deleteForm').submit();">
+                <i class="fas fa-trash"></i> Elimina gruppo
+            </button>
+            {% endif %}
+        </div>
+    </form>
+
+    {% if group %}
+    <form id="deleteForm" method="post"
+          action="{{ url_for('recipient_groups.delete_view', group_id=group.id) }}"
+          style="display:none;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    </form>
+    {% endif %}
+</div>
+
+<script>
+function updateMemberCount() {
+    const n = document.querySelectorAll('input[name="members"]:checked').length;
+    document.getElementById('memberCount').textContent = `${n} membri`;
+}
+function filterSuggestions() {
+    const q = (document.getElementById('suggFilter').value || '').toLowerCase();
+    document.querySelectorAll('#suggList .sugg-row').forEach(r => {
+        const e = (r.dataset.email || '').toLowerCase();
+        r.style.display = e.includes(q) ? '' : 'none';
+    });
+}
+function checkAll(on) {
+    document.querySelectorAll('#suggList .sugg-row').forEach(r => {
+        if (r.style.display !== 'none') {
+            const cb = r.querySelector('input[type=checkbox]');
+            if (cb) cb.checked = on;
+        }
+    });
+    updateMemberCount();
+}
+updateMemberCount();
+</script>
+{% endblock %}

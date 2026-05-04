@@ -1,0 +1,78 @@
+{% extends "admin/_base.html" %}
+{% block title %}Gruppi destinatari — SMTP relay{% endblock %}
+{% block content %}
+<style>
+.wrap { padding: 1rem 1.4rem; }
+.intro {
+    background: #f0f9ff; border-left: 3px solid #0ea5e9;
+    padding: 0.7rem 1rem; border-radius: 6px; margin-bottom: 1rem;
+    font-size: 0.86rem; color: #444;
+}
+.group-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1rem; margin-top: 1rem;
+}
+.group-card {
+    background: white; border: 1px solid #e2e8f0; border-radius: 8px;
+    padding: 1rem; transition: box-shadow 0.2s; cursor: pointer;
+    border-left: 4px solid var(--accent);
+}
+.group-card:hover { box-shadow: 0 4px 14px rgba(0,0,0,0.08); }
+.group-card .name {
+    font-size: 1.1rem; font-weight: 600; color: var(--primary-dark);
+    margin: 0 0 0.4rem;
+}
+.group-card .code {
+    font-family: ui-monospace, monospace; color: #64748b; font-size: 0.78rem;
+}
+.group-card .desc { color: #555; font-size: 0.85rem; margin-top: 0.5rem; }
+.group-card .stats {
+    margin-top: 0.7rem; padding-top: 0.6rem; border-top: 1px solid #e2e8f0;
+    font-size: 0.82rem; color: #555;
+}
+.group-card.disabled { opacity: 0.5; }
+.color-bar {
+    width: 4px; height: 100%; position: absolute; left: 0; top: 0;
+}
+</style>
+
+<div class="wrap">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+        <h1 style="margin:0;">👥 Gruppi destinatari</h1>
+        <a href="{{ url_for('recipient_groups.new_view') }}" class="dr-btn dr-btn-primary">
+            <i class="fas fa-plus"></i> Nuovo gruppo
+        </a>
+    </div>
+
+    <div class="intro">
+        <strong>I gruppi destinatari</strong> raggruppano indirizzi email per usarli nelle regole come:
+        <ul style="margin: 0.4rem 0 0 1.2rem;">
+            <li><strong>criterio di match</strong>: la regola scatta se la mail è destinata a un membro del gruppo</li>
+            <li><strong>target di forward</strong>: l'azione forward espande il gruppo in N destinatari</li>
+        </ul>
+        Use case tipico: gruppo "Tecnici no fuori orario" + regola "fuori orario → forward a catchall H24".
+    </div>
+
+    <div class="group-grid">
+        {% for g in groups %}
+        <a href="{{ url_for('recipient_groups.detail_view', group_id=g.id) }}"
+           class="group-card {% if not g.enabled %}disabled{% endif %}"
+           style="border-left-color: {{ g.color or '#f6c23e' }}; text-decoration:none; color:inherit;">
+            <div class="name">{{ g.name }}</div>
+            <div class="code">{{ g.code }}{% if not g.enabled %} <span style="color:#dc2626;">— disattivato</span>{% endif %}</div>
+            {% if g.description %}<div class="desc">{{ g.description|truncate(120) }}</div>{% endif %}
+            <div class="stats">
+                <i class="fas fa-envelope"></i> {{ g.member_count }} membri
+                <span style="color:#94a3b8; margin-left:0.7rem;">creato {{ (g.created_at or '')|truncate(10, true, '') }}</span>
+            </div>
+        </a>
+        {% endfor %}
+        {% if not groups %}
+        <p style="color:#94a3b8; grid-column:1/-1; text-align:center; padding:2rem;">
+            Nessun gruppo destinatari ancora.<br>
+            <a href="{{ url_for('recipient_groups.new_view') }}" class="dr-btn dr-btn-primary" style="margin-top:0.5rem;">Crea il primo</a>
+        </p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

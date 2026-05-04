@@ -194,6 +194,10 @@ def rules_active():
             "match_known_customer": r.get("match_known_customer"),
             "match_has_exception_today": r.get("match_has_exception_today"),
             "match_customer_groups": r.get("match_customer_groups"),
+            # Migration 027: recipient groups
+            "match_to_group_id": r.get("match_to_group_id"),
+            "forward_to_emails": r.get("forward_to_emails"),
+            "forward_to_group_id": r.get("forward_to_group_id"),
             "action": r["action"],
             "action_map": am,
             "continue_after_match": bool(r.get("continue_after_match")),
@@ -378,6 +382,30 @@ def h24_targets_active():
     }), 200
 
 
+@api_bp.route("/recipient-groups/active", methods=["GET"])
+@require_api_key
+def recipient_groups_active():
+    """Gruppi destinatari + membri (Migration 025).
+    Listener cache locale per match `match_to_group_id` e `forward_to_group_id`."""
+    storage = _storage()
+    groups = storage.list_recipient_groups(only_enabled=True)
+    out = []
+    for g in groups:
+        members = [m["email"] for m in storage.list_recipient_group_members(g["id"])]
+        out.append({
+            "id": int(g["id"]),
+            "code": g["code"],
+            "name": g["name"],
+            "color": g.get("color"),
+            "enabled": bool(g["enabled"]),
+            "members": members,
+        })
+    return jsonify({
+        "synced_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "groups": out,
+    }), 200
+
+
 @api_bp.route("/events", methods=["POST"])
 @require_api_key
 def events_post():
@@ -459,6 +487,8 @@ def events_post():
                 accepted += 1
                 # Auto-upsert anagrafica indirizzi (mittente + destinatario)
                 _upsert_address_from_event(storage, evt)
+                # Autodiscovery destinatari (Migration 025)
+                _autodiscover_recipients(storage, evt)
                 # F2 — Error aggregator IA: hook per clustering errori
                 _try_aggregate_error_cluster(storage, evt)
             else:
@@ -467,6 +497,26 @@ def events_post():
             errors.append({"uuid": str(uuid_str), "error": str(exc)})
 
     return jsonify({"accepted": accepted, "duplicates": duplicates, "errors": errors}), 200
+
+
+def _autodiscover_recipients(storage, evt: dict) -> None:
+    """Autodiscovery destinatari: popola la tabella `recipients` ad ogni evento.
+
+    Pattern: per ogni indirizzo destinatario visto (To primario), upsert con
+    incremento occurrences + last_seen_at. Best-effort, errori non bloccanti.
+    """
+    try:
+        tenant_id = int(evt.get("tenant_id") or 1)
+        to_addr = (evt.get("to_address") or "").strip().lower()
+        if to_addr and "@" in to_addr:
+            storage.upsert_recipient(
+                to_addr,
+                tenant_id=tenant_id,
+                last_subject=(evt.get("subject") or "")[:200] or None,
+                last_from=(evt.get("from_address") or "")[:120] or None,
+            )
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("autodiscover_recipients fallito: %s", exc)
 
 
 def _try_aggregate_error_cluster(storage, evt: dict) -> None:
@@ -584,6 +634,7 @@ def auth_codes_post():
     except (TypeError, ValueError):
         ttl_hours = 48
     tenant_id = int(body.get("tenant_id") or 1)
+    sent_to = (body.get("sent_to_email") or "").strip().lower() or None
     try:
         result = _storage().issue_auth_code(
             tenant_id=tenant_id, codice_cliente=codcli,
@@ -591,9 +642,31 @@ def auth_codes_post():
             ttl_hours=ttl_hours, note=note,
             event_uuid=event_uuid,
         )
+        # Migration 026: marca dove è stato spedito (se già noto)
+        if sent_to and result.get("code"):
+            try:
+                _storage().mark_authorization_code_sent(
+                    result["code"], sent_to_email=sent_to)
+            except Exception:  # noqa: BLE001
+                pass
         return jsonify(result), 200
     except Exception as exc:  # noqa: BLE001
         return jsonify({"ok": False, "error": str(exc)}), 500
+
+
+@api_bp.route("/auth-codes/sent", methods=["POST"])
+@require_api_key
+def auth_codes_mark_sent():
+    """Marca a posteriori il sent_to_email di un codice già emesso.
+    Body: {code: "AUTH-XYZ", sent_to_email: "mario@datia.it"}.
+    """
+    body = request.get_json(silent=True) or {}
+    code = (body.get("code") or "").strip().upper()
+    sent_to = (body.get("sent_to_email") or "").strip().lower()
+    if not code or not sent_to:
+        return jsonify({"ok": False, "error": "code+sent_to_email required"}), 400
+    ok = _storage().mark_authorization_code_sent(code, sent_to_email=sent_to)
+    return jsonify({"ok": bool(ok)}), 200
 
 
 @api_bp.route("/auth-codes/validate", methods=["POST"])
@@ -635,6 +708,7 @@ def auth_codes_validate():
     event_uuid = body.get("event_uuid") or None
     from_address = body.get("from_address") or None
     inbound_alias = body.get("inbound_alias") or None
+    body_excerpt = body.get("body_excerpt") or body.get("body_text") or None
     extracted = False
 
     # Estrazione server-side se code non fornito
@@ -671,8 +745,12 @@ def auth_codes_validate():
         oneshot_code, consume=True, used_by=used_by, tenant_id=tenant_id,
     )
     if one["valid"]:
-        # Aggiorna event_uuid sul codice se non presente (legame post-fact)
-        # e logga from_address se mancante
+        # Migration 026: marca anche state=accepted + accepted_by_email
+        try:
+            storage.mark_authorization_code_accepted(
+                oneshot_code, accepted_by_email=from_address or "")
+        except Exception:  # noqa: BLE001
+            pass
         return jsonify({
             "valid": True,
             "kind": "oneshot",
@@ -683,10 +761,11 @@ def auth_codes_validate():
             "extracted_from_subject": extracted,
         }), 200
 
-    # Cascade 2: permanente
+    # Cascade 2: permanente — Migration 026 include body_excerpt
     perm = storage.validate_h24_customer_code(
         code, tenant_id=tenant_id, event_uuid=event_uuid,
         from_address=from_address, subject=subject, inbound_alias=inbound_alias,
+        body_excerpt=body_excerpt,
     )
     if perm["valid"]:
         return jsonify({
