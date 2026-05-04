@@ -6,48 +6,92 @@
     <h2><i class="fas fa-envelope-open-text"></i> Mailbox H24 di rientro
         <small style="color:#64748b; font-weight:400;">{{ targets|length }} mappature</small>
     </h2>
-    <p style="color:#64748b; font-size:0.88rem;">
-        Mappa dominio mittente → indirizzo H24 da inserire nel pulsante
-        <code>mailto:</code> dell'auto-reply fuori orario. Permette routing
-        multi-brand: il cliente Datia clicca e arriva su <code>h24@datia.it</code>,
-        il cliente Domarc su <code>h24@domarc.it</code>.
-    </p>
-    {% if fallback_alias %}
-    <p style="color:#64748b; font-size:0.85rem; margin-top:0.5rem;">
-        <strong>Fallback globale</strong>: <code>{{ fallback_alias }}</code>
-        (usato quando il dominio mittente non è in tabella).
-        Configurabile in <a href="{{ url_for('h24_codes.settings_view') }}">Settings H24</a>.
-    </p>
-    {% endif %}
 </section>
 
+<!-- Spiegazione step-by-step -->
+<section class="dr-section">
+    <div style="background:#f8fafc; border:1px solid #cbd5e1; border-radius:8px; padding:1rem 1.2rem;">
+        <h3 style="margin-top:0; color:#0b2a4a;">A cosa serve questa pagina</h3>
+        <p style="font-size:0.9rem; color:#374151;">
+            Quando un cliente scrive fuori orario, il relay risponde con
+            un'email contenente un <strong>pulsante "Autorizza intervento
+            urgente"</strong>. Il pulsante è un link <code>mailto:</code>
+            che apre il client mail del cliente con destinatario già
+            compilato. <strong>Qui decidi quale destinatario mettere</strong>,
+            in base al brand del cliente.
+        </p>
+
+        <h4 style="color:#0b2a4a; margin-bottom:0.4rem;">Esempio reale (cliente Datia)</h4>
+        <ol style="font-size:0.88rem; color:#374151;">
+            <li>Un cliente con email <code>r.grandi@datia.it</code> scrive
+                a <code>supporto@datia.it</code> alle 23:00 (fuori orario).</li>
+            <li>Il relay risponde con auto-reply contenente il pulsante
+                rosso "Autorizza intervento urgente — 250 €".</li>
+            <li>Sistema controlla questa tabella: il dominio del cliente
+                (<code>datia.it</code>) è in tabella → il pulsante punta a
+                <strong><code>h24@datia.it</code></strong>.</li>
+            <li>Cliente clicca → si apre il suo client mail con
+                <code>To: h24@datia.it</code> e nell'oggetto il codice di
+                autorizzazione precompilato.</li>
+            <li>Cliente preme Invio → la mail di rientro arriva a
+                <code>h24@datia.it</code> e il relay apre il ticket urgente.</li>
+        </ol>
+
+        <h4 style="color:#0b2a4a; margin-bottom:0.4rem;">Perché serve una tabella e non un solo indirizzo fisso</h4>
+        <p style="font-size:0.88rem; color:#374151;">
+            Domarc gestisce più brand (Domarc, Datia, eventualmente altri).
+            Un cliente Datia non vuole vedere <code>h24@domarc.it</code> nella sua
+            mail (si confonderebbe sul brand). Questa tabella permette di
+            mostrare a ogni cliente la mailbox del suo brand di provenienza.
+        </p>
+
+        {% if fallback_alias %}
+        <p style="font-size:0.85rem; color:#64748b; border-top:1px solid #e5e7eb; padding-top:8px; margin-top:12px;">
+            <strong>Fallback globale</strong>: se il dominio di un cliente
+            <strong>non</strong> è in questa tabella, il pulsante usa
+            <code>{{ fallback_alias }}</code>.
+            Modificabile in <a href="{{ url_for('h24_codes.settings_view') }}">Settings H24</a>
+            (chiave <code>h24.default_inbound_alias</code>).
+        </p>
+        {% endif %}
+    </div>
+</section>
+
+<!-- Form -->
 <section class="dr-section">
     <h3><i class="fas fa-plus-circle"></i> Aggiungi / modifica mappatura</h3>
     <form method="post" action="{{ url_for('h24_codes.targets_upsert_view') }}"
           style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:end;">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div>
-            <small>Dominio sorgente *</small><br>
+            <small><strong>Dominio del cliente *</strong>
+                <span style="color:#64748b;">(es. il dominio @ del mittente)</span>
+            </small><br>
             <input type="text" name="source_domain" required
                    placeholder="es. datia.it"
                    pattern="[a-z0-9.-]+\.[a-z]{2,}"
                    style="text-transform:lowercase;">
         </div>
         <div>
-            <small>Alias H24 *</small><br>
+            <small><strong>Mailbox H24 da mostrare nel pulsante *</strong>
+                <span style="color:#64748b;">(dove arriva il rientro)</span>
+            </small><br>
             <input type="email" name="h24_alias" required
                    placeholder="es. h24@datia.it"
                    style="text-transform:lowercase;">
         </div>
         <div>
-            <small>Importo override (€)</small><br>
+            <small>Importo override (€)<br>
+                <span style="color:#64748b;">solo se diverso dal default</span>
+            </small><br>
             <input type="number" name="urgent_fee_eur"
                    placeholder="default settings" min="0" max="10000"
                    style="width:140px;">
         </div>
         <div style="flex:1; min-width:200px;">
-            <small>Note</small><br>
-            <input type="text" name="note" style="width:100%;">
+            <small>Note interne (per audit)</small><br>
+            <input type="text" name="note" style="width:100%;"
+                   placeholder="es. 'pilota 2026', 'attivato dopo migrazione'">
         </div>
         <div>
             <label style="display:flex; align-items:center; gap:0.3rem;">
@@ -61,15 +105,25 @@
     </form>
 </section>
 
+<!-- Lista mappature -->
 <div class="table-outer">
     <div class="table-scroll">
         <table class="fw-table">
             <thead>
                 <tr>
-                    <th>Dominio sorgente</th>
-                    <th>Alias H24</th>
-                    <th style="text-align:right;">Importo override</th>
-                    <th>Note</th>
+                    <th>Dominio del cliente<br>
+                        <small style="font-weight:400; color:#64748b;">
+                            (lookup su mittente)
+                        </small></th>
+                    <th>Mailbox H24<br>
+                        <small style="font-weight:400; color:#64748b;">
+                            (mostrata nel pulsante mailto)
+                        </small></th>
+                    <th style="text-align:right;">Importo<br>
+                        <small style="font-weight:400; color:#64748b;">
+                            override
+                        </small></th>
+                    <th>Note interne</th>
                     <th>Stato</th>
                     <th>Aggiornato</th>
                     <th style="width:100px;">Azioni</th>
@@ -79,7 +133,10 @@
                 {% for t in targets %}
                 <tr {% if not t.enabled %}style="background:#f8fafc; color:#94a3b8;"{% endif %}>
                     <td><code>{{ t.source_domain }}</code></td>
-                    <td><code>{{ t.h24_alias }}</code></td>
+                    <td>
+                        <i class="fas fa-arrow-right" style="color:#94a3b8;"></i>
+                        <code>{{ t.h24_alias }}</code>
+                    </td>
                     <td style="text-align:right;">
                         {% if t.urgent_fee_eur %}
                         <strong>{{ t.urgent_fee_eur }} €</strong>
@@ -110,8 +167,8 @@
                 </tr>
                 {% else %}
                 <tr><td colspan="7" style="text-align:center; color:#94a3b8; padding:2rem;">
-                    Nessuna mappatura. L'auto-reply userà sempre il fallback
-                    globale (<code>{{ fallback_alias or 'non configurato' }}</code>).
+                    Nessuna mappatura configurata. L'auto-reply userà sempre
+                    il fallback globale (<code>{{ fallback_alias or 'non configurato' }}</code>).
                 </td></tr>
                 {% endfor %}
             </tbody>
