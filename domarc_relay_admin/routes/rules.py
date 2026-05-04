@@ -121,6 +121,11 @@ def form_view(rule_id: int | None = None):
     customer_groups = merge_with_virtuals(real_groups, db_path, _tid())
     recipient_groups = _storage().list_recipient_groups(tenant_id=_tid(),
                                                           only_enabled=True)
+    # Profili orari per preset orario (Refactor form 2026-05-05).
+    try:
+        profiles = _storage().list_profiles(tenant_id=_tid())
+    except Exception:  # noqa: BLE001
+        profiles = []
 
     return render_template(
         "admin/rule_form.html",
@@ -131,6 +136,7 @@ def form_view(rule_id: int | None = None):
         known_domains=known_domains,
         customer_groups=customer_groups,
         recipient_groups=recipient_groups,
+        profiles=profiles,
         ai_active_bindings=ai_active_bindings,
         ai_providers=ai_providers_map,
         ai_global_status=ai_global_status,

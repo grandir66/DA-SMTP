@@ -29,6 +29,51 @@
     .rf-action-fields { display:none; padding:0.8rem 1rem; background:#f8fafc; border-radius:6px; margin-top:0.6rem; border:1px solid #e2e8f0; }
     .rf-action-fields.active { display:block; }
     .rf-footer { display:flex; gap:0.5rem; padding:1rem 0; max-width:1100px; }
+
+    /* Match sub-section: piccola card annidata */
+    .rf-subcard {
+        background: #fcfcfd; border: 1px solid #e2e8f0; border-radius: 6px;
+        margin-bottom: 0.8rem; overflow: hidden;
+    }
+    .rf-subcard-header {
+        display: flex; align-items: center; gap: 0.5rem;
+        padding: 0.55rem 0.9rem; background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+        border-bottom: 1px solid #e2e8f0;
+        font-size: 0.85rem; font-weight: 600; color: #334155;
+    }
+    .rf-subcard-header .rf-subcard-icon {
+        width: 22px; height: 22px; border-radius: 4px;
+        display: inline-flex; align-items: center; justify-content: center;
+        background: #e0e7ff; color: #4338ca; font-size: 0.78rem;
+    }
+    .rf-subcard-header .rf-subcard-stats {
+        margin-left: auto; font-size: 0.75rem; font-weight: normal;
+        color: #94a3b8;
+    }
+    .rf-subcard-body { padding: 0.8rem 0.9rem; }
+
+    /* Mutex grigiatura */
+    .rf-row.disabled-by-mutex { opacity: 0.45; pointer-events: none; }
+    .rf-row.disabled-by-mutex input,
+    .rf-row.disabled-by-mutex select,
+    .rf-row.disabled-by-mutex textarea {
+        background: #f1f5f9; cursor: not-allowed;
+    }
+    .rf-mutex-note {
+        background: #fef3c7; border-left: 3px solid #f59e0b;
+        padding: 0.4rem 0.7rem; border-radius: 0 4px 4px 0;
+        font-size: 0.78rem; color: #92400e; margin-bottom: 0.6rem;
+    }
+
+    /* Preset orari quick-buttons */
+    .rf-hours-presets { display: flex; gap: 0.3rem; flex-wrap: wrap; margin-top: 0.4rem; }
+    .rf-hours-preset-btn {
+        background: #e0e7ff; color: #4338ca; border: 1px solid #c7d2fe;
+        padding: 0.2rem 0.55rem; border-radius: 4px;
+        font-size: 0.78rem; cursor: pointer; user-select: none;
+    }
+    .rf-hours-preset-btn:hover { background: #c7d2fe; }
+    .rf-hours-preset-btn.applied { background: #6366f1; color: white; border-color: #6366f1; }
 </style>
 {% endblock %}
 
@@ -56,19 +101,16 @@
         </summary>
         <ul style="margin:0.5rem 0 0 1.2rem; padding:0; color:#065f46;">
             <li><strong>Fuori orario / festività clienti con contratto</strong> →
-                Cliente noto = <em>sì</em>, Contratto = <em>con contratto</em>, Stato servizio = <em>fuori servizio</em>;
-                action <code>auto_reply</code> + template "fuori_orario" + <code>create_ticket</code> in cascata.</li>
+                Cliente noto = sì, Contratto = con contratto, Stato servizio = fuori servizio;
+                action <code>auto_reply</code> + template "fuori_orario" + <code>create_ticket</code>.</li>
             <li><strong>Cliente censito senza contratto</strong> →
-                Cliente noto = <em>sì</em>, Contratto = <em>senza contratto</em>;
+                Cliente noto = sì, Contratto = senza contratto;
                 action <code>auto_reply</code> + template "no_contract".</li>
             <li><strong>Mittente sconosciuto / catch-all</strong> →
-                Cliente noto = <em>non censito</em>; action <code>auto_reply</code> + template "unknown" o <code>quarantine</code>.</li>
-            <li><strong>Eccezione attiva (es. ponte, evento)</strong> →
-                Eccezione oggi = <em>sì</em>; action <code>auto_reply</code> con template specifico — si applica
-                a prescindere dal contratto.</li>
-            <li><strong>Notifiche automatiche da monitoring</strong> →
-                From dominio + Subject regex con keyword (alert/error/down) → <code>create_ticket</code>
-                con urgenza <code>ALTA</code>.</li>
+                Cliente noto = non censito; action <code>auto_reply</code> + template "unknown" o <code>quarantine</code>.</li>
+            <li><strong>Notifiche da monitoring</strong> →
+                From dominio + Subject regex <code>(?i)problem:</code> →
+                <code>create_ticket</code> NORMALE.</li>
         </ul>
     </details>
     {% endif %}
@@ -79,9 +121,7 @@
 <div class="rf-grid">
 
     <style>
-        /* Balloon/tooltip per ogni label del form rule.
-           Apertura A DESTRA della freccia (non sopra) per evitare che vada
-           fuori viewport o che sia coperto dall'header sticky. */
+        /* Balloon/tooltip — apertura a destra. */
         .rf-tip { position: relative; display: inline-block; margin-left: 0.4rem;
                   color: #2563eb; cursor: help; font-size: 0.8rem; }
         .rf-tip:hover .rf-tip-balloon { visibility: visible; opacity: 1; }
@@ -100,6 +140,7 @@
         .rf-tip-balloon code { background: rgba(255,255,255,0.15); padding: 1px 4px; border-radius: 2px; }
     </style>
 
+    {# === 1. IDENTIFICAZIONE === #}
     <div class="rf-card">
         <h3><i class="fas fa-tag"></i> Identificazione</h3>
         <div class="rf-body">
@@ -114,52 +155,44 @@
                 <label>Descrizione<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
                     Note interne sull'uso e la funzione della regola. Spiega
                     <strong>perché</strong> esiste, <strong>quando</strong> matcha
-                    e <strong>cosa</strong> fa. Visibile come tooltip nella lista
-                    regole.
+                    e <strong>cosa</strong> fa.
                 </span></span></label>
                 <textarea name="description" rows="3" style="width:100%; font-family:inherit;"
-                          placeholder="Spiega scopo, condizioni di match e comportamento atteso. Es: 'Intercetta mail dirette alla mailbox di rientro H24 con codice nel subject. Apre ticket urgente a pagamento.'">{{ record.description or '' }}</textarea>
+                          placeholder="Spiega scopo, condizioni di match e comportamento atteso.">{{ record.description or '' }}</textarea>
             </div>
             <div class="rf-row">
                 <label>Priorità<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
-                    Ordine di valutazione: numero <strong>più basso = valutata prima</strong>.
-                    Le regole con stessa priorità vengono valutate per ID. Il rule
-                    engine si ferma al primo match (a meno di "Cascata" attiva).
-                    Suggerito: 5-50 H24/critiche, 100-500 contratti, 999 catch-all.
+                    Numero <strong>più basso = valutata prima</strong>.
+                    5-50 H24/critiche, 100-500 contratti, 999 catch-all.
                 </span></span></label>
                 <div>
                     <input type="number" name="priority" min="1" max="999" value="{{ record.priority or 100 }}" style="width:120px;">
-                    <div class="help">Numero più basso = valutata prima nello stesso scope.</div>
+                    <div class="help">Numero più basso = valutata prima.</div>
                 </div>
             </div>
             <div class="rf-row">
-                <label>Stato<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
-                    Se disattivata la regola NON viene valutata. Utile per
-                    parking temporaneo senza perdere la configurazione.
-                </span></span></label>
+                <label>Stato</label>
                 <div><label style="font-weight:400;"><input type="checkbox" name="enabled" {% if record.enabled or is_new %}checked{% endif %}> Attiva</label></div>
             </div>
             <div class="rf-row">
                 <label>Cascata<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
-                    Se attivo, dopo il match continua a valutare le regole
-                    successive (può triggerare azioni multiple). Se spento (default),
-                    al primo match la pipeline si ferma. Tipico: spento per
-                    auto_reply/create_ticket, acceso per flag_only diagnostici.
+                    Se attivo, dopo il match continua a valutare le regole successive.
+                    Default OFF: prima regola che matcha vince.
                 </span></span></label>
-                <div><label style="font-weight:400;"><input type="checkbox" name="continue_after_match" {% if record.continue_after_match %}checked{% endif %}> Continua a valutare regole successive dopo il match</label></div>
+                <div><label style="font-weight:400;"><input type="checkbox" name="continue_after_match" {% if record.continue_after_match %}checked{% endif %}> Continua a valutare regole successive</label></div>
             </div>
         </div>
     </div>
 
+    {# === 2. SCOPE === #}
     <div class="rf-card">
         <h3><i class="fas fa-bullseye"></i> Scope</h3>
         <div class="rf-body">
             <div class="rf-row">
                 <label>Tipo<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
-                    Ambito di applicazione:<br>
-                    <strong>Globale</strong>: applicata a tutte le mail<br>
-                    <strong>Mailbox specifica</strong>: solo se scope_ref matcha id mailbox<br>
-                    <strong>Settore</strong>: solo per pack settore (sector_pack)
+                    <strong>Globale</strong>: tutte le mail.
+                    <strong>Mailbox specifica</strong>: solo per scope_ref.
+                    <strong>Settore</strong>: solo per pack settore.
                 </span></span></label>
                 <select name="scope_type">
                     <option value="global"      {% if record.scope_type == 'global' or not record.scope_type %}selected{% endif %}>Globale</option>
@@ -168,11 +201,7 @@
                 </select>
             </div>
             <div class="rf-row">
-                <label>Riferimento<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
-                    Identificatore concreto dell'ambito. Vuoto se Tipo=Globale.
-                    Per Tipo=Mailbox: id numerico della mailbox. Per Tipo=Settore:
-                    nome del pack.
-                </span></span></label>
+                <label>Riferimento</label>
                 <div>
                     <input type="text" name="scope_ref" value="{{ record.scope_ref or '' }}" placeholder="es. id mailbox o nome settore">
                     <div class="help">Vuoto se scope = global.</div>
@@ -181,305 +210,326 @@
         </div>
     </div>
 
+    {# === 3. CRITERI DI MATCH (5 sotto-sezioni) === #}
     <div class="rf-card full">
-        <h3><i class="fas fa-magnifying-glass"></i> Match (AND tra i campi compilati)</h3>
+        <h3><i class="fas fa-magnifying-glass"></i> Criteri di match
+            <span style="margin-left:auto; font-size:0.78rem; font-weight:normal; color:#64748b;">
+                AND logico tra i campi compilati di tutte le sezioni
+            </span>
+        </h3>
         <div class="rf-body">
-            <div class="rf-row">
-                <label>Subject regex<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
-                    Regex Python applicata al <strong>subject</strong> della mail.
-                    Senza match → la regola non scatta. Esempi:
-                    <code>(?i)urgente</code>,
-                    <code>AUTH-|H24-</code>,
-                    <code>\\[OptiWize\\]</code>.
-                    Usa <code>(?i)</code> per case-insensitive.
-                </span></span></label>
-                <div>
-                    <div class="inline-test">
-                        <input type="text" id="match_subject_regex" name="match_subject_regex" value="{{ record.match_subject_regex or '' }}" placeholder="(?i)urgente|critico">
-                        <button type="button" class="dr-btn" style="width:auto;" onclick="testRegex('match_subject_regex','tr_subject')"><i class="fas fa-vial"></i> Test</button>
-                    </div>
-                    <div id="tr_subject" class="test-result"></div>
+
+            {# 3.1 ORIGINE === #}
+            <div class="rf-subcard">
+                <div class="rf-subcard-header">
+                    <span class="rf-subcard-icon"><i class="fas fa-paper-plane"></i></span>
+                    Origine (mittente)
+                    <span class="rf-subcard-stats">
+                        Filtra per <em>chi ha mandato</em> la mail
+                    </span>
                 </div>
-            </div>
-            <div class="rf-row">
-                <label>From dominio<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
-                    Confronto esatto sul <strong>dominio del mittente</strong>
-                    (case-insensitive). Es: <code>cloudtik.it</code>. Più veloce
-                    di "From regex" perché evita parsing regex. Da preferire quando
-                    matcha solo un dominio specifico.
-                </span></span></label>
-                <div>
-                    <input type="text" name="match_from_domain" id="match_from_domain"
-                           list="known_domains_list"
-                           value="{{ record.match_from_domain or '' }}"
-                           placeholder="es. cliente.com (autocomplete dai domini noti)" maxlength="255"
-                           style="text-transform:lowercase;"
-                           oninput="lookupDomain()">
-                    <datalist id="known_domains_list">
-                        {% for d in known_domains %}
-                        <option value="{{ d }}"></option>
-                        {% endfor %}
-                    </datalist>
-                    <div class="help">
-                        Match esatto (case-insensitive) sul dominio del mittente. Autocomplete dai domini
-                        noti dei clienti ({{ known_domains|length }} censiti). Se valorizzato insieme
-                        a <em>From regex</em>, sono in AND.
+                <div class="rf-subcard-body">
+                    <div class="rf-row">
+                        <label>From dominio<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
+                            Confronto esatto sul <strong>dominio del mittente</strong>
+                            (case-insensitive). Es: <code>cloudtik.it</code>.
+                        </span></span></label>
+                        <div>
+                            <input type="text" name="match_from_domain" id="match_from_domain"
+                                   list="known_domains_list"
+                                   value="{{ record.match_from_domain or '' }}"
+                                   placeholder="es. cliente.com" maxlength="255"
+                                   style="text-transform:lowercase;"
+                                   oninput="lookupDomain()">
+                            <datalist id="known_domains_list">
+                                {% for d in known_domains %}
+                                <option value="{{ d }}"></option>
+                                {% endfor %}
+                            </datalist>
+                            <div class="help">Autocomplete dai {{ known_domains|length }} domini noti.</div>
+                            <div id="domain_lookup_result" style="margin-top:0.4rem; font-size:0.85rem;"></div>
+                        </div>
                     </div>
-                    <div id="domain_lookup_result" style="margin-top:0.4rem; font-size:0.85rem;"></div>
-                </div>
-            </div>
-            <div class="rf-row">
-                <label>From regex<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
-                    Regex sul <strong>From</strong> completo (es.
-                    <code>r.grandi@datia.it</code>). Usa <code>(?i)</code> per
-                    ignorare maiuscole. Per match su dominio preferisci "From dominio"
-                    (più veloce, senza regex).
-                </span></span></label>
-                <div>
-                    <div class="inline-test">
-                        <input type="text" id="match_from_regex" name="match_from_regex" value="{{ record.match_from_regex or '' }}" placeholder="(?i)^noreply@cliente\.com$">
-                        <button type="button" class="dr-btn" style="width:auto;" onclick="testRegex('match_from_regex','tr_from')"><i class="fas fa-vial"></i> Test</button>
-                    </div>
-                    <div id="tr_from" class="test-result"></div>
-                    <div class="help">Regex sull'indirizzo mittente completo (es. per filtrare specifici local-part).</div>
-                </div>
-            </div>
-            <div class="rf-row">
-                <label>To regex<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
-                    Regex sul <strong>destinatario primario</strong>. Esempi:
-                    <code>^h24@(datia|domarc)\\.it$</code> per la mailbox di
-                    rientro H24, <code>(?i)^supporto@</code> per la cassetta
-                    assistenza.
-                </span></span></label>
-                <div>
-                    <div class="inline-test">
-                        <input type="text" id="match_to_regex" name="match_to_regex" value="{{ record.match_to_regex or '' }}" placeholder="(?i)^supporto@">
-                        <button type="button" class="dr-btn" style="width:auto;" onclick="testRegex('match_to_regex','tr_to')"><i class="fas fa-vial"></i> Test</button>
-                    </div>
-                    <div id="tr_to" class="test-result"></div>
-                </div>
-            </div>
-            <div class="rf-row">
-                <label>Body regex<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
-                    Regex sul <strong>body text</strong> della mail (HTML
-                    convertito a testo). Costoso su body lunghi: usare
-                    sparingly. Esempi: <code>(?i)\\bdown\\b</code>,
-                    <code>(?i)server\\s+(?:offline|giù)</code>.
-                </span></span></label>
-                <div>
-                    <div class="inline-test">
-                        <input type="text" id="match_body_regex" name="match_body_regex" value="{{ record.match_body_regex or '' }}" placeholder="opzionale, body troncato a 16 KB">
-                        <button type="button" class="dr-btn" style="width:auto;" onclick="testRegex('match_body_regex','tr_body')"><i class="fas fa-vial"></i> Test</button>
-                    </div>
-                    <div id="tr_body" class="test-result"></div>
-                </div>
-            </div>
-            <div class="rf-row">
-                <label>To domain<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
-                    Confronto esatto sul dominio del <strong>destinatario primario</strong>.
-                    Es: <code>datia.it</code>. Da preferire a "To regex" se basta
-                    il dominio.
-                </span></span></label>
-                <input type="text" name="match_to_domain" value="{{ record.match_to_domain or '' }}" placeholder="es. domarc.it">
-            </div>
-            <div class="rf-row">
-                <label>To gruppo destinatari<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
-                    <strong>Alternativa esclusiva</strong> a "To regex": la regola scatta
-                    se uno dei destinatari della mail è membro del gruppo selezionato.
-                    Utile per regole tipo "tecnici no fuori orario → catchall".
-                    <br><br>
-                    <strong>Non si può usare insieme a "To regex"</strong>:
-                    se entrambi sono valorizzati, il salvataggio fallisce.
-                    <br><br>
-                    Gestisci i gruppi destinatari da
-                    <a href="{{ url_for('recipient_groups.list_view') }}">/recipient-groups</a>.
-                </span></span></label>
-                <select name="match_to_group_id">
-                    <option value="">— nessuno —</option>
-                    {% for rg in (recipient_groups or []) %}
-                    <option value="{{ rg.id }}"
-                        {% if record.match_to_group_id == rg.id %}selected{% endif %}>
-                        {{ rg.name }} ({{ rg.member_count }} membri)
-                    </option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="rf-row" style="grid-column: 1 / -1;">
-                <label>Forward — destinatari<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
-                    Per l'azione <code>forward</code>: lista di indirizzi destinatari
-                    separati da <code>;</code>, <code>,</code> o newline. Esempio:
-                    <code>assistenza-h24@datia.it; backup@altro.com</code>.
-                    <br><br>
-                    Alternativa: scegli un <strong>Forward gruppo</strong> qui sotto;
-                    il listener espande i membri del gruppo al momento dell'invio.
-                </span></span></label>
-                <textarea name="forward_to_emails" rows="2"
-                          placeholder="assistenza-h24@datia.it; backup@altro.com"
-                          style="font-family:ui-monospace,monospace; font-size:0.85rem;">{{ record.forward_to_emails or '' }}</textarea>
-            </div>
-            <div class="rf-row">
-                <label>Forward gruppo<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
-                    Alternativa alla lista email: scegli un gruppo destinatari
-                    e il listener invia a tutti i membri.
-                </span></span></label>
-                <select name="forward_to_group_id">
-                    <option value="">— nessuno —</option>
-                    {% for rg in (recipient_groups or []) %}
-                    <option value="{{ rg.id }}"
-                        {% if record.forward_to_group_id == rg.id %}selected{% endif %}>
-                        {{ rg.name }} ({{ rg.member_count }} membri)
-                    </option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div style="grid-column: 1 / -1; margin-top:0.5rem; padding:0.7rem 0.9rem; background:#f0fdf4; border-left:3px solid #10b981; border-radius:0 6px 6px 0;">
-                <h4 style="margin:0 0 0.4rem 0; color:#065f46; font-size:0.92rem;">
-                    <i class="fas fa-clock"></i> Match temporale (rispetto al profilo orari del cliente)
-                </h4>
-                <p style="margin:0 0 0.5rem 0; font-size:0.82rem; color:#065f46;">
-                    Il rule engine valuta la regola in funzione dell'orario corrente confrontato con
-                    il profilo orario assegnato al codcli del mittente (STD/EXT/H24/NO o profilo custom).
-                    Le festività del profilo (con flag <code>exclude_holidays</code>) sono trattate
-                    come "fuori servizio".
-                </p>
-            </div>
-            <div class="rf-row">
-                <label>Stato servizio<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
-                    <strong>Indifferente</strong> (default): la regola scatta
-                    sia in che fuori orario.<br>
-                    <strong>In servizio</strong>: matcha solo se il cliente è
-                    nelle sue ore contrattuali.<br>
-                    <strong>Fuori servizio</strong>: matcha solo fuori orario
-                    contrattuale.<br>
-                    Tipicamente "fuori servizio" per regole H24 / urgenti a pagamento.
-                </span></span></label>
-                <div>
-                    <select name="match_in_service">
-                        <option value="">Indifferente — applica sempre</option>
-                        <option value="true"  {% if record.match_in_service == 1 or record.match_in_service is sameas true %}selected{% endif %}>Solo in servizio (dentro la finestra del profilo)</option>
-                        <option value="false" {% if record.match_in_service == 0 or record.match_in_service is sameas false %}selected{% endif %}>Solo fuori servizio (notte/weekend/festività)</option>
-                    </select>
-                    <div class="help">
-                        <code>in servizio</code> = orario corrente ricade in uno slot del profilo orari del cliente
-                        e non è una festività. <code>fuori servizio</code> = il contrario, oppure il profilo è
-                        <code>NO</code> (nessuna copertura).
+                    <div class="rf-row">
+                        <label>From regex<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
+                            Regex sul <strong>From</strong> completo. AND con "From dominio".
+                            Es: <code>(?i)^noreply@cliente\.com$</code>.
+                        </span></span></label>
+                        <div>
+                            <div class="inline-test">
+                                <input type="text" id="match_from_regex" name="match_from_regex" value="{{ record.match_from_regex or '' }}" placeholder="(?i)^noreply@cliente\.com$">
+                                <button type="button" class="dr-btn" style="width:auto;" onclick="testRegex('match_from_regex','tr_from')"><i class="fas fa-vial"></i> Test</button>
+                            </div>
+                            <div id="tr_from" class="test-result"></div>
+                            <div class="help">Per match solo dominio preferisci "From dominio" (più veloce).</div>
+                        </div>
                     </div>
                 </div>
             </div>
-            <div class="rf-row">
-                <label>Override slot orario</label>
-                <div>
-                    <input type="text" name="match_at_hours" value="{{ record.match_at_hours or '' }}"
-                           placeholder="es. 22:00-06:00, oppure mon=00:00-08:00;sat=*">
-                    <div class="help">
-                        Override sul profilo cliente: se valorizzato, ignora il profilo e applica solo se
-                        l'orario corrente cade in questo slot. Sintassi: <code>HH:MM-HH:MM</code> (singolo slot)
-                        o <code>day=HH:MM-HH:MM;day=*</code> per più giorni. Lascia vuoto per usare il profilo.
+
+            {# 3.2 DESTINAZIONE === #}
+            <div class="rf-subcard">
+                <div class="rf-subcard-header">
+                    <span class="rf-subcard-icon" style="background:#fef3c7; color:#92400e;"><i class="fas fa-envelope-open"></i></span>
+                    Destinazione (destinatario)
+                    <span class="rf-subcard-stats">
+                        Filtra per <em>a chi è destinata</em> la mail
+                    </span>
+                </div>
+                <div class="rf-subcard-body">
+                    <div class="rf-row">
+                        <label>To dominio<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
+                            Confronto esatto sul dominio del <strong>destinatario primario</strong>.
+                            Es: <code>datia.it</code>.
+                        </span></span></label>
+                        <input type="text" name="match_to_domain" value="{{ record.match_to_domain or '' }}" placeholder="es. domarc.it">
+                    </div>
+
+                    <div class="rf-mutex-note">
+                        <i class="fas fa-circle-info"></i>
+                        I due campi sotto sono <strong>mutuamente esclusivi</strong>: usa <em>regex</em>
+                        per pattern singoli (es. <code>^h24@</code>) o <em>gruppo destinatari</em>
+                        per liste di indirizzi predefiniti. Se valorizzi uno, l'altro viene grigiato.
+                    </div>
+
+                    <div class="rf-row" id="row_to_regex">
+                        <label>To regex<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
+                            Regex sul <strong>destinatario primario</strong>.
+                            Es: <code>(?i)^h24@(datia|domarc)\.it$</code>.
+                        </span></span></label>
+                        <div>
+                            <div class="inline-test">
+                                <input type="text" id="match_to_regex" name="match_to_regex"
+                                       value="{{ record.match_to_regex or '' }}" placeholder="(?i)^supporto@"
+                                       oninput="updateMutexTo()">
+                                <button type="button" class="dr-btn" style="width:auto;" onclick="testRegex('match_to_regex','tr_to')"><i class="fas fa-vial"></i> Test</button>
+                            </div>
+                            <div id="tr_to" class="test-result"></div>
+                        </div>
+                    </div>
+                    <div class="rf-row" id="row_to_group_id">
+                        <label>To gruppo destinatari<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
+                            La regola scatta se uno dei destinatari è membro del gruppo selezionato.
+                            <a href="{{ url_for('recipient_groups.list_view') }}">Gestisci gruppi</a>.
+                        </span></span></label>
+                        <select name="match_to_group_id" id="match_to_group_id" onchange="updateMutexTo()">
+                            <option value="">— nessuno —</option>
+                            {% for rg in (recipient_groups or []) %}
+                            <option value="{{ rg.id }}"
+                                {% if record.match_to_group_id == rg.id %}selected{% endif %}>
+                                {{ rg.name }} ({{ rg.member_count }} membri)
+                            </option>
+                            {% endfor %}
+                        </select>
                     </div>
                 </div>
             </div>
-            <div class="rf-row">
-                <label>Cliente noto<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
-                    <strong>Indifferente</strong>: ignora.<br>
-                    <strong>Sì</strong>: matcha solo se il mittente è collegato
-                    a un cliente in archivio (codcli risolto).<br>
-                    <strong>No</strong>: matcha solo se mittente <em>sconosciuto</em>
-                    (utile per regole "non riconosciuto, manda commerciale").
-                </span></span></label>
-                <div>
-                    <select name="match_known_customer">
-                        <option value="">Indifferente</option>
-                        <option value="true"  {% if record.match_known_customer == 1 or record.match_known_customer is sameas true %}selected{% endif %}>Solo se mittente è in <code>client_domains</code></option>
-                        <option value="false" {% if record.match_known_customer == 0 or record.match_known_customer is sameas false %}selected{% endif %}>Solo se mittente NON è censito</option>
-                    </select>
-                    <div class="help">
-                        Il rule engine risolve <code>codcli</code> dal dominio del mittente.
-                        Usa "non censito" per regole catch-all su mittenti sconosciuti
-                        (es. auto-reply standard "non sei un cliente").
+
+            {# 3.3 OGGETTO E CONTENUTO === #}
+            <div class="rf-subcard">
+                <div class="rf-subcard-header">
+                    <span class="rf-subcard-icon" style="background:#dcfce7; color:#166534;"><i class="fas fa-file-lines"></i></span>
+                    Oggetto e contenuto
+                    <span class="rf-subcard-stats">
+                        Filtra per <em>cosa c'è scritto</em> nella mail
+                    </span>
+                </div>
+                <div class="rf-subcard-body">
+                    <div class="rf-row">
+                        <label>Subject regex<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
+                            Regex Python sul <strong>subject</strong>. Es:
+                            <code>(?i)urgente</code>, <code>(?i)\| Problem:</code>.
+                        </span></span></label>
+                        <div>
+                            <div class="inline-test">
+                                <input type="text" id="match_subject_regex" name="match_subject_regex" value="{{ record.match_subject_regex or '' }}" placeholder="(?i)urgente|critico">
+                                <button type="button" class="dr-btn" style="width:auto;" onclick="testRegex('match_subject_regex','tr_subject')"><i class="fas fa-vial"></i> Test</button>
+                            </div>
+                            <div id="tr_subject" class="test-result"></div>
+                        </div>
+                    </div>
+                    <div class="rf-row">
+                        <label>Body regex<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
+                            Regex sul <strong>body text</strong> (HTML convertito).
+                            Costoso su body lunghi: usare con criterio.
+                        </span></span></label>
+                        <div>
+                            <div class="inline-test">
+                                <input type="text" id="match_body_regex" name="match_body_regex" value="{{ record.match_body_regex or '' }}" placeholder="opzionale, body troncato a 16 KB">
+                                <button type="button" class="dr-btn" style="width:auto;" onclick="testRegex('match_body_regex','tr_body')"><i class="fas fa-vial"></i> Test</button>
+                            </div>
+                            <div id="tr_body" class="test-result"></div>
+                        </div>
+                    </div>
+                    <div class="rf-row">
+                        <label>Match tag<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
+                            Tag esplicito sulla mail (header X-Tag o assegnato dal parser).
+                        </span></span></label>
+                        <input type="text" name="match_tag" value="{{ record.match_tag or '' }}" placeholder="es. priority/spam">
                     </div>
                 </div>
             </div>
-            <div class="rf-row">
-                <label>Contratto cliente<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
-                    Stato del contratto del cliente:<br>
-                    <strong>Indifferente</strong>: ignora.<br>
-                    <strong>Attivo</strong>: matcha solo se contratto attivo.<br>
-                    <strong>Non attivo</strong>: matcha solo clienti senza
-                    contratto attivo (utile per "manda al commerciale").
-                </span></span></label>
-                <div>
-                    <select name="match_contract_active">
-                        <option value="">Indifferente</option>
-                        <option value="true"  {% if record.match_contract_active == 1 or record.match_contract_active is sameas true %}selected{% endif %}>Solo clienti CON contratto attivo</option>
-                        <option value="false" {% if record.match_contract_active == 0 or record.match_contract_active is sameas false %}selected{% endif %}>Solo clienti SENZA contratto attivo (ma censiti)</option>
-                    </select>
-                    <div class="help">
-                        Esempio "senza contratto + cliente noto": clienti attivi ma senza contratto formale →
-                        auto-reply con template specifico "Per supporto stipulare contratto".
+
+            {# 3.4 CLIENTE & CONTRATTO === #}
+            <div class="rf-subcard">
+                <div class="rf-subcard-header">
+                    <span class="rf-subcard-icon" style="background:#fce7f3; color:#9d174d;"><i class="fas fa-id-card"></i></span>
+                    Cliente &amp; contratto
+                    <span class="rf-subcard-stats">
+                        Filtra per <em>stato anagrafica</em> del cliente del mittente
+                    </span>
+                </div>
+                <div class="rf-subcard-body">
+                    <div class="rf-row">
+                        <label>Cliente noto<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
+                            <strong>Indifferente</strong>: ignora.
+                            <strong>Sì</strong>: matcha solo se mittente collegato a codcli.
+                            <strong>No</strong>: solo mittenti sconosciuti.
+                        </span></span></label>
+                        <div>
+                            <select name="match_known_customer">
+                                <option value="">Indifferente</option>
+                                <option value="true"  {% if record.match_known_customer == 1 or record.match_known_customer is sameas true %}selected{% endif %}>Solo se mittente è in <code>client_domains</code></option>
+                                <option value="false" {% if record.match_known_customer == 0 or record.match_known_customer is sameas false %}selected{% endif %}>Solo se mittente NON è censito</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="rf-row">
+                        <label>Contratto<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
+                            <strong>Attivo</strong>: solo clienti con contratto attivo.
+                            <strong>Non attivo</strong>: clienti censiti ma senza contratto
+                            (auto-reply "always_billable_no_contract").
+                        </span></span></label>
+                        <div>
+                            <select name="match_contract_active">
+                                <option value="">Indifferente</option>
+                                <option value="true"  {% if record.match_contract_active == 1 or record.match_contract_active is sameas true %}selected{% endif %}>Solo CON contratto attivo</option>
+                                <option value="false" {% if record.match_contract_active == 0 or record.match_contract_active is sameas false %}selected{% endif %}>Solo SENZA contratto attivo (ma censito)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="rf-row">
+                        <label>Eccezione oggi<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
+                            Cliente con override calendario oggi (festività locale, ponte).
+                            Si applica indipendentemente dal contratto.
+                        </span></span></label>
+                        <div>
+                            <select name="match_has_exception_today">
+                                <option value="">Indifferente</option>
+                                <option value="true"  {% if record.match_has_exception_today == 1 or record.match_has_exception_today is sameas true %}selected{% endif %}>Solo se cliente ha eccezione oggi</option>
+                                <option value="false" {% if record.match_has_exception_today == 0 or record.match_has_exception_today is sameas false %}selected{% endif %}>Solo se nessuna eccezione</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="rf-row">
+                        <label>Gruppi clienti<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
+                            Selezione multipla. Logica OR: la regola scatta se cliente
+                            è in <strong>almeno uno</strong> dei gruppi.
+                        </span></span></label>
+                        <div>
+                            {% set selected_groups = (record.match_customer_groups or '').split(',') | map('trim') | list %}
+                            <select name="match_customer_groups" multiple
+                                    style="width:100%; min-height:120px; font-family:ui-monospace, monospace; font-size:0.85rem;">
+                                {% for g in (customer_groups or []) %}
+                                <option value="{{ g.code }}"
+                                        {% if g.code in selected_groups %}selected{% endif %}
+                                        {% if g.is_system %}style="background:#f0f9ff; font-weight:600;"{% endif %}>
+                                    {% if g.is_system %}⚙ {% endif %}{{ g.code }} — {{ g.name }} ({{ g.member_count }} membri){% if g.is_system %} [auto]{% endif %}
+                                </option>
+                                {% else %}
+                                <option disabled>Nessun gruppo definito</option>
+                                {% endfor %}
+                            </select>
+                            <div class="help">
+                                Tieni Ctrl/Cmd per selezione multipla.
+                                <a href="{{ url_for('customer_groups.list_view') }}">Gestisci gruppi</a>.
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
-            <div class="rf-row">
-                <label>Eccezione oggi<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
-                    Cliente con un'eccezione di calendario oggi (festività
-                    locale, chiusura aziendale, ecc.). Tipico: regole "fuori
-                    orario" devono scattare anche di mercoledì se il cliente
-                    ha festività locale.
-                </span></span></label>
-                <div>
-                    <select name="match_has_exception_today">
-                        <option value="">Indifferente</option>
-                        <option value="true"  {% if record.match_has_exception_today == 1 or record.match_has_exception_today is sameas true %}selected{% endif %}>Solo se cliente ha eccezione oggi</option>
-                        <option value="false" {% if record.match_has_exception_today == 0 or record.match_has_exception_today is sameas false %}selected{% endif %}>Solo se nessuna eccezione</option>
-                    </select>
-                    <div class="help">
-                        Eccezione = override schedule per data specifica configurato in
-                        <a href="{{ url_for('service_hours.list_view') }}">Orari per cliente</a>
-                        (es. apertura straordinaria, chiusura per ponte, festività locale).
-                        Si applica <strong>a prescindere dal contratto</strong>.
+
+            {# 3.5 ORARIO E CALENDARIO === #}
+            <div class="rf-subcard">
+                <div class="rf-subcard-header">
+                    <span class="rf-subcard-icon" style="background:#dbeafe; color:#1e40af;"><i class="fas fa-clock"></i></span>
+                    Orario e calendario
+                    <span class="rf-subcard-stats">
+                        Filtra per <em>quando arriva</em> la mail
+                    </span>
+                </div>
+                <div class="rf-subcard-body">
+                    <p style="margin: 0 0 0.7rem; font-size:0.82rem; color:#64748b;">
+                        Il rule engine confronta l'orario corrente con il <strong>profilo orario del cliente del mittente</strong>
+                        (STD/EXT/H24/NO o profilo custom). Le festività del profilo sono trattate come "fuori servizio".
+                    </p>
+                    <div class="rf-row">
+                        <label>Stato servizio<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
+                            <strong>In servizio</strong>: ore contrattuali del cliente.
+                            <strong>Fuori servizio</strong>: notte/weekend/festività o profilo NO.
+                        </span></span></label>
+                        <div>
+                            <select name="match_in_service">
+                                <option value="">Indifferente — applica sempre</option>
+                                <option value="true"  {% if record.match_in_service == 1 or record.match_in_service is sameas true %}selected{% endif %}>Solo in servizio</option>
+                                <option value="false" {% if record.match_in_service == 0 or record.match_in_service is sameas false %}selected{% endif %}>Solo fuori servizio</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="rf-row">
+                        <label>Override slot orario<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
+                            Override sul profilo cliente: se valorizzato, ignora il profilo
+                            e applica solo se l'orario corrente cade in questo slot.
+                            <br><br>
+                            Sintassi: <code>HH:MM-HH:MM</code> (singolo slot) o
+                            <code>day=HH:MM-HH:MM;day=*</code> per più giorni.
+                        </span></span></label>
+                        <div>
+                            <input type="text" name="match_at_hours" id="match_at_hours"
+                                   value="{{ record.match_at_hours or '' }}"
+                                   placeholder="es. 22:00-06:00, oppure mon=00:00-08:00;sat=*"
+                                   oninput="syncHoursPresetButtons()">
+                            {% if profiles %}
+                            <div class="rf-hours-presets">
+                                <span style="font-size:0.78rem; color:#64748b;">Preset da profili:</span>
+                                {% for prof in profiles %}
+                                {% if prof.schedule %}
+                                <button type="button" class="rf-hours-preset-btn"
+                                        data-profile="{{ prof.code }}"
+                                        data-schedule='{{ prof.schedule|tojson }}'
+                                        onclick="applyHoursPreset(this)"
+                                        title="{{ prof.description or prof.name }}">
+                                    {{ prof.code }}
+                                </button>
+                                {% endif %}
+                                {% endfor %}
+                                <button type="button" class="rf-hours-preset-btn"
+                                        data-schedule='""'
+                                        onclick="applyHoursPreset(this)"
+                                        style="background:#fee2e2; color:#991b1b; border-color:#fecaca;">
+                                    ✕ Vuoto
+                                </button>
+                            </div>
+                            <div class="help" style="margin-top:0.4rem;">
+                                Click su un profilo → riempie il campo con lo slot del profilo.
+                                Lascia vuoto per usare il profilo orario del cliente del mittente.
+                            </div>
+                            {% else %}
+                            <div class="help">
+                                Lascia vuoto per usare il profilo cliente.
+                                <a href="{{ url_for('profiles.list_view') }}">Gestisci profili orari</a>
+                                per usare i preset.
+                            </div>
+                            {% endif %}
+                        </div>
                     </div>
                 </div>
             </div>
-            <div class="rf-row">
-                <label>Gruppi clienti<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
-                    Selezione multipla. La regola scatta se il cliente del
-                    messaggio appartiene ad <strong>almeno uno</strong> dei
-                    gruppi selezionati (logica OR). Gestisci i gruppi nella
-                    voce "Gruppi clienti" del menu.
-                </span></span></label>
-                <div>
-                    {% set selected_groups = (record.match_customer_groups or '').split(',') | map('trim') | list %}
-                    <select name="match_customer_groups" multiple
-                            style="width:100%; min-height:120px; font-family:ui-monospace, monospace; font-size:0.85rem;">
-                        {% for g in (customer_groups or []) %}
-                        <option value="{{ g.code }}"
-                                {% if g.code in selected_groups %}selected{% endif %}
-                                {% if g.is_system %}style="background:#f0f9ff; font-weight:600;"{% endif %}>
-                            {% if g.is_system %}⚙ {% endif %}{{ g.code }} — {{ g.name }} ({{ g.member_count }} membri){% if g.is_system %} [auto]{% endif %}
-                        </option>
-                        {% else %}
-                        <option disabled>Nessun gruppo definito</option>
-                        {% endfor %}
-                    </select>
-                    <div class="help">
-                        La regola scatta se il cliente del messaggio appartiene ad
-                        <strong>almeno uno</strong> dei gruppi selezionati (logica OR).
-                        Tieni Ctrl/Cmd per selezione multipla.
-                        <a href="{{ url_for('customer_groups.list_view') }}">Gestisci gruppi</a>.
-                    </div>
-                </div>
-            </div>
-            <div class="rf-row">
-                <label>Match tag<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
-                    Tag esplicito sulla mail (header X-Tag o assegnato dal
-                    parser). Permette di marcare regole per scenari specifici
-                    senza dover fare match su contenuti.
-                </span></span></label>
-                <input type="text" name="match_tag" value="{{ record.match_tag or '' }}" placeholder="es. priority/spam">
-            </div>
+
         </div>
     </div>
 
+    {# === 4. AZIONE === #}
     <div class="rf-card full">
         <h3><i class="fas fa-bolt"></i> Azione</h3>
         <div class="rf-body">
@@ -503,6 +553,7 @@
             </div>
             <input type="hidden" id="action" name="action" value="{{ record.action or '' }}" required>
 
+            {# create_ticket #}
             <div class="rf-action-fields" id="amf_create_ticket" data-for="create_ticket">
                 <div class="rf-row">
                     <label>Settore ticket</label>
@@ -519,6 +570,7 @@
                 </div>
             </div>
 
+            {# auto_reply #}
             <div class="rf-action-fields" id="amf_auto_reply" data-for="auto_reply">
                 <div class="rf-row">
                     <label>Template</label>
@@ -533,13 +585,10 @@
                     <label>Modalità reply</label>
                     <div>
                         <select name="action_map_reply_mode">
-                            <option value="to_sender_only" {% if not record.action_map or (record.action_map.reply_mode in (None,'','to_sender_only')) %}selected{% endif %}>Solo al mittente (To: sender)</option>
-                            <option value="reply_all"     {% if record.action_map and record.action_map.reply_mode == 'reply_all' %}selected{% endif %}>Rispondi a tutti (sender + To/Cc originali)</option>
-                            <option value="to_alias"      {% if record.action_map and record.action_map.reply_mode == 'to_alias' %}selected{% endif %}>Rispondi dall'alias intercept (From = destinatario originale)</option>
+                            <option value="to_sender_only" {% if not record.action_map or (record.action_map.reply_mode in (None,'','to_sender_only')) %}selected{% endif %}>Solo al mittente</option>
+                            <option value="reply_all"     {% if record.action_map and record.action_map.reply_mode == 'reply_all' %}selected{% endif %}>Rispondi a tutti</option>
+                            <option value="to_alias"      {% if record.action_map and record.action_map.reply_mode == 'to_alias' %}selected{% endif %}>Dall'alias intercept</option>
                         </select>
-                        <div class="help">
-                            Definisce a chi va indirizzata la risposta automatica e con quale identità mittente.
-                        </div>
                     </div>
                 </div>
                 <div class="rf-row">
@@ -548,7 +597,7 @@
                         <input type="text" name="action_map_reply_subject_prefix"
                                value="{{ record.action_map.reply_subject_prefix if record.action_map and record.action_map.reply_subject_prefix else 'Re: ' }}"
                                placeholder="Re: " maxlength="32" style="width:120px;">
-                        <div class="help">Prefisso aggiunto al subject originale (default <code>Re: </code>; lascia vuoto per usare il subject del template).</div>
+                        <div class="help">Prefisso aggiunto al subject originale (default <code>Re: </code>).</div>
                     </div>
                 </div>
                 <div class="rf-row">
@@ -556,11 +605,11 @@
                     <div>
                         <label style="font-weight:400; display:block;">
                             <input type="checkbox" name="action_map_reply_quote_original" {% if record.action_map and record.action_map.reply_quote_original %}checked{% endif %}>
-                            Includi il messaggio originale citato nel body della reply
+                            Includi messaggio originale citato nel body
                         </label>
                         <label style="font-weight:400; display:block;">
                             <input type="checkbox" name="action_map_reply_attach_original" {% if record.action_map and record.action_map.reply_attach_original %}checked{% endif %}>
-                            Allega il messaggio originale come <code>.eml</code>
+                            Allega come <code>.eml</code>
                         </label>
                     </div>
                 </div>
@@ -568,7 +617,7 @@
                     <label>Reply-To</label>
                     <input type="text" name="action_map_reply_to"
                            value="{{ record.action_map.reply_to if record.action_map and record.action_map.reply_to else '' }}"
-                           placeholder="opzionale, es. assistenza@domarc.it (sovrascrive header Reply-To)">
+                           placeholder="opzionale">
                 </div>
                 <div class="rf-row">
                     <label>Codice autorizzazione</label>
@@ -586,9 +635,13 @@
                 </div>
             </div>
 
+            {# forward — include forward_to_emails / forward_to_group_id (spostati da Match) #}
             <div class="rf-action-fields" id="amf_forward" data-for="forward">
                 <div class="rf-row">
-                    <label>Forward target</label>
+                    <label>Forward target<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
+                        Smarthost SMTP a cui consegnare la mail (host:port).
+                        Se vuoto, usa lo smarthost di default.
+                    </span></span></label>
                     <input type="text" name="action_map_forward_target"
                            value="{{ record.action_map.forward_target if record.action_map else '' }}" placeholder="acme.mail.protection.outlook.com">
                 </div>
@@ -605,8 +658,40 @@
                         <option value="none"          {% if record.action_map and record.action_map.forward_tls == 'none' %}selected{% endif %}>none</option>
                     </select>
                 </div>
+
+                <div class="rf-mutex-note" style="margin-top:0.8rem;">
+                    <i class="fas fa-circle-info"></i>
+                    <strong>Destinatari forward</strong> — i due campi sotto sono mutuamente esclusivi:
+                    usa <em>lista email</em> per indirizzi specifici o <em>gruppo destinatari</em>
+                    per liste predefinite. Lascia entrambi vuoti per usare gli rcpt originali della mail.
+                </div>
+                <div class="rf-row" id="row_fwd_emails">
+                    <label>Lista email<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
+                        Lista indirizzi separati da <code>;</code> o <code>,</code>.
+                        Es: <code>assistenza-h24@datia.it; backup@altro.com</code>.
+                    </span></span></label>
+                    <textarea name="forward_to_emails" id="forward_to_emails" rows="2"
+                              placeholder="assistenza-h24@datia.it; backup@altro.com"
+                              style="font-family:ui-monospace,monospace; font-size:0.85rem;"
+                              oninput="updateMutexForward()">{{ record.forward_to_emails or '' }}</textarea>
+                </div>
+                <div class="rf-row" id="row_fwd_group_id">
+                    <label>Gruppo destinatari<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
+                        Il listener espande i membri del gruppo al momento dell'invio.
+                    </span></span></label>
+                    <select name="forward_to_group_id" id="forward_to_group_id" onchange="updateMutexForward()">
+                        <option value="">— nessuno —</option>
+                        {% for rg in (recipient_groups or []) %}
+                        <option value="{{ rg.id }}"
+                            {% if record.forward_to_group_id == rg.id %}selected{% endif %}>
+                            {{ rg.name }} ({{ rg.member_count }} membri)
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
             </div>
 
+            {# redirect #}
             <div class="rf-action-fields" id="amf_redirect" data-for="redirect">
                 <div class="rf-row">
                     <label>Redirect target</label>
@@ -620,6 +705,7 @@
                 </div>
             </div>
 
+            {# quarantine #}
             <div class="rf-action-fields" id="amf_quarantine" data-for="quarantine">
                 <div class="rf-row">
                     <label>Motivo</label>
@@ -628,7 +714,7 @@
                 </div>
             </div>
 
-            {# ============================ AI CLASSIFY ============================ #}
+            {# AI CLASSIFY #}
             <div class="rf-action-fields" id="amf_ai_classify" data-for="ai_classify"
                  style="background:#f5f3ff; border-color:#c4b5fd;">
                 <div style="display:flex; gap:0.8rem; align-items:flex-start; margin-bottom:0.8rem;">
@@ -636,21 +722,18 @@
                     <div style="flex:1;">
                         <h4 style="margin:0 0 0.3rem; color:#5b21b6;">L'IA classificherà ogni email che matcha questa regola</h4>
                         <p style="margin:0; font-size:0.85rem; color:#6d28d9;">
-                            Il listener invocherà l'admin via <code>POST /api/v1/relay/ai/classify</code> (timeout 5s).
-                            L'IA produce: <strong>intent</strong>, <strong>urgenza</strong>, <strong>summary</strong>, <strong>suggested_action</strong>.
-                            In <strong>shadow mode</strong> (default) la decisione viene solo loggata; in <strong>live mode</strong> viene applicata
-                            (<code>create_ticket</code>, <code>forward</code>, ecc.).
+                            <code>POST /api/v1/relay/ai/classify</code> (timeout 5s) →
+                            <strong>intent</strong>, <strong>urgenza</strong>, <strong>summary</strong>, <strong>suggested_action</strong>.
                         </p>
                     </div>
                 </div>
 
                 <div style="background:#fff; border:1px solid #c4b5fd; border-radius:6px; padding:0.8rem 1rem; margin-bottom:0.8rem;">
                     <h5 style="margin:0 0 0.4rem; color:#5b21b6; font-size:0.88rem;">
-                        <i class="fas fa-route"></i> Job &amp; binding che verrà invocato
+                        <i class="fas fa-route"></i> Job &amp; binding
                     </h5>
                     <div style="font-size:0.85rem;">
                         <strong>Job:</strong> <code>classify_email</code>
-                        <span style="color:#6b7280;">→ il job IA che la regola richiama (1:1 con action=ai_classify).</span>
                     </div>
                     {% if ai_active_bindings and ai_active_bindings.get('classify_email') %}
                     <div style="font-size:0.85rem; margin-top:0.3rem;">
@@ -672,17 +755,14 @@
                     {% else %}
                     <div style="margin-top:0.4rem; padding:0.5rem 0.8rem; background:#fef2f2; border-left:3px solid #dc2626; border-radius:0 4px 4px 0; font-size:0.85rem;">
                         <strong style="color:#991b1b;">⚠ Nessun binding attivo per <code>classify_email</code></strong><br>
-                        <span style="color:#7f1d1d;">
-                            La regola scatta ma il listener entrerà in fail-safe (forward + ticket ALTA con <code>ai_unavailable=true</code>).
-                            <a href="{{ url_for('ai.model_form') }}?job_code=classify_email" style="color:#dc2626;"><strong>Configura un binding ora →</strong></a>
-                        </span>
+                        <a href="{{ url_for('ai.model_form') }}?job_code=classify_email" style="color:#dc2626;"><strong>Configura un binding ora →</strong></a>
                     </div>
                     {% endif %}
 
                     {% if ai_global_status %}
                     <div style="font-size:0.78rem; margin-top:0.5rem; color:#6b7280;">
                         Stato globale:
-                        {% if ai_global_status.master_enabled %}<span class="rule-status on">AI master ON</span>{% else %}<span class="rule-status off">AI master OFF (Settings)</span>{% endif %}
+                        {% if ai_global_status.master_enabled %}<span class="rule-status on">AI master ON</span>{% else %}<span class="rule-status off">AI master OFF</span>{% endif %}
                         {% if ai_global_status.shadow_mode %}<span class="rule-inherit-badge">SHADOW</span>{% else %}<span class="rule-status on">LIVE</span>{% endif %}
                         — Costo oggi: ${{ '%.4f'|format(ai_global_status.spent_today or 0) }} / ${{ '%.2f'|format(ai_global_status.budget or 0) }}
                     </div>
@@ -695,28 +775,19 @@
                         <input type="number" name="action_map_timeout_ms"
                                value="{{ record.action_map.timeout_ms if record.action_map and record.action_map.timeout_ms else 5000 }}"
                                min="500" max="30000" step="500">
-                        <div class="help">Timeout sync per la chiamata all'IA (default 5000ms). Su timeout/errore: fail-safe forward + ticket ALTA.</div>
+                        <div class="help">Su timeout/errore: fail-safe forward + ticket ALTA.</div>
                     </div>
                 </div>
                 <div class="rf-row">
                     <label>Tenant id</label>
-                    <div>
-                        <input type="number" name="action_map_tenant_id"
-                               value="{{ record.action_map.tenant_id if record.action_map and record.action_map.tenant_id else 1 }}" min="1">
-                        <div class="help">Tenant per cui invocare il routing IA (default 1 = DOMARC).</div>
-                    </div>
-                </div>
-                <div style="background:#dbeafe; border-left:3px solid #3b82f6; padding:0.6rem 0.8rem; border-radius:0 4px 4px 0; margin-top:0.5rem; font-size:0.85rem; color:#1e3a8a;">
-                    <strong><i class="fas fa-info-circle"></i> Suggerimento:</strong>
-                    abilita <strong>"Mantieni consegna originale"</strong> nelle Delivery extra qui sotto:
-                    in shadow mode è essenziale per non perdere la mail (il listener lo forza comunque, ma è bene rendere il comportamento esplicito).
+                    <input type="number" name="action_map_tenant_id"
+                           value="{{ record.action_map.tenant_id if record.action_map and record.action_map.tenant_id else 1 }}" min="1">
                 </div>
 
-                {# Mini-tabella decisioni IA recenti per QUESTA regola #}
                 {% if ai_recent_decisions %}
                 <div style="margin-top:1rem;">
                     <h5 style="margin:0 0 0.4rem; color:#5b21b6; font-size:0.88rem;">
-                        <i class="fas fa-history"></i> Ultime decisioni IA invocate da questa regola
+                        <i class="fas fa-history"></i> Ultime decisioni IA per questa regola
                         <a href="{{ url_for('ai.decisions_list') }}" style="font-size:0.78rem; font-weight:normal;">vedi tutte →</a>
                     </h5>
                     <table class="dr-table" style="background:#fff;">
@@ -739,15 +810,10 @@
                         </tbody>
                     </table>
                 </div>
-                {% else %}
-                <div style="margin-top:0.8rem; padding:0.6rem 0.8rem; background:#f9fafb; border-radius:4px; font-size:0.82rem; color:#6b7280;">
-                    <i class="fas fa-info-circle"></i> Nessuna decisione IA ancora registrata per questa regola.
-                    Manda una mail di test che matchi questa regola per vedere l'IA in azione.
-                </div>
                 {% endif %}
             </div>
 
-            <!-- Delivery extra: globale, applicabile a tutte le azioni -->
+            <!-- Delivery extra: globale -->
             <div style="margin-top:1.2rem; padding:0.9rem 1rem; background:#fffbeb; border-left:3px solid #f6c23e; border-radius:0 6px 6px 0;">
                 <h4 style="margin:0 0 0.5rem 0; color:#78350f; font-size:0.92rem;">
                     <i class="fas fa-share-nodes"></i> Delivery extra (oltre all'azione principale)
@@ -758,13 +824,8 @@
                         <label style="font-weight:400;">
                             <input type="checkbox" name="action_map_keep_original_delivery" {% if record.action_map and record.action_map.keep_original_delivery %}checked{% endif %}>
                             <strong>Consegna anche al destinatario originale</strong>
-                            (oltre a forward/redirect/quarantine/auto_reply)
                         </label>
-                        <div class="help">
-                            Quando l'azione altera il routing (forward, redirect, quarantine), questa opzione ricostruisce
-                            la consegna ordinaria al destinatario originale via smarthost del dominio. Se OFF, l'email
-                            si ferma all'azione (pipeline conclusa).
-                        </div>
+                        <div class="help">Quando attivo, la mail va sia all'azione che al destinatario reale.</div>
                     </div>
                 </div>
                 <div class="rf-row">
@@ -773,10 +834,7 @@
                         <input type="text" name="action_map_also_deliver_to"
                                value="{{ record.action_map.also_deliver_to if record.action_map else '' }}"
                                placeholder="r.grandi@datia.it, r.grandi@domarc.it">
-                        <div class="help">
-                            Lista CSV di destinatari aggiuntivi (Cc). Indipendente dal flag "Mantieni originale".
-                            Applicabile a tutte le azioni.
-                        </div>
+                        <div class="help">Lista CSV di destinatari aggiuntivi (Cc).</div>
                     </div>
                 </div>
                 <div class="rf-row">
@@ -784,9 +842,9 @@
                     <div>
                         <label style="font-weight:400;">
                             <input type="checkbox" name="action_map_apply_rules" {% if record.action_map and record.action_map.apply_rules %}checked{% endif %}>
-                            La consegna originale (se attivata) passa di nuovo per le regole
+                            La consegna originale ripassa per le regole
                         </label>
-                        <div class="help">Default OFF — evita loop di valutazione regole sulla copia originale.</div>
+                        <div class="help">Default OFF — evita loop.</div>
                     </div>
                 </div>
             </div>
@@ -820,6 +878,85 @@ function selectAction(code) {
 }
 {% if record.action %}selectAction("{{ record.action }}");{% endif %}
 
+// === Mutex To regex / To gruppo ===
+function updateMutexTo() {
+    const inp = document.getElementById('match_to_regex');
+    const sel = document.getElementById('match_to_group_id');
+    const rowInp = document.getElementById('row_to_regex');
+    const rowSel = document.getElementById('row_to_group_id');
+    if (!inp || !sel) return;
+    const inpVal = (inp.value || '').trim();
+    const selVal = sel.value;
+    rowInp.classList.toggle('disabled-by-mutex', !!selVal && !inpVal);
+    rowSel.classList.toggle('disabled-by-mutex', !!inpVal && !selVal);
+}
+
+// === Mutex Forward emails / Forward gruppo ===
+function updateMutexForward() {
+    const ta = document.getElementById('forward_to_emails');
+    const sel = document.getElementById('forward_to_group_id');
+    const rowTa = document.getElementById('row_fwd_emails');
+    const rowSel = document.getElementById('row_fwd_group_id');
+    if (!ta || !sel) return;
+    const taVal = (ta.value || '').trim();
+    const selVal = sel.value;
+    rowTa.classList.toggle('disabled-by-mutex', !!selVal && !taVal);
+    rowSel.classList.toggle('disabled-by-mutex', !!taVal && !selVal);
+}
+
+// Init mutex al caricamento
+updateMutexTo();
+updateMutexForward();
+
+// === Preset orari da profili ===
+// Schedule format dal DB: {mon: [["08:30","13:00"], ["14:30","17:30"]], ...}
+// Output match_at_hours: "mon=08:30-13:00,14:30-17:30;tue=...;sun=*"
+function _serializeSchedule(sched) {
+    if (typeof sched === 'string') return sched;
+    if (!sched || typeof sched !== 'object') return '';
+    const days = ['mon','tue','wed','thu','fri','sat','sun'];
+    const parts = [];
+    for (const d of days) {
+        const slots = sched[d];
+        if (!slots) continue;
+        if (Array.isArray(slots) && slots.length) {
+            // Ogni slot può essere ["HH:MM","HH:MM"] o "HH:MM-HH:MM"
+            const slotStrs = slots.map(s => {
+                if (Array.isArray(s) && s.length === 2) return `${s[0]}-${s[1]}`;
+                return String(s);
+            });
+            parts.push(`${d}=${slotStrs.join(',')}`);
+        }
+    }
+    return parts.join(';');
+}
+function applyHoursPreset(btn) {
+    const inp = document.getElementById('match_at_hours');
+    if (!inp) return;
+    const raw = btn.dataset.schedule;
+    let scheduleStr = '';
+    try {
+        const sched = JSON.parse(raw);
+        scheduleStr = _serializeSchedule(sched);
+    } catch (err) { /* lascia vuoto */ }
+    inp.value = scheduleStr;
+    syncHoursPresetButtons();
+}
+function syncHoursPresetButtons() {
+    const inp = document.getElementById('match_at_hours');
+    if (!inp) return;
+    const cur = (inp.value || '').trim();
+    document.querySelectorAll('.rf-hours-preset-btn').forEach(btn => {
+        try {
+            const sched = JSON.parse(btn.dataset.schedule);
+            const s = _serializeSchedule(sched);
+            btn.classList.toggle('applied', s === cur && !!cur);
+        } catch (e) {}
+    });
+}
+syncHoursPresetButtons();
+
+// === Domain lookup ===
 let _domainLookupTimer = null;
 async function lookupDomain() {
     clearTimeout(_domainLookupTimer);
@@ -835,34 +972,27 @@ async function _doLookupDomain() {
         if (!d.ok) { out.innerHTML = '<small style="color:#b91c1c;">'+ (d.error || 'errore') +'</small>'; return; }
         if (!d.is_known) {
             out.innerHTML = '<div style="background:#fef3c7; padding:0.4rem 0.7rem; border-radius:4px; color:#7a4500;">'
-                + '<i class="fas fa-circle-exclamation"></i> Dominio <code>'+domain+'</code> <strong>non censito</strong> — '
-                + 'la regola si applicherebbe solo se hai messo <em>Cliente noto = non censito</em>.</div>';
+                + '<i class="fas fa-circle-exclamation"></i> Dominio <code>'+domain+'</code> <strong>non censito</strong>.</div>';
             return;
         }
         let html = '<div style="background:#d1fae5; padding:0.5rem 0.7rem; border-radius:4px; color:#065f46;">';
-        html += '<i class="fas fa-check"></i> <strong>'+ d.matches.length +' cliente(i) censiti</strong> con questo dominio:<ul style="margin:0.3rem 0 0 1.1rem; padding:0;">';
+        html += '<i class="fas fa-check"></i> <strong>'+ d.matches.length +' cliente(i) censiti</strong>:';
+        html += '<ul style="margin:0.3rem 0 0 1.1rem; padding:0;">';
         d.matches.forEach(m => {
             const profile = m.profile_code ? '<code>'+m.profile_code+'</code>' : '—';
             const contract = m.contract_type ? ' · '+m.contract_type : '';
             const active = m.is_active ? '<span class="dr-badge dr-badge-ok">attivo</span>' : '<span class="dr-badge dr-badge-error">non attivo</span>';
             html += '<li><strong>'+m.codice_cliente+'</strong> — '+(m.ragione_sociale || '—')+' · profilo '+profile+contract+' '+active+'</li>';
         });
-        html += '</ul>';
-        if (d.exceptions_today && d.exceptions_today.length) {
-            html += '<div style="margin-top:0.4rem; padding-top:0.4rem; border-top:1px solid #a7f3d0;">';
-            html += '<i class="fas fa-calendar-day"></i> <strong>Eccezione oggi ('+d.today+')</strong>: ';
-            html += d.exceptions_today.map(e => (e.note || 'override schedule')).join(', ');
-            html += '</div>';
-        }
-        html += '</div>';
+        html += '</ul></div>';
         out.innerHTML = html;
     } catch (err) {
-        out.innerHTML = '<small style="color:#b91c1c;">errore lookup: '+err+'</small>';
+        out.innerHTML = '<small style="color:#b91c1c;">errore: '+err+'</small>';
     }
 }
-// Esegui lookup all'apertura form se il campo è già compilato
 if (document.getElementById('match_from_domain').value.trim()) lookupDomain();
 
+// === Test regex ===
 async function testRegex(inputId, resultId) {
     const pattern = document.getElementById(inputId).value;
     if (!pattern) {
