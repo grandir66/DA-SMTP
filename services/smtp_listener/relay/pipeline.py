@@ -418,6 +418,14 @@ def _dispatch_action(
             event_uuid=event_uuid, parsed=parsed, storage=storage,
             action_map=action_map, codcli=ctx.codcli,
         )
+    elif action_name == "create_authorized_ticket":
+        # H24: valida codice da subject (cascade oneshot → permanente via API
+        # admin), apre ticket URGENZA=PAGAMENTO solo se valido. Vedi piano H24
+        # Fase C.
+        result = actions.do_create_authorized_ticket(
+            event_uuid=event_uuid, parsed=parsed, cfg=cfg, storage=storage,
+            backend=backend, action_map=action_map, codcli=ctx.codcli,
+        )
     elif action_name in ("ai_classify", "ai_critical_check"):
         result = actions.do_ai_classify(
             event_uuid=event_uuid, parsed=parsed, cfg=cfg, storage=storage,
@@ -440,6 +448,7 @@ def _dispatch_action(
         keep_original = True
     if keep_original and action_name in (
         "auto_reply", "redirect", "forward", "create_ticket",
+        "create_authorized_ticket",
         "ai_classify", "ai_critical_check",
     ):
         try:

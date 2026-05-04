@@ -351,7 +351,48 @@ def do_auto_reply(
         "auth_code": None,
         "auth_code_valid_until": None,
         "auth_code_ttl_hours": None,
+        # H24 Fase D — variabili template (risolute sotto se applicabili)
+        "h24_inbound_alias": None,
+        "urgent_fee": None,
+        "ticket_id": None,
     }
+
+    # H24: risoluzione h24_inbound_alias multi-brand.
+    # Cascata: action_map.h24_inbound_alias > lookup smtp_relay_h24_targets per
+    # dominio del MITTENTE (Fase E quando il sync sarà attivo) > setting
+    # h24.default_inbound_alias.
+    h24_alias = action_map.get("h24_inbound_alias")
+    if not h24_alias and parsed.from_address and "@" in parsed.from_address:
+        try:
+            sender_domain = parsed.from_address.rsplit("@", 1)[1].lower().strip()
+            if hasattr(storage, "find_h24_target_by_domain"):
+                target_row = storage.find_h24_target_by_domain(sender_domain)
+                if target_row:
+                    h24_alias = target_row.get("h24_alias")
+        except Exception:  # noqa: BLE001
+            pass
+    if not h24_alias:
+        try:
+            h24_alias = storage.get_setting("h24.default_inbound_alias") or None
+        except Exception:  # noqa: BLE001
+            pass
+    ctx["h24_inbound_alias"] = h24_alias
+
+    # urgent_fee: action_map > setting > default 250.
+    fee = action_map.get("urgent_fee")
+    if fee is None:
+        try:
+            fee_raw = storage.get_setting("h24.default_urgent_fee_eur")
+            fee = int(fee_raw) if fee_raw else 250
+        except (TypeError, ValueError):
+            fee = 250
+    ctx["urgent_fee"] = fee
+
+    # H24: extra context iniettato dal chiamante (es. _send_h24_template_reply
+    # per ack/reject) — sovrascrive i default di sopra (es. ticket_id post-ticket).
+    h24_extra = action_map.get("_h24_extra_ctx")
+    if isinstance(h24_extra, dict):
+        ctx.update(h24_extra)
 
     # Generazione codice di autorizzazione (se richiesto dalla regola e backend disponibile)
     auth_code_extra: dict[str, Any] = {}
@@ -570,6 +611,202 @@ def do_redirect(
         smarthost_tls=smarthost_tls,
     )
     return ActionResult(action="redirect", ok=True, detail=f"queued id={qid} to={redirect_to} via {smarthost}", extra={"queue_id": qid})
+
+
+def do_create_authorized_ticket(
+    *,
+    event_uuid: str,
+    parsed: ParsedMessage,
+    cfg: "RelayConfig",
+    storage: Storage,
+    backend: Any | None,
+    action_map: dict[str, Any],
+    codcli: str | None,
+) -> ActionResult:
+    """Action H24: valida codice autorizzazione dal subject e apre ticket
+    URGENZA=PAGAMENTO solo se valido. Cascade oneshot → permanente via API.
+
+    action_map opzionale:
+        ack_template_id: int      → invia auto-reply ack al cliente post-ticket
+        reject_template_id: int   → invia auto-reply reject se codice non valido
+        urgent_fee: int           → override settings (per audit ticket note)
+        settore, urgenza          → override default (default: S, URGENTE)
+    """
+    # Bounce / auto-reply / list mail → skip silenzioso (no loop)
+    if getattr(parsed, "is_auto_or_bulk", False):
+        return ActionResult(
+            action="create_authorized_ticket", ok=True,
+            detail="skip: auto/bulk message",
+            extra={"h24_skip_reason": "auto_or_bulk"},
+        )
+
+    if backend is None:
+        logger.error("create_authorized_ticket: backend non disponibile, skip")
+        return ActionResult(
+            action="create_authorized_ticket", ok=False,
+            detail="backend non disponibile",
+        )
+
+    inbound_alias = parsed.primary_to or None
+    # Cascade validation server-side (oneshot atomico → permanente)
+    val = backend.validate_auth_code(
+        subject=parsed.subject,
+        event_uuid=event_uuid,
+        from_address=parsed.from_address,
+        inbound_alias=inbound_alias,
+        tenant_id=int(action_map.get("tenant_id") or 1),
+    )
+
+    if not val.valid:
+        # Reject path: log + opzionale auto-reply
+        logger.info(
+            "H24 reject event=%s reason=%s code=%s",
+            event_uuid, val.reason or val.error, val.code,
+        )
+        # Reject template opzionale
+        reject_tid = action_map.get("reject_template_id")
+        if reject_tid:
+            try:
+                _send_h24_template_reply(
+                    template_id=int(reject_tid),
+                    parsed=parsed, cfg=cfg, storage=storage,
+                    backend=backend, action_map=action_map,
+                    extra_ctx={
+                        "h24_reject_reason": val.reason or "invalid",
+                        "ticket_id": None,
+                    },
+                    label="h24_reject",
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("H24 reject auto-reply fallito: %s", exc)
+        return ActionResult(
+            action="create_authorized_ticket",
+            ok=True,
+            detail=f"reject: {val.reason or val.error or 'invalid'}",
+            extra={
+                "h24_kind": None,
+                "h24_reason": val.reason,
+                "h24_code": val.code,
+                "h24_extracted": val.extracted_from_subject,
+            },
+        )
+
+    # Codice valido → costruisci payload ticket
+    code_info = val.code_info or {}
+    # Per permanenti: forza codice_cliente da customer_h24_codes
+    final_codcli = code_info.get("codice_cliente") or codcli
+    # Recupera urgent_fee dalla setting (action_map override)
+    urgent_fee = action_map.get("urgent_fee")
+    if not urgent_fee:
+        try:
+            urgent_fee = int(storage.get_setting("h24.default_urgent_fee_eur") or "250")
+        except (TypeError, ValueError):
+            urgent_fee = 250
+    settore = (action_map.get("settore") or "S").strip() or "S"
+    urgenza = (action_map.get("urgenza") or "URGENTE").strip() or "URGENTE"
+
+    note_lines = [
+        f"Apertura ticket autorizzata via codice H24 ({val.kind}).",
+        f"Codice: {val.code}",
+        f"Importo intervento urgente: {urgent_fee} EUR + IVA",
+        f"Mailbox di rientro: {inbound_alias or '(non determinato)'}",
+        f"Mittente: {parsed.from_address}",
+    ]
+    if val.kind == "oneshot" and code_info.get("event_uuid"):
+        note_lines.append(f"Evento originario: {code_info['event_uuid']}")
+    if val.kind == "permanent" and code_info.get("label"):
+        note_lines.append(f"Etichetta codice: {code_info['label']}")
+
+    body_prefix = "\n".join(note_lines) + "\n\n--- Body originale ---\n\n"
+    original_body = (parsed.body_text or parsed.body_html or "")[:7000]
+
+    payload: dict[str, Any] = {
+        "channel": "email_h24_authorized",
+        "external_id": f"h24-{val.kind}-{val.code}-{event_uuid[:12]}",
+        "subject": f"[H24 PAGAMENTO] {parsed.subject or '(senza oggetto)'}",
+        "body": body_prefix + original_body,
+        "from_address": parsed.from_address,
+        "to_address": parsed.primary_to,
+        "message_id": parsed.message_id,
+        "codice_cliente": final_codcli,
+        "settore": settore,
+        "urgenza": urgenza,
+        "metadata": {
+            "h24_kind": val.kind,
+            "h24_code": val.code,
+            "h24_usage_id": val.usage_id,
+            "h24_urgent_fee_eur": urgent_fee,
+            "h24_inbound_alias": inbound_alias,
+            "h24_event_uuid_origin": code_info.get("event_uuid"),
+            "received_count": parsed.received_count,
+            "attachments": [{"filename": a.filename, "content_type": a.content_type,
+                              "size": a.size_bytes} for a in parsed.attachments],
+        },
+    }
+    qid = _enqueue_dispatch(storage, event_uuid=event_uuid, payload=payload)
+
+    # Ack opzionale al cliente (POST async, non blocca apertura ticket)
+    ack_tid = action_map.get("ack_template_id")
+    if ack_tid:
+        try:
+            _send_h24_template_reply(
+                template_id=int(ack_tid),
+                parsed=parsed, cfg=cfg, storage=storage,
+                backend=backend, action_map=action_map,
+                extra_ctx={
+                    "h24_code": val.code,
+                    "h24_kind": val.kind,
+                    "urgent_fee": urgent_fee,
+                    "ticket_id": None,  # ancora pending dispatch
+                },
+                label="h24_ack",
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("H24 ack auto-reply fallito: %s", exc)
+
+    logger.info(
+        "H24 ticket enqueued event=%s kind=%s code=%s codcli=%s qid=%s",
+        event_uuid, val.kind, val.code, final_codcli, qid,
+    )
+    return ActionResult(
+        action="create_authorized_ticket",
+        ok=True,
+        detail=f"valid {val.kind}: ticket queued id={qid}",
+        extra={
+            "h24_kind": val.kind,
+            "h24_code": val.code,
+            "h24_usage_id": val.usage_id,
+            "h24_extracted": val.extracted_from_subject,
+            "dispatch_id": qid,
+        },
+    )
+
+
+def _send_h24_template_reply(
+    *, template_id: int, parsed: ParsedMessage, cfg: "RelayConfig",
+    storage: Storage, backend: Any | None, action_map: dict[str, Any],
+    extra_ctx: dict[str, Any], label: str,
+) -> None:
+    """Helper per inviare ack/reject H24 riusando l'infrastruttura auto_reply.
+
+    Costruisce un action_map sintetico con template_id e chiama
+    do_auto_reply, passando extra_ctx via action_map._h24_extra_ctx (se
+    auto_reply.build_context lo legge — vedi Fase D, oggi è solo log).
+    """
+    synth_action_map = dict(action_map)
+    synth_action_map["template_id"] = int(template_id)
+    synth_action_map["_h24_extra_ctx"] = extra_ctx  # Fase D: build_context lo userà
+    # generate_auth_code MAI in ack/reject (non vogliamo emettere nuovi codici)
+    synth_action_map["generate_auth_code"] = False
+    # Riusa do_auto_reply (gestisce tutto: render template, send via SMTP outbound)
+    res = do_auto_reply(
+        event_uuid=f"h24-{label}-{parsed.message_id or '?'}"[:64],
+        parsed=parsed, cfg=cfg, storage=storage, backend=backend,
+        action_map=synth_action_map,
+        customer_context={"in_service": False, "codcli": None},
+        rule=None,
+    )
+    logger.info("H24 %s template_id=%s result=%s", label, template_id, res.ok)
 
 
 def do_create_ticket(

@@ -81,6 +81,19 @@ class AuthCodeResult:
 
 
 @dataclass
+class AuthCodeValidationResult:
+    """Esito validazione codice (cascade oneshot → permanente)."""
+    valid: bool
+    kind: str | None = None      # 'oneshot' | 'permanent' | None
+    reason: str | None = None    # 'ok' | 'not_found' | 'already_used' | 'expired' | 'revoked' | 'no_code_in_subject'
+    code: str | None = None
+    code_info: dict[str, Any] | None = None
+    usage_id: int | None = None  # solo per permanente
+    extracted_from_subject: bool = False
+    error: str | None = None
+
+
+@dataclass
 class AggregationsPayload:
     synced_at: str
     aggregations: list[dict[str, Any]] = field(default_factory=list)
@@ -146,6 +159,22 @@ class ManagerBackend(ABC):
 
     @abstractmethod
     def submit_ticket(self, payload: dict[str, Any]) -> TicketResult: ...
+
+    def validate_auth_code(self, *, code: str | None = None,
+                             subject: str | None = None,
+                             event_uuid: str | None = None,
+                             from_address: str | None = None,
+                             inbound_alias: str | None = None,
+                             tenant_id: int = 1) -> "AuthCodeValidationResult":
+        """Default: backend non supporta H24 (pre-Fase B). Ritorna invalid."""
+        return AuthCodeValidationResult(
+            valid=False, error="backend_does_not_support_h24",
+        )
+
+    def update_h24_usage_ticket(self, *, usage_id: int,
+                                  ticket_id: str | None) -> bool:
+        """Default: backend non supporta H24."""
+        return False
 
     @abstractmethod
     def issue_auth_code(self, *, codcli: str | None, rule_id: int | None,
@@ -415,7 +444,8 @@ class StormshieldManagerBackend(ManagerBackend):
                 external_client.close()
 
     def issue_auth_code(self, *, codcli: str | None, rule_id: int | None,
-                        ttl_hours: int, note: str | None = None) -> AuthCodeResult:
+                        ttl_hours: int, note: str | None = None,
+                        event_uuid: str | None = None) -> AuthCodeResult:
         try:
             resp = self._client.post(
                 "/api/v1/relay/auth-codes",
@@ -424,6 +454,7 @@ class StormshieldManagerBackend(ManagerBackend):
                     "rule_id": rule_id,
                     "ttl_hours": int(ttl_hours),
                     "note": note,
+                    "event_uuid": event_uuid,
                 },
             )
         except httpx.HTTPError as exc:
@@ -442,6 +473,68 @@ class StormshieldManagerBackend(ManagerBackend):
             except ValueError:
                 return AuthCodeResult(ok=False, error="risposta non-JSON")
         return AuthCodeResult(ok=False, error=f"HTTP {resp.status_code}: {resp.text[:200]}")
+
+    def validate_auth_code(self, *,
+                             code: str | None = None,
+                             subject: str | None = None,
+                             event_uuid: str | None = None,
+                             from_address: str | None = None,
+                             inbound_alias: str | None = None,
+                             tenant_id: int = 1) -> AuthCodeValidationResult:
+        """Valida codice autorizzazione H24 sull'admin (cascade oneshot →
+        permanente). Estrazione server-side se code è None ma subject è valorizzato.
+        Atomico per consume oneshot.
+        """
+        try:
+            resp = self._client.post(
+                "/api/v1/relay/auth-codes/validate",
+                json={
+                    "code": code,
+                    "subject": subject,
+                    "event_uuid": event_uuid,
+                    "from_address": from_address,
+                    "inbound_alias": inbound_alias,
+                    "tenant_id": int(tenant_id),
+                },
+            )
+        except httpx.HTTPError as exc:
+            return AuthCodeValidationResult(valid=False, error=f"network: {exc}")
+        if resp.status_code < 200 or resp.status_code >= 300:
+            return AuthCodeValidationResult(
+                valid=False,
+                error=f"HTTP {resp.status_code}: {resp.text[:200]}",
+            )
+        try:
+            data = resp.json()
+        except ValueError:
+            return AuthCodeValidationResult(valid=False, error="risposta non-JSON")
+        return AuthCodeValidationResult(
+            valid=bool(data.get("valid")),
+            kind=data.get("kind"),
+            reason=data.get("reason"),
+            code=data.get("code"),
+            code_info=data.get("code_info"),
+            usage_id=data.get("usage_id"),
+            extracted_from_subject=bool(data.get("extracted_from_subject")),
+        )
+
+    def update_h24_usage_ticket(self, *, usage_id: int,
+                                  ticket_id: str | None) -> bool:
+        """Aggiorna usage_id.ticket_id post creazione ticket sul manager.
+        Usato solo per codici permanenti (audit fatturazione)."""
+        try:
+            resp = self._client.post(
+                f"/api/v1/relay/auth-codes/usage/{int(usage_id)}/ticket",
+                json={"ticket_id": ticket_id},
+            )
+        except httpx.HTTPError:
+            return False
+        if resp.status_code < 200 or resp.status_code >= 300:
+            return False
+        try:
+            return bool(resp.json().get("ok"))
+        except ValueError:
+            return False
 
     def fetch_active_aggregations(self) -> AggregationsPayload:
         data = self._get_json("/api/v1/relay/aggregations/active")
