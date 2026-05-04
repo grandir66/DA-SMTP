@@ -1,0 +1,121 @@
+{% extends "admin/_base.html" %}
+{% block title %}Mailbox H24 di rientro (multi-brand){% endblock %}
+{% block content %}
+
+<section class="dr-section">
+    <h2><i class="fas fa-envelope-open-text"></i> Mailbox H24 di rientro
+        <small style="color:#64748b; font-weight:400;">{{ targets|length }} mappature</small>
+    </h2>
+    <p style="color:#64748b; font-size:0.88rem;">
+        Mappa dominio mittente → indirizzo H24 da inserire nel pulsante
+        <code>mailto:</code> dell'auto-reply fuori orario. Permette routing
+        multi-brand: il cliente Datia clicca e arriva su <code>h24@datia.it</code>,
+        il cliente Domarc su <code>h24@domarc.it</code>.
+    </p>
+    {% if fallback_alias %}
+    <p style="color:#64748b; font-size:0.85rem; margin-top:0.5rem;">
+        <strong>Fallback globale</strong>: <code>{{ fallback_alias }}</code>
+        (usato quando il dominio mittente non è in tabella).
+        Configurabile nel <a href="{{ url_for('settings.list_view') if 'settings' in request.url_rule.endpoint or true else '#' }}">setting <code>h24.default_inbound_alias</code></a>.
+    </p>
+    {% endif %}
+</section>
+
+<section class="dr-section">
+    <h3><i class="fas fa-plus-circle"></i> Aggiungi / modifica mappatura</h3>
+    <form method="post" action="{{ url_for('h24_codes.targets_upsert_view') }}"
+          style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:end;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div>
+            <small>Dominio sorgente *</small><br>
+            <input type="text" name="source_domain" required
+                   placeholder="es. datia.it"
+                   pattern="[a-z0-9.-]+\.[a-z]{2,}"
+                   style="text-transform:lowercase;">
+        </div>
+        <div>
+            <small>Alias H24 *</small><br>
+            <input type="email" name="h24_alias" required
+                   placeholder="es. h24@datia.it"
+                   style="text-transform:lowercase;">
+        </div>
+        <div>
+            <small>Importo override (€)</small><br>
+            <input type="number" name="urgent_fee_eur"
+                   placeholder="default settings" min="0" max="10000"
+                   style="width:140px;">
+        </div>
+        <div style="flex:1; min-width:200px;">
+            <small>Note</small><br>
+            <input type="text" name="note" style="width:100%;">
+        </div>
+        <div>
+            <label style="display:flex; align-items:center; gap:0.3rem;">
+                <input type="checkbox" name="enabled" value="1" checked>
+                <small>Attivo</small>
+            </label>
+        </div>
+        <button class="dr-btn dr-btn-primary" style="width:auto;">
+            <i class="fas fa-save"></i> Salva
+        </button>
+    </form>
+</section>
+
+<div class="table-outer">
+    <div class="table-scroll">
+        <table class="fw-table">
+            <thead>
+                <tr>
+                    <th>Dominio sorgente</th>
+                    <th>Alias H24</th>
+                    <th style="text-align:right;">Importo override</th>
+                    <th>Note</th>
+                    <th>Stato</th>
+                    <th>Aggiornato</th>
+                    <th style="width:100px;">Azioni</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for t in targets %}
+                <tr {% if not t.enabled %}style="background:#f8fafc; color:#94a3b8;"{% endif %}>
+                    <td><code>{{ t.source_domain }}</code></td>
+                    <td><code>{{ t.h24_alias }}</code></td>
+                    <td style="text-align:right;">
+                        {% if t.urgent_fee_eur %}
+                        <strong>{{ t.urgent_fee_eur }} €</strong>
+                        {% else %}
+                        <small style="color:#94a3b8;">(default)</small>
+                        {% endif %}
+                    </td>
+                    <td><small>{{ t.note or '—' }}</small></td>
+                    <td>
+                        {% if t.enabled %}
+                        <span class="pill pill-success">attivo</span>
+                        {% else %}
+                        <span class="pill pill-muted">spento</span>
+                        {% endif %}
+                    </td>
+                    <td><small>{{ t.updated_at }}</small></td>
+                    <td>
+                        <form method="post"
+                              action="{{ url_for('h24_codes.targets_delete_view', target_id=t.id) }}"
+                              style="display:inline;"
+                              onsubmit="return confirm('Eliminare la mappatura {{ t.source_domain }} → {{ t.h24_alias }}?');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button class="dr-btn dr-btn-danger" title="Elimina">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="7" style="text-align:center; color:#94a3b8; padding:2rem;">
+                    Nessuna mappatura. L'auto-reply userà sempre il fallback
+                    globale (<code>{{ fallback_alias or 'non configurato' }}</code>).
+                </td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

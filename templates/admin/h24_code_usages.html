@@ -1,0 +1,94 @@
+{% extends "admin/_base.html" %}
+{% block title %}Utilizzi codice {{ code.code }}{% endblock %}
+{% block content %}
+
+<section class="dr-section">
+    <a href="{{ url_for('h24_codes.list_view') }}" class="dr-btn">
+        <i class="fas fa-arrow-left"></i> Torna ai codici
+    </a>
+    <h2 style="margin:0.5rem 0;">
+        <i class="fas fa-list-check"></i> Storico utilizzi —
+        <code>{{ code.code }}</code>
+    </h2>
+</section>
+
+<section class="dr-section">
+    <table style="border-collapse:collapse; max-width:600px;">
+        <tr><td style="padding:0.3rem 0.6rem; color:#64748b;">Cliente</td>
+            <td style="padding:0.3rem 0.6rem;"><strong>{{ code.codice_cliente }}</strong></td></tr>
+        <tr><td style="padding:0.3rem 0.6rem; color:#64748b;">Etichetta</td>
+            <td style="padding:0.3rem 0.6rem;">{{ code.label or '—' }}</td></tr>
+        <tr><td style="padding:0.3rem 0.6rem; color:#64748b;">Stato</td>
+            <td style="padding:0.3rem 0.6rem;">
+                {% if code.revoked_at %}
+                <span class="pill pill-danger">revocato il {{ code.revoked_at }}
+                    da {{ code.revoked_by or '?' }}</span>
+                {% elif not code.enabled %}
+                <span class="pill pill-muted">disabilitato</span>
+                {% else %}
+                <span class="pill pill-success">attivo</span>
+                {% endif %}
+            </td></tr>
+        <tr><td style="padding:0.3rem 0.6rem; color:#64748b;">Creato</td>
+            <td style="padding:0.3rem 0.6rem;">{{ code.created_at }}
+                {% if code.created_by %}da {{ code.created_by }}{% endif %}</td></tr>
+        {% if code.note %}
+        <tr><td style="padding:0.3rem 0.6rem; color:#64748b;">Note</td>
+            <td style="padding:0.3rem 0.6rem;">{{ code.note }}</td></tr>
+        {% endif %}
+        {% if code.revoked_reason %}
+        <tr><td style="padding:0.3rem 0.6rem; color:#64748b;">Motivo revoca</td>
+            <td style="padding:0.3rem 0.6rem; color:#991b1b;">{{ code.revoked_reason }}</td></tr>
+        {% endif %}
+    </table>
+</section>
+
+<section class="dr-section">
+    <h3>Utilizzi ({{ usages|length }})</h3>
+</section>
+
+<div class="table-outer">
+    <div class="table-scroll">
+        <table class="fw-table">
+            <thead>
+                <tr>
+                    <th>Quando</th>
+                    <th>Mittente</th>
+                    <th>Subject</th>
+                    <th>Mailbox di rientro</th>
+                    <th>Ticket</th>
+                    <th>Rendicontato</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for u in usages %}
+                <tr>
+                    <td><small>{{ u.used_at }}</small></td>
+                    <td>{{ u.from_address or '—' }}</td>
+                    <td><small>{{ u.subject or '—' }}</small></td>
+                    <td>{{ u.inbound_alias or '—' }}</td>
+                    <td>
+                        {% if u.ticket_id %}
+                        <code>{{ u.ticket_id }}</code>
+                        {% else %}
+                        <span class="pill pill-muted">in attesa</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if u.reported_to_manager_at %}
+                        <small style="color:#166534;">✓ {{ u.reported_to_manager_at }}</small>
+                        {% else %}
+                        <span class="pill pill-warn">non ancora</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="6" style="text-align:center; color:#94a3b8; padding:2rem;">
+                    Nessun utilizzo registrato per questo codice.
+                </td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

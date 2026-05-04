@@ -91,6 +91,7 @@ def create_app(config: AppConfig | None = None, *, init_db: bool = True) -> Flas
     from .routes.templates import templates_bp
     from .routes.service_hours import service_hours_bp
     from .routes.auth_codes import auth_codes_bp
+    from .routes.h24_codes import h24_codes_bp
     from .routes.events import events_bp
     from .routes.aggregations import aggregations_bp
     from .routes.customers import customers_bp
@@ -115,6 +116,7 @@ def create_app(config: AppConfig | None = None, *, init_db: bool = True) -> Flas
     app.register_blueprint(templates_bp)
     app.register_blueprint(service_hours_bp)
     app.register_blueprint(auth_codes_bp)
+    app.register_blueprint(h24_codes_bp)
     app.register_blueprint(events_bp)
     app.register_blueprint(aggregations_bp)
     app.register_blueprint(customers_bp)

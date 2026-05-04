@@ -1,0 +1,134 @@
+{% extends "admin/_base.html" %}
+{% block title %}Codici H24 permanenti{% endblock %}
+{% block content %}
+
+<section class="dr-section">
+    <h2><i class="fas fa-shield-halved"></i> Codici H24 permanenti
+        <small style="color:#64748b; font-weight:400;">{{ codes|length }}</small>
+    </h2>
+    <p style="color:#64748b; font-size:0.88rem;">
+        Codici fissi anagrafici (riusabili, revocabili) per l'apertura ticket
+        urgenti a pagamento via mailbox H24. Diversi dai
+        <a href="{{ url_for('auth_codes.list_view') }}">codici monouso</a>
+        emessi automaticamente fuori orario.
+    </p>
+</section>
+
+<section class="dr-section">
+    <h3><i class="fas fa-plus-circle"></i> Crea nuovo codice</h3>
+    <form method="post" action="{{ url_for('h24_codes.create_view') }}"
+          style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:end; padding-top:0.5rem;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div>
+            <small>Cliente *</small><br>
+            <input type="text" name="codice_cliente" required
+                   placeholder="es. 73053" style="text-transform:uppercase;">
+        </div>
+        <div>
+            <small>Etichetta</small><br>
+            <input type="text" name="label" placeholder="es. Direzione IT">
+        </div>
+        <div>
+            <small>Codice custom (opzionale)</small><br>
+            <input type="text" name="code"
+                   placeholder="auto-genera se vuoto"
+                   pattern="[A-Z0-9][A-Z0-9-]{4,38}[A-Z0-9]"
+                   style="text-transform:uppercase; font-family:ui-monospace,monospace;">
+        </div>
+        <div style="flex:1; min-width:200px;">
+            <small>Note</small><br>
+            <input type="text" name="note" style="width:100%;">
+        </div>
+        <button class="dr-btn dr-btn-primary" style="width:auto;">
+            <i class="fas fa-key"></i> Crea
+        </button>
+    </form>
+</section>
+
+<section class="dr-section">
+    <form method="get" style="display:flex; gap:0.5rem; align-items:center;">
+        <select name="state" onchange="this.form.submit()">
+            <option value="all" {% if not only_active %}selected{% endif %}>Tutti</option>
+            <option value="active" {% if only_active %}selected{% endif %}>Solo attivi</option>
+        </select>
+        <input type="text" name="cliente" value="{{ cliente }}" placeholder="filtra per codcli"
+               style="text-transform:uppercase;">
+        <button class="dr-btn" type="submit"><i class="fas fa-filter"></i> Filtra</button>
+    </form>
+</section>
+
+<div class="table-outer">
+    <div class="table-scroll">
+        <table class="fw-table">
+            <thead>
+                <tr>
+                    <th>Codice</th>
+                    <th>Cliente</th>
+                    <th>Etichetta</th>
+                    <th>Stato</th>
+                    <th style="text-align:center;">Usi</th>
+                    <th>Ultimo uso</th>
+                    <th>Creato</th>
+                    <th style="width:160px;">Azioni</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for c in codes %}
+                <tr {% if c.revoked_at %}style="background:#fef2f2;"{% endif %}>
+                    <td><code style="font-weight:600;">{{ c.code }}</code></td>
+                    <td><strong>{{ c.codice_cliente }}</strong></td>
+                    <td>{{ c.label or '—' }}</td>
+                    <td>
+                        {% if c.revoked_at %}
+                        <span class="pill pill-danger" title="Revocato il {{ c.revoked_at }} da {{ c.revoked_by or '?' }}{% if c.revoked_reason %}: {{ c.revoked_reason }}{% endif %}">
+                            <i class="fas fa-ban"></i> revocato
+                        </span>
+                        {% elif not c.enabled %}
+                        <span class="pill pill-muted">disabilitato</span>
+                        {% else %}
+                        <span class="pill pill-success"><i class="fas fa-check"></i> attivo</span>
+                        {% endif %}
+                    </td>
+                    <td style="text-align:center;">
+                        {% if c.used_count and c.used_count > 0 %}
+                        <a href="{{ url_for('h24_codes.usages_view', code_id=c.id) }}"
+                           class="pill pill-info">{{ c.used_count }}</a>
+                        {% else %}
+                        <span class="pill pill-muted">0</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ c.last_used_at or '—' }}</td>
+                    <td>
+                        <small style="color:#64748b;">{{ c.created_at }}</small>
+                        {% if c.created_by %}<br><small>{{ c.created_by }}</small>{% endif %}
+                    </td>
+                    <td>
+                        <a href="{{ url_for('h24_codes.usages_view', code_id=c.id) }}"
+                           class="dr-btn" title="Storico utilizzi">
+                            <i class="fas fa-list"></i>
+                        </a>
+                        {% if not c.revoked_at %}
+                        <form method="post"
+                              action="{{ url_for('h24_codes.revoke_view', code_id=c.id) }}"
+                              style="display:inline;"
+                              onsubmit="return confirm('Revocare il codice {{ c.code }}? Operazione irreversibile.');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="reason"
+                                   value="manual revocation">
+                            <button class="dr-btn dr-btn-danger" title="Revoca">
+                                <i class="fas fa-ban"></i>
+                            </button>
+                        </form>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="8" style="text-align:center; color:#94a3b8; padding:2rem;">
+                    Nessun codice {% if only_active %}attivo{% endif %} trovato.
+                </td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
