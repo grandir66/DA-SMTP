@@ -53,18 +53,69 @@
 
     <h3 style="margin:0 0 0.5rem 0; color:#0b2a4a;">
         <i class="fas fa-users"></i> Membri del gruppo
-        <small style="color:#64748b;">{{ members|length }}</small>
+        <small style="color:#64748b;">attualmente <strong id="memberCount">{{ members|length }}</strong></small>
     </h3>
     <p style="color:#64748b; font-size:0.85rem; margin-bottom:0.6rem;">
-        Spunta i clienti da includere. Sono inclusi automaticamente i loro domini e alias.
+        Spunta i clienti da includere nel gruppo. Filtri ricchi: testo libero,
+        profilo orario, stato e tipo contratto, vista membri/non-membri.
     </p>
 
-    <div style="margin-bottom:0.6rem;">
-        <input type="text" id="customerFilter" placeholder="🔎 cerca per codice o ragione sociale…"
-               style="width:100%; padding:0.5rem 0.7rem; font-size:0.88rem;">
+    <!-- Filtri -->
+    <div style="background:#f8fafc; border:1px solid #cbd5e1; border-radius:6px; padding:0.6rem 0.8rem; margin-bottom:0.6rem;">
+        <div style="display:flex; gap:0.4rem; flex-wrap:wrap; align-items:center; margin-bottom:0.4rem;">
+            <input type="text" id="customerFilter"
+                   placeholder="🔎 codcli, ragione sociale, dominio, alias…"
+                   style="flex:1; min-width:240px; padding:0.4rem 0.6rem; border:1px solid #cbd5e1; border-radius:4px;">
+
+            <label style="font-size:0.82rem; color:#475569;">
+                <strong>Mostra:</strong>
+                <select id="visFilter" style="padding:0.32rem; border:1px solid #cbd5e1; border-radius:4px;">
+                    <option value="all">tutti i clienti</option>
+                    <option value="members">solo membri attuali</option>
+                    <option value="non-members">solo non-membri</option>
+                </select>
+            </label>
+        </div>
+
+        <div style="display:flex; gap:0.4rem; flex-wrap:wrap; align-items:center; font-size:0.82rem; color:#475569;">
+            <strong>Profilo:</strong>
+            {% for prof in ['STD', 'EXT', 'H24', 'NO'] %}
+            <label style="font-weight:400;">
+                <input type="checkbox" class="profile-cb" value="{{ prof }}" checked> {{ prof }}
+            </label>
+            {% endfor %}
+            <label style="font-weight:400;">
+                <input type="checkbox" class="profile-cb" value="UNK" checked>
+                <small>(senza profilo)</small>
+            </label>
+
+            <strong style="margin-left:0.6rem;">Contratto:</strong>
+            <label style="font-weight:400;"><input type="radio" name="contractFilter" value="all" checked> tutti</label>
+            <label style="font-weight:400;"><input type="radio" name="contractFilter" value="active"> attivo</label>
+            <label style="font-weight:400;"><input type="radio" name="contractFilter" value="inactive"> non attivo</label>
+
+            <strong style="margin-left:0.6rem;">Tipo:</strong>
+            <input type="text" id="ctypeFilter" placeholder="STD, ADV, …"
+                   style="padding:0.3rem 0.5rem; border:1px solid #cbd5e1; border-radius:4px; width:120px;">
+        </div>
     </div>
 
-    <div style="border:1px solid #cbd5e1; border-radius:6px; max-height:480px; overflow-y:auto; background:#fafbfd;">
+    <!-- Bulk action sui visibili -->
+    <div style="display:flex; gap:0.4rem; align-items:center; margin-bottom:0.4rem; font-size:0.85rem;">
+        <button type="button" class="dr-btn" onclick="bulkToggle(true)">
+            <i class="fas fa-check-double"></i> Spunta tutti i visibili
+        </button>
+        <button type="button" class="dr-btn" onclick="bulkToggle(false)">
+            <i class="fas fa-square"></i> Deseleziona visibili
+        </button>
+        <span style="margin-left:auto; color:#64748b;">
+            <strong id="visibleCount">{{ available_customers|length }}</strong> visibili ·
+            <strong id="selectedCount">{{ member_codcli|length if member_codcli else 0 }}</strong> selezionati ·
+            <strong>{{ available_customers|length }}</strong> totali
+        </span>
+    </div>
+
+    <div style="border:1px solid #cbd5e1; border-radius:6px; max-height:520px; overflow-y:auto; background:#fafbfd;">
         <table class="fw-table" id="customersTable" style="margin:0;">
             <thead style="position:sticky; top:0; background:#f1f5f9; z-index:1;">
                 <tr>
@@ -73,32 +124,63 @@
                     </th>
                     <th>Codice</th>
                     <th>Ragione sociale</th>
+                    <th>Profilo</th>
+                    <th>Contratto</th>
+                    <th>Tipo</th>
                     <th>Domini</th>
                 </tr>
             </thead>
             <tbody>
                 {% for c in available_customers %}
-                <tr class="customer-row" data-search="{{ (c.codice_cliente or '')|lower }} {{ (c.ragione_sociale or '')|lower }} {{ c.domains|join(' ')|lower }}">
+                {% set cc = c.codice_cliente %}
+                {% set prof = (c.tipologia_servizio or 'UNK')|upper %}
+                {% if prof == 'STANDARD' %}{% set prof = 'STD' %}{% endif %}
+                {% set ctype = contract_type_by_codcli.get(cc, '') %}
+                {% set is_member = cc in (member_codcli or []) %}
+                <tr class="customer-row"
+                    data-search="{{ (cc or '')|lower }} {{ (c.ragione_sociale or '')|lower }} {{ c.domains|join(' ')|lower }} {{ c.aliases|join(' ')|lower }}"
+                    data-profile="{{ prof }}"
+                    data-contract="{{ 'active' if c.contract_active else 'inactive' }}"
+                    data-ctype="{{ ctype }}"
+                    data-member="{{ '1' if is_member else '0' }}"
+                    {% if is_member %}style="background:#f0fdf4;"{% endif %}>
                     <td style="text-align:center;">
-                        <input type="checkbox" name="members" value="{{ c.codice_cliente }}"
+                        <input type="checkbox" name="members" value="{{ cc }}"
                                class="member-cb"
-                               {% if c.codice_cliente in (member_codcli or []) %}checked{% endif %}>
+                               {% if is_member %}checked{% endif %}>
                     </td>
-                    <td><code>{{ c.codice_cliente }}</code></td>
+                    <td><code>{{ cc }}</code></td>
                     <td>{{ c.ragione_sociale or '—' }}</td>
-                    <td style="font-size:0.82rem; color:#64748b;">
-                        {% for d in (c.domains or [])[:3] %}<span class="pill pill-muted">{{ d }}</span>{% endfor %}
-                        {% if c.domains and c.domains|length > 3 %}<small>+{{ c.domains|length - 3 }}</small>{% endif %}
+                    <td>
+                        <span class="pill" style="font-size:0.7rem;
+                              background:{% if prof == 'STD' %}#dbeafe{% elif prof == 'EXT' %}#fef3c7{% elif prof == 'H24' %}#fee2e2{% elif prof == 'NO' %}#f1f5f9{% else %}#f1f5f9{% endif %};
+                              color:{% if prof == 'STD' %}#1d4ed8{% elif prof == 'EXT' %}#92400e{% elif prof == 'H24' %}#dc2626{% elif prof == 'NO' %}#64748b{% else %}#94a3b8{% endif %};">
+                            {{ prof }}
+                        </span>
+                    </td>
+                    <td>
+                        {% if c.contract_active %}
+                        <span class="pill pill-success" style="font-size:0.7rem;">attivo</span>
+                        {% else %}
+                        <span class="pill pill-danger" style="font-size:0.7rem;">no</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if ctype %}
+                        <small style="font-family:ui-monospace,monospace; color:#6d28d9;">{{ ctype }}</small>
+                        {% else %}
+                        <small style="color:#94a3b8;">—</small>
+                        {% endif %}
+                    </td>
+                    <td style="font-size:0.78rem; color:#64748b;">
+                        {% for d in (c.domains or [])[:2] %}<span style="background:#f1f5f9; padding:1px 5px; border-radius:3px; margin:0 2px;">{{ d }}</span>{% endfor %}
+                        {% if c.domains and c.domains|length > 2 %}<small>+{{ c.domains|length - 2 }}</small>{% endif %}
                     </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
-    <p style="margin-top:0.4rem; font-size:0.82rem; color:#64748b;">
-        <span id="selectedCount">{{ member_codcli|length if member_codcli else 0 }}</span> selezionati
-        di <span id="totalCount">{{ available_customers|length }}</span>
-    </p>
     {% endif %}
 
     <div style="margin-top:1.2rem; display:flex; gap:0.6rem;">
@@ -124,26 +206,56 @@
 <script>
 (function() {
     const filterInput = document.getElementById('customerFilter');
+    const ctypeFilter = document.getElementById('ctypeFilter');
+    const visFilter = document.getElementById('visFilter');
+    const profileCBs = document.querySelectorAll('.profile-cb');
+    const contractRadios = document.querySelectorAll('input[name="contractFilter"]');
     const rows = document.querySelectorAll('.customer-row');
     const cbAll = document.getElementById('selectAllVisible');
     const cbItems = document.querySelectorAll('.member-cb');
-    const selectedCount = document.getElementById('selectedCount');
+    const selectedCountEl = document.getElementById('selectedCount');
+    const visibleCountEl = document.getElementById('visibleCount');
+    const memberCountEl = document.getElementById('memberCount');
 
-    function updateCount() {
-        if (!selectedCount) return;
-        const n = document.querySelectorAll('.member-cb:checked').length;
-        selectedCount.textContent = n;
+    function updateCounts() {
+        if (selectedCountEl) {
+            selectedCountEl.textContent = document.querySelectorAll('.member-cb:checked').length;
+        }
+        if (visibleCountEl) {
+            visibleCountEl.textContent = Array.from(rows).filter(r => r.style.display !== 'none').length;
+        }
+        if (memberCountEl) {
+            memberCountEl.textContent = document.querySelectorAll('.member-cb:checked').length;
+        }
     }
-    cbItems.forEach(cb => cb.addEventListener('change', updateCount));
+    cbItems.forEach(cb => cb.addEventListener('change', updateCounts));
 
-    if (filterInput) {
-        filterInput.addEventListener('input', () => {
-            const q = filterInput.value.toLowerCase().trim();
-            rows.forEach(r => {
-                r.style.display = (!q || r.dataset.search.includes(q)) ? '' : 'none';
-            });
+    function applyFilters() {
+        const q = filterInput ? filterInput.value.toLowerCase().trim() : '';
+        const ctype = ctypeFilter ? ctypeFilter.value.toUpperCase().trim() : '';
+        const visMode = visFilter ? visFilter.value : 'all';
+        const enabledProfiles = new Set(
+            Array.from(profileCBs).filter(cb => cb.checked).map(cb => cb.value)
+        );
+        const contractMode = (Array.from(contractRadios).find(r => r.checked) || {}).value || 'all';
+
+        rows.forEach(r => {
+            let show = true;
+            if (q && !r.dataset.search.includes(q)) show = false;
+            if (show && !enabledProfiles.has(r.dataset.profile)) show = false;
+            if (show && contractMode !== 'all' && r.dataset.contract !== contractMode) show = false;
+            if (show && ctype && r.dataset.ctype !== ctype) show = false;
+            if (show && visMode === 'members' && r.dataset.member !== '1') show = false;
+            if (show && visMode === 'non-members' && r.dataset.member === '1') show = false;
+            r.style.display = show ? '' : 'none';
         });
+        updateCounts();
     }
+
+    [filterInput, ctypeFilter, visFilter].forEach(el => el && el.addEventListener('input', applyFilters));
+    profileCBs.forEach(cb => cb.addEventListener('change', applyFilters));
+    contractRadios.forEach(r => r.addEventListener('change', applyFilters));
+
     if (cbAll) {
         cbAll.addEventListener('change', () => {
             rows.forEach(r => {
@@ -152,9 +264,21 @@
                     if (cb) cb.checked = cbAll.checked;
                 }
             });
-            updateCount();
+            updateCounts();
         });
     }
+
+    window.bulkToggle = function(state) {
+        rows.forEach(r => {
+            if (r.style.display !== 'none') {
+                const cb = r.querySelector('.member-cb');
+                if (cb) cb.checked = state;
+            }
+        });
+        updateCounts();
+    };
+
+    updateCounts();
 })();
 </script>
 {% endblock %}

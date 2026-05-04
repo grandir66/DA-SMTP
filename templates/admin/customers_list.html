@@ -8,25 +8,27 @@
 .cust-stat-card .label { font-size:0.7rem; color:var(--dr-gray-dark); text-transform:uppercase; letter-spacing:0.04em; }
 .cust-stat-card .value { font-size:1.4rem; font-weight:700; color:var(--dr-primary); }
 
-.cust-filters { display:flex; gap:0.4rem; flex-wrap:wrap; margin-bottom:0.6rem; align-items:center; }
-.cust-filters input, .cust-filters select { padding:0.35rem 0.6rem; border:1px solid var(--dr-gray); border-radius:5px; font-family:inherit; }
-.cust-filters .pill-link { padding:0.2rem 0.7rem; border-radius:9px; font-size:0.78rem; font-weight:600; text-decoration:none;
-                            background:#f1f5f9; color:var(--dr-gray-dark); border:1px solid #cbd5e1; }
-.cust-filters .pill-link.active { background:var(--dr-primary); color:#fff; border-color:var(--dr-primary); }
-.cust-filters .pill-link.profile-STD { background:#dbeafe; color:#1d4ed8; border-color:#93c5fd; }
-.cust-filters .pill-link.profile-EXT { background:#fef3c7; color:#92400e; border-color:#fde68a; }
-.cust-filters .pill-link.profile-H24 { background:#fee2e2; color:#dc2626; border-color:#fca5a5; }
-.cust-filters .pill-link.profile-NO { background:#f1f5f9; color:#64748b; border-color:#cbd5e1; }
-.cust-filters .pill-link.active.profile-STD { background:#1d4ed8; color:#fff; }
-.cust-filters .pill-link.active.profile-EXT { background:#92400e; color:#fff; }
-.cust-filters .pill-link.active.profile-H24 { background:#dc2626; color:#fff; }
-.cust-filters .pill-link.active.profile-NO { background:#64748b; color:#fff; }
+.cust-filter-card { background:#fff; border:1px solid #cbd5e1; border-radius:8px;
+                     padding:0.7rem 0.9rem; margin-bottom:0.6rem; }
+.cust-filter-row { display:flex; gap:0.4rem; align-items:center; flex-wrap:wrap; margin-bottom:0.4rem; }
+.cust-filter-row:last-child { margin-bottom:0; }
+.cust-filter-row label { font-weight:600; min-width:90px; color:var(--dr-primary); font-size:0.82rem; }
+.cust-filter-row input[type=text], .cust-filter-row input[type=search] {
+    padding:0.35rem 0.6rem; border:1px solid var(--dr-gray); border-radius:5px; font-family:inherit;
+}
+.cust-filter-row select {
+    padding:0.32rem 0.5rem; border:1px solid var(--dr-gray); border-radius:5px; font-family:inherit;
+    font-size:0.82rem;
+}
+.cust-filter-row .mode-select { background:#fef3c7; font-weight:600; }
+.cust-help { font-size:0.75rem; color:var(--dr-gray-dark); }
 
 .cust-table { background:#fff; border:1px solid var(--dr-gray); border-radius:8px; overflow:hidden; }
-.cust-row { display:grid; grid-template-columns: 70px 1.4fr 75px 80px 0.9fr 110px 0.7fr 150px;
-            gap:0.7rem; padding:0.7rem 0.9rem; align-items:center; border-bottom:1px solid #eef2f7;
+.cust-row { display:grid; grid-template-columns: 36px 70px 1.4fr 75px 80px 90px 0.9fr 110px 0.7fr 100px;
+            gap:0.6rem; padding:0.7rem 0.9rem; align-items:center; border-bottom:1px solid #eef2f7;
             transition:background 0.1s; }
 .cust-row:hover { background:#f8fafc; }
+.cust-row.selected { background:#eff6ff; }
 .cust-row:last-child { border-bottom:none; }
 .cust-row.header { background:#f1f5f9; font-weight:600; font-size:0.82rem;
                     color:var(--dr-primary); text-transform:uppercase; letter-spacing:0.04em; }
@@ -47,6 +49,9 @@
 .contract-badge.active { background:#d1fae5; color:#047857; }
 .contract-badge.inactive { background:#fee2e2; color:#dc2626; }
 
+.ctype-badge { font-size:0.7rem; padding:0.1rem 0.45rem; border-radius:9px;
+                background:#ede9fe; color:#6d28d9; font-weight:600; }
+
 .cust-domains { font-family:ui-monospace, monospace; font-size:0.78rem; line-height:1.4; }
 .cust-domains .dom { display:inline-block; background:#f1f5f9; color:#475569;
                       padding:0.05rem 0.4rem; border-radius:3px; margin:0.05rem; }
@@ -57,13 +62,44 @@
                    border-radius:4px; font-size:0.75rem; text-decoration:none;
                    border:1px solid #cbd5e1; color:var(--dr-gray-dark); }
 .cust-actions a:hover { border-color:#3b82f6; color:#3b82f6; text-decoration:none; }
-.cust-actions a.exception { border-color:#f59e0b; color:#92400e; background:#fef3c7; }
-.cust-actions a.has-exception { border-color:#dc2626; background:#fee2e2; color:#dc2626; }
-.cust-actions a.has-exception:hover { background:#fecaca; }
 
 .exception-pill { display:inline-flex; align-items:center; gap:0.2rem;
                    background:#fef3c7; color:#92400e; padding:0.05rem 0.4rem;
                    border-radius:9px; font-size:0.7rem; font-weight:600; }
+
+/* Bulk toolbar */
+.bulk-toolbar {
+    position:sticky; top:0; z-index:10;
+    background:#0b2a4a; color:#fff;
+    padding:10px 16px; border-radius:0 0 8px 8px;
+    margin-bottom:0.6rem;
+    display:none;  /* visible when items selected (set by JS) */
+    align-items:center; gap:0.7rem; flex-wrap:wrap;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+}
+.bulk-toolbar.visible { display:flex; }
+.bulk-toolbar .count { font-weight:700; font-size:1.05rem; }
+.bulk-toolbar .dr-btn { background:rgba(255,255,255,0.15); color:#fff; border:1px solid rgba(255,255,255,0.3); }
+.bulk-toolbar .dr-btn:hover { background:rgba(255,255,255,0.25); }
+.bulk-toolbar .dr-btn-primary { background:#f6c23e; color:#0b2a4a; font-weight:600; border-color:#f6c23e; }
+
+/* Modal */
+.modal-overlay {
+    display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:1000;
+    align-items:center; justify-content:center;
+}
+.modal-overlay.visible { display:flex; }
+.modal {
+    background:#fff; border-radius:8px; padding:1.2rem 1.5rem; max-width:500px; width:90%;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+}
+.modal h3 { margin-top:0; color:#0b2a4a; }
+.modal .form-row { margin-bottom:0.7rem; }
+.modal .form-row label { display:block; font-weight:600; margin-bottom:0.2rem; font-size:0.85rem; }
+.modal .form-row input, .modal .form-row select, .modal .form-row textarea {
+    width:100%; padding:0.4rem 0.6rem; border:1px solid #cbd5e1; border-radius:4px; font-family:inherit;
+}
+.modal .actions-row { display:flex; gap:0.5rem; justify-content:flex-end; margin-top:0.8rem; }
 </style>
 {% endblock %}
 {% block content %}
@@ -102,133 +138,348 @@
         </div>
     </div>
 
-    <form method="get" class="cust-filters">
-        <input type="search" name="q" value="{{ search }}" placeholder="🔍 codcli, ragione sociale, dominio…" style="min-width:320px;">
+    <!-- Filtri avanzati -->
+    <form method="get" class="cust-filter-card">
+        <div class="cust-filter-row">
+            <label>Ricerca</label>
+            <input type="search" name="q" value="{{ search }}"
+                   placeholder="codcli, ragione sociale, dominio, alias…"
+                   style="min-width:280px; flex:1;">
+            <select name="q_mode" class="mode-select" title="Operatore tra i token di ricerca">
+                <option value="OR"  {% if q_mode == 'OR'  %}selected{% endif %}>OR</option>
+                <option value="AND" {% if q_mode == 'AND' %}selected{% endif %}>AND</option>
+                <option value="NOT" {% if q_mode == 'NOT' %}selected{% endif %}>NOT</option>
+            </select>
+            <span class="cust-help">spazi separano token; mode controlla AND/OR/NOT</span>
+        </div>
 
-        <span style="margin-left:0.4rem;">Profilo:</span>
-        <a href="?{% if search %}q={{ search }}&{% endif %}{% if contract_filter %}contract={{ contract_filter }}&{% endif %}"
-           class="pill-link {% if not profile_filter %}active{% endif %}">tutti</a>
-        {% for prof in ['STD', 'EXT', 'H24', 'NO'] %}
-        {% if by_profile.get(prof, 0) %}
-        <a href="?profile={{ prof }}{% if search %}&q={{ search }}{% endif %}{% if contract_filter %}&contract={{ contract_filter }}{% endif %}"
-           class="pill-link profile-{{ prof }} {% if profile_filter == prof %}active{% endif %}">{{ prof }} <strong>{{ by_profile[prof] }}</strong></a>
-        {% endif %}
-        {% endfor %}
+        <div class="cust-filter-row">
+            <label>Profilo orario</label>
+            <input type="text" name="profile" value="{{ profile_filter }}"
+                   placeholder="STD, EXT, H24, NO… (vuoto = tutti)" style="min-width:180px;">
+            <select name="profile_mode" class="mode-select">
+                <option value="OR"  {% if profile_mode == 'OR'  %}selected{% endif %}>IN</option>
+                <option value="NOT" {% if profile_mode == 'NOT' %}selected{% endif %}>NOT IN</option>
+            </select>
+            {% for prof, n in by_profile.items()|sort %}
+            <span class="cust-help">{{ prof }}={{ n }}</span>
+            {% endfor %}
+        </div>
 
-        <span style="margin-left:0.4rem;">Contratto:</span>
-        <a href="?{% if search %}q={{ search }}&{% endif %}{% if profile_filter %}profile={{ profile_filter }}&{% endif %}"
-           class="pill-link {% if not contract_filter %}active{% endif %}">tutti</a>
-        <a href="?contract=active{% if search %}&q={{ search }}{% endif %}{% if profile_filter %}&profile={{ profile_filter }}{% endif %}"
-           class="pill-link {% if contract_filter == 'active' %}active{% endif %}" style="background:#d1fae5; color:#047857; border-color:#86efac;">attivo</a>
-        <a href="?contract=inactive{% if search %}&q={{ search }}{% endif %}{% if profile_filter %}&profile={{ profile_filter }}{% endif %}"
-           class="pill-link {% if contract_filter == 'inactive' %}active{% endif %}" style="background:#fee2e2; color:#dc2626; border-color:#fca5a5;">inattivo</a>
+        <div class="cust-filter-row">
+            <label>Tipo contratto</label>
+            <input type="text" name="ctype" value="{{ ctype_filter }}" list="ctype_list"
+                   placeholder="STD, ADV, FULL_SERVICE…" style="min-width:180px;">
+            <datalist id="ctype_list">
+                {% for ct in all_ctypes %}<option value="{{ ct }}">{% endfor %}
+            </datalist>
+            <select name="ctype_mode" class="mode-select">
+                <option value="OR"  {% if ctype_mode == 'OR'  %}selected{% endif %}>IN</option>
+                <option value="NOT" {% if ctype_mode == 'NOT' %}selected{% endif %}>NOT IN</option>
+            </select>
+            {% for ct, n in by_ctype.items()|sort %}{% if ct != '—' %}
+            <span class="cust-help">{{ ct }}={{ n }}</span>
+            {% endif %}{% endfor %}
+        </div>
 
-        <button class="dr-btn" style="margin-left:0.4rem;"><i class="fas fa-filter"></i></button>
+        <div class="cust-filter-row">
+            <label>Stato contratto</label>
+            <select name="contract">
+                <option value="" {% if not contract_filter %}selected{% endif %}>tutti</option>
+                <option value="active"   {% if contract_filter == 'active'   %}selected{% endif %}>attivo</option>
+                <option value="inactive" {% if contract_filter == 'inactive' %}selected{% endif %}>NON attivo</option>
+            </select>
+
+            <label style="margin-left:1rem;">Gruppo</label>
+            <select name="group">
+                <option value="">— qualsiasi —</option>
+                {% for g in all_groups %}
+                <option value="{{ g.id }}" {% if group_filter == g.id|string %}selected{% endif %}>{{ g.name }} ({{ g.code }})</option>
+                {% endfor %}
+            </select>
+            <select name="group_mode" class="mode-select">
+                <option value="IN"     {% if group_mode == 'IN' or not group_mode %}selected{% endif %}>nel gruppo</option>
+                <option value="NOT_IN" {% if group_mode == 'NOT_IN' %}selected{% endif %}>NON nel gruppo</option>
+            </select>
+        </div>
+
+        <div class="cust-filter-row">
+            <button type="submit" class="dr-btn dr-btn-primary"><i class="fas fa-filter"></i> Applica filtri</button>
+            <a href="?" class="dr-btn"><i class="fas fa-rotate-left"></i> Reset</a>
+            <span class="cust-help" style="margin-left:auto;">
+                Filtri composti in AND tra le sezioni; ogni sezione ha modalità AND/OR/NOT.
+            </span>
+        </div>
     </form>
 </section>
 
-<div class="cust-table">
-    <div class="cust-row header">
-        <div>Codice</div>
-        <div>Ragione sociale</div>
-        <div>Profilo</div>
-        <div>Contratto</div>
-        <div>Domini / Alias</div>
-        <div>Orari servizio</div>
-        <div>Gruppi</div>
-        <div>Azioni</div>
-    </div>
-    {% for c in customers %}
-    {% set cc = c.codice_cliente %}
-    {% set sh = sh_records.get(cc) %}
-    {% set has_today_exc = exceptions_today.get(cc, 0) %}
-    {% set prof = (c.tipologia_servizio or 'UNK')|upper %}
-    {% if prof == 'STANDARD' %}{% set prof = 'STD' %}{% endif %}
-    <div class="cust-row">
-        <div class="cust-codcli">{{ cc }}</div>
-        <div class="cust-name">
-            {{ c.ragione_sociale or '—' }}
-            {% if c.contract_type %}<small>{{ c.contract_type }}{% if c.contract_expiry_date %} · scad. {{ c.contract_expiry_date }}{% endif %}</small>{% endif %}
-        </div>
-        <div>
-            <span class="profile-badge {{ prof }}">{{ prof }}</span>
-            {% if c.profile_description %}
-            <small style="color:var(--dr-gray-dark); display:block; font-size:0.7rem; margin-top:0.2rem;">{{ c.profile_description|truncate(28) }}</small>
-            {% endif %}
-        </div>
-        <div>
-            {% if c.contract_active %}
-            <span class="contract-badge active">attivo</span>
-            {% else %}
-            <span class="contract-badge inactive">no</span>
-            {% endif %}
-        </div>
-        <div class="cust-domains">
-            {%- for d in (c.domains or [])[:3] -%}
-            <span class="dom" title="dominio">{{ d }}</span>
-            {%- endfor -%}
-            {% if c.domains and c.domains|length > 3 %}<small>+{{ c.domains|length - 3 }}</small>{% endif %}
-            {%- for a in (c.aliases or [])[:2] -%}
-            <span class="dom alias" title="alias">{{ a|truncate(25) }}</span>
-            {%- endfor -%}
-            {% if c.aliases and c.aliases|length > 2 %}<small>+{{ c.aliases|length - 2 }} alias</small>{% endif %}
-            {% if not c.domains and not c.aliases %}<small style="color:var(--dr-gray);">nessuno</small>{% endif %}
-        </div>
-        <div>
-            {% if sh %}
-                <small style="color:var(--dr-gray-dark);">profilo: <strong>{{ sh.profile_id or 'inherit' }}</strong></small>
-                {% if has_today_exc %}
-                <br><span class="exception-pill">
-                    <i class="fas fa-calendar-day"></i> {{ has_today_exc }} eccez. oggi
-                </span>
-                {% elif sh.schedule_exceptions and sh.schedule_exceptions|length %}
-                <br><small style="color:var(--dr-gray-dark);">{{ sh.schedule_exceptions|length }} eccez. totali</small>
-                {% endif %}
-            {% else %}
-            <small style="color:var(--dr-gray);">— da profilo default —</small>
-            {% endif %}
-        </div>
-        <div>
-            {% set cust_groups = (groups_by_codcli or {}).get(cc, []) %}
-            {% if cust_groups %}
-                {% for g in cust_groups[:3] %}
-                <span title="{{ g.name }}"
-                      style="display:inline-block; padding:0.05rem 0.4rem; margin:0.05rem;
-                             background:{{ g.color or '#e0e7ff' }}; color:#fff;
-                             border-radius:9px; font-size:0.7rem; font-weight:600;
-                             font-family:ui-monospace, monospace;">
-                    {{ g.code }}
-                </span>
-                {% endfor %}
-                {% if cust_groups|length > 3 %}
-                <small style="color:var(--dr-gray-dark);">+{{ cust_groups|length - 3 }}</small>
-                {% endif %}
-            {% else %}
-                <small style="color:var(--dr-gray);">—</small>
-            {% endif %}
-        </div>
-        <div class="cust-actions">
-            <a href="{{ url_for('customers.groups_view', codcli=cc) }}"
-               class="exception"
-               title="Assegna gruppi a {{ cc }}"
-               style="background:#eef2ff; color:#3730a3; border-color:#c7d2fe;">
-                <i class="fas fa-layer-group"></i> gruppi
-            </a>
-            <a href="{{ url_for('service_hours.form_view', codcli=cc) }}"
-               class="{% if has_today_exc %}has-exception{% else %}exception{% endif %}"
-               title="Gestisci orari + eccezioni per {{ cc }}">
-                <i class="fas fa-calendar-plus"></i>
-                {% if has_today_exc %}{{ has_today_exc }} oggi{% else %}eccezioni{% endif %}
-            </a>
-        </div>
-    </div>
-    {% else %}
-    <div class="cust-row">
-        <div></div>
-        <div class="dr-empty" style="grid-column: 2 / -1; padding:2rem;">
-            Nessun cliente trovato con i filtri attuali.
-        </div>
-    </div>
-    {% endfor %}
+<!-- Bulk action toolbar (sticky) -->
+<div id="bulkToolbar" class="bulk-toolbar">
+    <span class="count"><span id="bulkCount">0</span> clienti selezionati</span>
+    <button type="button" class="dr-btn dr-btn-primary" onclick="openModal('addToGroupModal')">
+        <i class="fas fa-folder-plus"></i> Aggiungi a gruppo esistente
+    </button>
+    <button type="button" class="dr-btn" onclick="openModal('createGroupModal')">
+        <i class="fas fa-folder-tree"></i> Crea nuovo gruppo
+    </button>
+    <button type="button" class="dr-btn" onclick="clearSelection()">
+        <i class="fas fa-xmark"></i> Deseleziona
+    </button>
 </div>
+
+<form id="bulkForm" method="post" style="margin:0;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="cust-table">
+        <div class="cust-row header">
+            <div>
+                <input type="checkbox" id="selectAll" onclick="toggleAll(this.checked)" title="Seleziona tutti">
+            </div>
+            <div>Codice</div>
+            <div>Ragione sociale</div>
+            <div>Profilo</div>
+            <div>Contratto</div>
+            <div>Tipo contr.</div>
+            <div>Domini / Alias</div>
+            <div>Orari servizio</div>
+            <div>Gruppi</div>
+            <div>Azioni</div>
+        </div>
+        {% for c in customers %}
+        {% set cc = c.codice_cliente %}
+        {% set sh = sh_records.get(cc) %}
+        {% set has_today_exc = exceptions_today.get(cc, 0) %}
+        {% set prof = (c.tipologia_servizio or 'UNK')|upper %}
+        {% if prof == 'STANDARD' %}{% set prof = 'STD' %}{% endif %}
+        {% set ctype = contract_type_by_codcli.get(cc, '') %}
+        <div class="cust-row" data-codcli="{{ cc }}">
+            <div>
+                <input type="checkbox" name="codcli" value="{{ cc }}"
+                       class="bulk-cb" onchange="updateBulkBar()">
+            </div>
+            <div class="cust-codcli">{{ cc }}</div>
+            <div class="cust-name">
+                {{ c.ragione_sociale or '—' }}
+                {% if c.contract_expiry_date %}<small>scad. {{ c.contract_expiry_date }}</small>{% endif %}
+            </div>
+            <div>
+                <span class="profile-badge {{ prof }}">{{ prof }}</span>
+            </div>
+            <div>
+                {% if c.contract_active %}
+                <span class="contract-badge active">attivo</span>
+                {% else %}
+                <span class="contract-badge inactive">no</span>
+                {% endif %}
+            </div>
+            <div>
+                {% if ctype %}
+                <span class="ctype-badge">{{ ctype }}</span>
+                {% else %}
+                <small style="color:var(--dr-gray);">—</small>
+                {% endif %}
+            </div>
+            <div class="cust-domains">
+                {%- for d in (c.domains or [])[:3] -%}
+                <span class="dom" title="dominio">{{ d }}</span>
+                {%- endfor -%}
+                {% if c.domains and c.domains|length > 3 %}<small>+{{ c.domains|length - 3 }}</small>{% endif %}
+                {%- for a in (c.aliases or [])[:2] -%}
+                <span class="dom alias" title="alias">{{ a|truncate(25) }}</span>
+                {%- endfor -%}
+                {% if c.aliases and c.aliases|length > 2 %}<small>+{{ c.aliases|length - 2 }} alias</small>{% endif %}
+                {% if not c.domains and not c.aliases %}<small style="color:var(--dr-gray);">nessuno</small>{% endif %}
+            </div>
+            <div>
+                {% if sh %}
+                    <small style="color:var(--dr-gray-dark);">profilo: <strong>{{ sh.profile_id or 'inherit' }}</strong></small>
+                    {% if has_today_exc %}
+                    <br><span class="exception-pill">
+                        <i class="fas fa-calendar-day"></i> {{ has_today_exc }} eccez. oggi
+                    </span>
+                    {% elif sh.schedule_exceptions and sh.schedule_exceptions|length %}
+                    <br><small style="color:var(--dr-gray-dark);">{{ sh.schedule_exceptions|length }} eccez. totali</small>
+                    {% endif %}
+                {% else %}
+                <small style="color:var(--dr-gray);">— da profilo default —</small>
+                {% endif %}
+            </div>
+            <div>
+                {% set cust_groups = (groups_by_codcli or {}).get(cc, []) %}
+                {% if cust_groups %}
+                    {% for g in cust_groups[:3] %}
+                    <span title="{{ g.name }}"
+                          style="display:inline-block; padding:0.05rem 0.4rem; margin:0.05rem;
+                                 background:{{ g.color or '#e0e7ff' }}; color:#fff;
+                                 border-radius:9px; font-size:0.7rem; font-weight:600;
+                                 font-family:ui-monospace, monospace;">
+                        {{ g.code }}
+                    </span>
+                    {% endfor %}
+                    {% if cust_groups|length > 3 %}
+                    <small style="color:var(--dr-gray-dark);">+{{ cust_groups|length - 3 }}</small>
+                    {% endif %}
+                {% else %}
+                    <small style="color:var(--dr-gray);">—</small>
+                {% endif %}
+            </div>
+            <div class="cust-actions">
+                <a href="{{ url_for('customers.groups_view', codcli=cc) }}"
+                   title="Assegna gruppi a {{ cc }}"
+                   style="background:#eef2ff; color:#3730a3; border-color:#c7d2fe;">
+                    <i class="fas fa-layer-group"></i>
+                </a>
+                <a href="{{ url_for('service_hours.form_view', codcli=cc) }}"
+                   title="Gestisci orari + eccezioni per {{ cc }}"
+                   style="background:#fef3c7; color:#92400e; border-color:#fde68a;">
+                    <i class="fas fa-calendar-plus"></i>
+                </a>
+            </div>
+        </div>
+        {% else %}
+        <div class="cust-row">
+            <div></div>
+            <div class="dr-empty" style="grid-column: 2 / -1; padding:2rem;">
+                Nessun cliente trovato con i filtri attuali.
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</form>
+
+<!-- Modal: aggiungi a gruppo esistente -->
+<div id="addToGroupModal" class="modal-overlay" onclick="if(event.target===this) closeModal('addToGroupModal')">
+    <div class="modal">
+        <h3><i class="fas fa-folder-plus"></i> Aggiungi selezione a gruppo</h3>
+        <p style="color:#64748b; font-size:0.9rem;">
+            <span id="addToGroupCount">0</span> clienti selezionati.
+        </p>
+        <form method="post" action="{{ url_for('customers.bulk_add_to_group') }}" id="addToGroupForm">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div id="addToGroupCodcliInputs"></div>
+            <div class="form-row">
+                <label>Gruppo destinazione</label>
+                <select name="group_id" required>
+                    <option value="">— scegli un gruppo —</option>
+                    {% for g in all_groups %}
+                    <option value="{{ g.id }}">{{ g.name }} <small>({{ g.code }})</small></option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="actions-row">
+                <button type="button" class="dr-btn" onclick="closeModal('addToGroupModal')">Annulla</button>
+                <button type="submit" class="dr-btn dr-btn-primary">
+                    <i class="fas fa-check"></i> Aggiungi al gruppo
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal: crea nuovo gruppo -->
+<div id="createGroupModal" class="modal-overlay" onclick="if(event.target===this) closeModal('createGroupModal')">
+    <div class="modal">
+        <h3><i class="fas fa-folder-tree"></i> Crea gruppo dalla selezione</h3>
+        <p style="color:#64748b; font-size:0.9rem;">
+            <span id="createGroupCount">0</span> clienti diventeranno membri.
+        </p>
+        <form method="post" action="{{ url_for('customers.bulk_create_group') }}" id="createGroupForm">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div id="createGroupCodcliInputs"></div>
+            <div class="form-row">
+                <label>Codice gruppo *</label>
+                <input type="text" name="group_code" required pattern="[a-z0-9_-]+"
+                       placeholder="es. top_clienti, sanita, vip"
+                       style="font-family:ui-monospace,monospace;">
+            </div>
+            <div class="form-row">
+                <label>Nome gruppo *</label>
+                <input type="text" name="group_name" required maxlength="200"
+                       placeholder="es. Top Customer, Settore Sanità">
+            </div>
+            <div class="form-row">
+                <label>Descrizione</label>
+                <textarea name="group_description" rows="2"
+                          placeholder="Note su uso e contesto del gruppo"></textarea>
+            </div>
+            <div class="form-row">
+                <label>Colore badge</label>
+                <input type="color" name="group_color" value="#3b82f6" style="height:36px;">
+            </div>
+            <div class="actions-row">
+                <button type="button" class="dr-btn" onclick="closeModal('createGroupModal')">Annulla</button>
+                <button type="submit" class="dr-btn dr-btn-primary">
+                    <i class="fas fa-plus"></i> Crea gruppo
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function getSelected() {
+    return Array.from(document.querySelectorAll('.bulk-cb:checked')).map(cb => cb.value);
+}
+
+function updateBulkBar() {
+    const sel = getSelected();
+    const bar = document.getElementById('bulkToolbar');
+    document.getElementById('bulkCount').textContent = sel.length;
+    if (sel.length > 0) bar.classList.add('visible');
+    else bar.classList.remove('visible');
+    // Marca le righe selezionate
+    document.querySelectorAll('.cust-row[data-codcli]').forEach(row => {
+        const cb = row.querySelector('.bulk-cb');
+        if (cb && cb.checked) row.classList.add('selected');
+        else row.classList.remove('selected');
+    });
+}
+
+function toggleAll(checked) {
+    document.querySelectorAll('.bulk-cb').forEach(cb => { cb.checked = checked; });
+    updateBulkBar();
+}
+
+function clearSelection() {
+    document.querySelectorAll('.bulk-cb').forEach(cb => { cb.checked = false; });
+    document.getElementById('selectAll').checked = false;
+    updateBulkBar();
+}
+
+function openModal(modalId) {
+    const sel = getSelected();
+    if (sel.length === 0) {
+        alert('Seleziona almeno un cliente.');
+        return;
+    }
+    // Popola gli hidden inputs col codcli selezionati
+    let containerId, countId;
+    if (modalId === 'addToGroupModal') {
+        containerId = 'addToGroupCodcliInputs';
+        countId = 'addToGroupCount';
+    } else {
+        containerId = 'createGroupCodcliInputs';
+        countId = 'createGroupCount';
+    }
+    const container = document.getElementById(containerId);
+    container.innerHTML = '';
+    sel.forEach(cc => {
+        const inp = document.createElement('input');
+        inp.type = 'hidden'; inp.name = 'codcli'; inp.value = cc;
+        container.appendChild(inp);
+    });
+    document.getElementById(countId).textContent = sel.length;
+    document.getElementById(modalId).classList.add('visible');
+}
+
+function closeModal(modalId) {
+    document.getElementById(modalId).classList.remove('visible');
+}
+
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+        document.querySelectorAll('.modal-overlay.visible').forEach(m => m.classList.remove('visible'));
+    }
+});
+</script>
 {% endblock %}

@@ -119,11 +119,23 @@ def detail_view(group_id: int):
     members = storage.list_group_members(group_id)
     member_codcli = {m["codice_cliente"] for m in members}
     customers = _customer_source().list_customers()
+    # contract_type lookup per filtri lato template
+    contract_type_by_codcli: dict[str, str] = {}
+    try:
+        with storage._connect() as conn:
+            for r in conn.execute(
+                "SELECT codcli, contract_type FROM customers_pg_cache "
+                "WHERE contract_type IS NOT NULL"
+            ).fetchall():
+                contract_type_by_codcli[r["codcli"]] = (r["contract_type"] or "").upper()
+    except Exception:  # noqa: BLE001
+        pass
     return render_template("admin/customer_group_form.html",
                             group=group,
                             members=members,
                             member_codcli=member_codcli,
-                            available_customers=customers)
+                            available_customers=customers,
+                            contract_type_by_codcli=contract_type_by_codcli)
 
 
 @customer_groups_bp.route("/<int:group_id>/delete", methods=["POST"])
