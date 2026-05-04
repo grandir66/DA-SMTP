@@ -320,6 +320,58 @@ def process(
             detail = res.detail
             extra.update(res.extra or {})
 
+            # Fix B (2026-05-05): se la regola create_authorized_ticket ha
+            # estratto un falso positivo (codice da regex non trovato in DB),
+            # ri-valuta il rule engine ESCLUDENDO la regola corrente. Permette
+            # alle regole successive di gestire normalmente la mail (es. apertura
+            # ticket diretto per alert CloudTIK con nome device tipo
+            # RT-FRANCESCHETTA-4833 che non è un codice H24).
+            if extra.get("h24_false_positive"):
+                logger.info(
+                    "H24 false positive su rule_id=%s: re-evaluate escludendo questa regola",
+                    rule_id,
+                )
+                outcome2 = engine.evaluate(
+                    _event_dict(parsed, ctx, storage),
+                    {"in_service": ctx.in_service, "sector": ctx.sector},
+                    exclude_rule_ids={rule_id},
+                )
+                # Estendi la chain con la nuova evaluation per audit
+                for s in outcome2.chain:
+                    chain_dump.append({
+                        "scope": s.scope, "rule_id": s.rule_id,
+                        "rule_name": s.rule_name, "priority": s.priority,
+                        "matched": s.matched,
+                        "reasons": ["[re-eval after h24_false_positive] " + r for r in s.reasons],
+                    })
+                if outcome2.rule is not None:
+                    rule_id = int(outcome2.rule["id"])
+                    action_name = str(outcome2.rule.get("action", ""))
+                    action_map = outcome2.rule.get("action_map") or {}
+                    res2 = _dispatch_action(
+                        action_name=action_name,
+                        event_uuid=pre_event_uuid,
+                        parsed=parsed,
+                        cfg=cfg,
+                        storage=storage,
+                        backend=backend,
+                        action_map=action_map,
+                        route_row=route_row,
+                        ctx=ctx,
+                        rule=outcome2.rule,
+                    )
+                    action_taken = res2.action
+                    detail = res2.detail
+                    extra.update(res2.extra or {})
+                    extra["h24_false_positive_recovered"] = True
+                else:
+                    # Nessuna regola successiva → default delivery
+                    action_taken, detail, queue_extra = _do_default_delivery(
+                        parsed, storage, "no_rule_match_after_h24_fp",
+                        event_uuid=pre_event_uuid,
+                    )
+                    extra.update(queue_extra)
+
     # Valutazione aggregazioni errori (in parallelo al rule engine, non sostituisce le azioni
     # standard ma può aprire ticket aggiuntivi al raggiungimento di una soglia)
     agg_summary = _process_aggregations(parsed=parsed, cfg=cfg, storage=storage,

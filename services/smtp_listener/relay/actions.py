@@ -727,14 +727,29 @@ def do_create_authorized_ticket(
     )
 
     if not val.valid:
-        # Reject path: log + opzionale auto-reply
+        # FIX B (2026-05-05): distingue "codice noto ma rifiutato" da
+        # "estrazione da regex larga = falso positivo".
+        #
+        # Caso A — codice fornito esplicitamente (no extraction): è un
+        #          tentativo legittimo, manda reject template.
+        # Caso B — estratto dal subject ma not_found in DB: il regex della
+        #          regola ha fatto un falso positivo (es. "RT-FRANCESCHETTA-4833"
+        #          su subject CloudTIK). NON inviare reject template (sarebbe
+        #          spam al mittente che non ha mai chiesto autorizzazione)
+        #          e segnala `h24_false_positive=True` così il pipeline
+        #          ri-valuta le regole successive escludendo questa.
+        is_false_positive = (
+            val.reason == "not_found"
+            and getattr(val, "extracted_from_subject", False)
+        )
         logger.info(
-            "H24 reject event=%s reason=%s code=%s",
+            "H24 %s event=%s reason=%s code=%s",
+            "false_positive" if is_false_positive else "reject",
             event_uuid, val.reason or val.error, val.code,
         )
-        # Reject template opzionale
+        # Reject template SOLO per il caso A (codice noto ma scaduto/usato/disabled)
         reject_tid = action_map.get("reject_template_id")
-        if reject_tid:
+        if reject_tid and not is_false_positive:
             try:
                 _send_h24_template_reply(
                     template_id=int(reject_tid),
@@ -751,12 +766,15 @@ def do_create_authorized_ticket(
         return ActionResult(
             action="create_authorized_ticket",
             ok=True,
-            detail=f"reject: {val.reason or val.error or 'invalid'}",
+            detail=(f"false_positive (regex extraction not in DB): {val.code}"
+                    if is_false_positive
+                    else f"reject: {val.reason or val.error or 'invalid'}"),
             extra={
                 "h24_kind": None,
                 "h24_reason": val.reason,
                 "h24_code": val.code,
                 "h24_extracted": val.extracted_from_subject,
+                "h24_false_positive": is_false_positive,
             },
         )
 

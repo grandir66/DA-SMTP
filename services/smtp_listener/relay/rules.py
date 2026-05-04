@@ -108,10 +108,18 @@ class RuleEngine:
         d.setdefault("continue_after_match", False)
         return d
 
-    def evaluate(self, event: dict[str, Any], context: dict[str, Any]) -> RuleOutcome:
+    def evaluate(self, event: dict[str, Any], context: dict[str, Any],
+                   *, exclude_rule_ids: set[int] | None = None) -> RuleOutcome:
+        """Valuta le regole.
+
+        ``exclude_rule_ids`` (Fix B 2026-05-05): salta le regole con id presente
+        nel set. Usato dal pipeline per re-evaluare dopo un falso positivo H24
+        (codice estratto via regex larga ma non trovato in DB).
+        """
         chain: list[ChainStep] = []
         winning: dict[str, Any] | None = None
         winning_scope: str | None = None
+        exclude = set(exclude_rule_ids or ())
 
         grouped: dict[str, list[dict[str, Any]]] = {s: [] for s in SCOPE_ORDER}
         for rule in self._rules:
@@ -125,6 +133,8 @@ class RuleEngine:
             if winning is not None and not winning.get("continue_after_match"):
                 break
             for rule in grouped[scope]:
+                if int(rule.get("id", 0)) in exclude:
+                    continue
                 if not self._scope_matches(rule, scope, context):
                     continue
 
