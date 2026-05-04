@@ -358,43 +358,32 @@ def do_auto_reply(
     }
 
     # H24: risoluzione h24_inbound_alias + urgent_fee multi-brand.
-    # Cascata h24_alias:
-    #   1. action_map.h24_inbound_alias (override per regola)
-    #   2. lookup smtp_relay_h24_targets:
-    #      a. match esatto su source_email (priorità — per webmail pubblici)
-    #      b. match su source_domain
+    #
+    # Cascade alias:
+    #   1. target_row (lookup cascade email > dominio — match piu specifico)
+    #   2. action_map.h24_inbound_alias (override per regola)
     #   3. setting h24.default_inbound_alias (fallback globale)
-    # Cascata urgent_fee (stessa priorità del lookup target):
-    #   1. action_map.urgent_fee
-    #   2. target_row.urgent_fee_eur (override per brand/email)
-    #   3. setting h24.default_urgent_fee_eur (default 250)
-    h24_alias = action_map.get("h24_inbound_alias")
-    fee = action_map.get("urgent_fee")
+    #
+    # Cascade fee:
+    #   1. target_row.urgent_fee_eur (priorita: match per email/dominio
+    #      specifico vince sul fee della rule, perche e un override
+    #      operativo per quel mittente preciso)
+    #   2. action_map.urgent_fee (rule-level, applicato se target_row
+    #      non ha override esplicito)
+    #   3. setting h24.default_urgent_fee_eur (default globale)
     target_row = None
     if parsed.from_address and "@" in parsed.from_address:
         try:
-            # Lookup cascade email > dominio (introdotto dalla migration 024)
             if hasattr(storage, "find_h24_target_by_email"):
                 target_row = storage.find_h24_target_by_email(parsed.from_address)
             elif hasattr(storage, "find_h24_target_by_domain"):
-                # Backward-compat con listener pre-migration-024
                 sender_domain = parsed.from_address.rsplit("@", 1)[1].lower().strip()
                 target_row = storage.find_h24_target_by_domain(sender_domain)
         except Exception:  # noqa: BLE001
             target_row = None
 
-    if target_row:
-        if not h24_alias:
-            h24_alias = target_row.get("h24_alias") or None
-        if fee is None:
-            target_fee = target_row.get("urgent_fee_eur")
-            if target_fee not in (None, ""):
-                try:
-                    fee = int(target_fee)
-                except (TypeError, ValueError):
-                    pass
-
-    # Fallback alias da setting globale
+    # Alias: target > action_map > setting
+    h24_alias = (target_row or {}).get("h24_alias") or action_map.get("h24_inbound_alias")
     if not h24_alias:
         try:
             h24_alias = storage.get_setting("h24.default_inbound_alias") or None
@@ -402,7 +391,22 @@ def do_auto_reply(
             pass
     ctx["h24_inbound_alias"] = h24_alias
 
-    # Fallback fee da setting globale
+    # Fee: target > action_map > setting
+    fee = None
+    if target_row:
+        target_fee = target_row.get("urgent_fee_eur")
+        if target_fee not in (None, ""):
+            try:
+                fee = int(target_fee)
+            except (TypeError, ValueError):
+                fee = None
+    if fee is None:
+        am_fee = action_map.get("urgent_fee")
+        if am_fee not in (None, ""):
+            try:
+                fee = int(am_fee)
+            except (TypeError, ValueError):
+                fee = None
     if fee is None:
         try:
             fee_raw = storage.get_setting("h24.default_urgent_fee_eur")
