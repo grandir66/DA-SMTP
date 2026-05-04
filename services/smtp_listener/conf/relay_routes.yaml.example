@@ -1,0 +1,21 @@
+# Mapping alias → cliente / destinazione (Fase 1-3 in YAML, Fase 4 spostato in DB manager).
+#
+# Ogni alias listato qui è un destinatario ACCETTATO dal listener: i destinatari fuori da
+# questa lista vengono rifiutati con `550 5.7.1 Relaying denied` se il dominio è in
+# `accepted_domains`. Domini fuori da `accepted_domains` sono comunque rifiutati.
+
+routes:
+  - alias: "pilot@mail-pilot.domarc.it"
+    codcli: "DEMO001"
+    forward_target: "demo-tenant.mail.protection.outlook.com"
+    forward_port: 25
+    forward_tls: "opportunistic"
+    redirect_target: "assistenza@domarc.it"
+    notes: "Alias pilota Fase 1 — solo per test"
+
+  # Esempio di alias dedicato a una casella di assistenza centralizzata
+  # - alias: "assistenza@mail-pilot.domarc.it"
+  #   codcli: null
+  #   default_action: "create_ticket"
+  #   redirect_target: null
+  #   notes: "Apre direttamente ticket nel manager"

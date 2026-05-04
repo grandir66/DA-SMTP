@@ -1,0 +1,8 @@
+Gentile mittente,
+
+la sua email "{{ subject }}" è stata inoltrata al servizio di assistenza{% if assistance_email %} ({{ assistance_email }}){% endif %} per una più rapida presa in carico.
+
+Sarà ricontattato dal personale di assistenza al più presto.
+
+--
+Stormshield Manager — risposta automatica

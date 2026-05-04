@@ -1,0 +1,60 @@
+# Configurazione Stormshield SMTP Relay
+#
+# Copia questo file in /etc/stormshield-smtp-relay/relay.yaml (o ./conf/relay.yaml)
+# e personalizza i valori. I segreti (API key, password) NON vanno nel file: usa la
+# sintassi <env:NOME_VAR> e definisci la variabile nel drop-in systemd o in un .env.
+#
+# Esempio di drop-in systemd:
+#   /etc/systemd/system/stormshield-smtp-relay-scheduler.service.d/secrets.conf
+#   [Service]
+#   Environment="RELAY_API_KEY=...la_chiave..."
+
+relay:
+  manager:
+    base_url: "https://manager-dev.domarc.it"
+    api_key: "<env:RELAY_API_KEY>"
+    timeout_sec: 10
+    sync_interval_sec: 300
+    cache_grace_ttl_sec: 1800
+    backend: "stormshield"
+    # Opzionale, solo se il manager espone certificato self-signed in dev:
+    # ca_bundle: "/etc/ssl/certs/manager-dev-ca.pem"
+
+  listener:
+    bind_host: "127.0.0.1"
+    bind_port: 2525
+    hostname: "mail-pilot.domarc.it"
+    data_size_limit_mb: 20
+    max_recipients: 50
+    session_timeout_sec: 60
+    starttls:
+      enabled: false
+      # In Fase 5, abilitare e fornire cert/key:
+      # cert_path: "/etc/letsencrypt/live/mail-pilot.domarc.it/fullchain.pem"
+      # key_path: "/etc/letsencrypt/live/mail-pilot.domarc.it/privkey.pem"
+    accepted_domains:
+      - "mail-pilot.domarc.it"
+      - "domarc.it"
+
+  storage:
+    sqlite_path: "/var/lib/stormshield-smtp-relay/relay.db"
+
+  outbound:
+    default_smarthost: "esva.domarc.it"
+    default_smarthost_port: 25
+    default_tls: "opportunistic"
+    helo_hostname: "mail-pilot.domarc.it"
+    timeout_sec: 20
+    max_attempts: 6
+    backoff_seconds: [60, 300, 1800, 3600, 14400, 86400]
+
+  scheduler:
+    outbound_drain_interval_sec: 5
+    dispatch_drain_interval_sec: 10
+    events_flush_interval_sec: 30
+
+  rate_limit:
+    per_from_domain_per_hour: 100
+
+  routes_files:
+    - "conf/relay_routes.yaml"

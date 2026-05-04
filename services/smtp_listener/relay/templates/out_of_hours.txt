@@ -1,0 +1,10 @@
+Gentile mittente,
+
+abbiamo ricevuto la sua email "{{ subject }}" alle {{ received_at }}.
+
+Al momento siamo fuori dall'orario di assistenza{% if next_in_service_at %} (riprendiamo il {{ next_in_service_at }}){% endif %}. Per emergenze contatti il numero di reperibilità riportato nel suo contratto, oppure ci scriva a {{ assistance_email | default('assistenza@domarc.it') }}.
+
+La sua richiesta verrà presa in carico al rientro in servizio.
+
+--
+Stormshield Manager — risposta automatica
