@@ -1,9 +1,15 @@
 # Domarc SMTP Relay — Manuale Utente
 
-> **Versione:** 0.9.1 (Beta) · **Aggiornato:** 2026-05-05
+> **Versione:** 0.9.2 (Beta) · **Aggiornato:** 2026-05-05
 > **Pubblico:** operatori e amministratori che gestiscono regole di smistamento mail, IA, autorizzazioni H24 e configurazioni di servizio.
 
-> **Convenzione UI**: tutte le tabelle principali supportano **ordinamento cliccando l'intestazione** (▲/▼). L'auto-detection sceglie il tipo (testo/numero/data) in base al titolo della colonna; ricliccando inverti la direzione.
+> **Convenzioni UI v0.9.2**:
+> - Tabelle: **ordinamento cliccando l'intestazione** (▲/▼) — auto-detection text/numero/data.
+> - Form regole: **5 sotto-card** (Origine, Destinazione, Oggetto, Cliente, Orario) con campi mutex grigiati e preset orari da profili.
+> - Header: **indicatore globale stato kill switch** (verde "OK" / rosso "KILL ON" pulsante) sempre visibile.
+> - Menu: ribilanciato in dropdown logici (Regole&Mail flow, H24&Autorizzazioni, Anagrafiche, Orari, Sistema) + AI Assistant top-level.
+> - Codici H24: **panoramica unica** [/codes-h24/](codes_h24_overview.png) con tab Monouso/Permanenti/Mailbox.
+> - Aggregazioni errori: **tab Statiche/Semantiche AI** unificate.
 
 Questo manuale descrive **come si usa** la console web Domarc SMTP Relay con linguaggio operativo. Per la documentazione tecnica (schema DB, endpoint API, migrations) c'è il [Manuale tecnico auto-generato](../manual.md) e [`docs/guida_funzionamento.md`](../guida_funzionamento.md).
 
@@ -316,6 +322,18 @@ Il flusso H24 gestisce le richieste di intervento **fuori orario di servizio**, 
 
 - **Codici monouso (oneshot)**: generati al momento, validi 24-48h, una sola volta. Tipicamente a pagamento. Spediti via mail al richiedente, che li ritorna in oggetto sulla mailbox H24 per autorizzare.
 - **Codici permanenti**: assegnati a un cliente specifico (es. `DOMARC-DATIA`), riutilizzabili, contrattuali (no addebito). Mantengono storico utilizzi.
+
+### 7.0 Panoramica unificata — `/codes-h24/`
+
+![Panoramica codici H24 con tab](img/26_codes_h24_overview.png)
+
+Pagina di ingresso per tutto il flusso H24 con KPI consolidati e 3 tab:
+
+- **Tab Monouso** — top 10 codici recenti con stato (pending/accepted/expired)
+- **Tab Permanenti** — top 10 codici cliente con utilizzi cumulativi
+- **Tab Mailbox** — mappature multi-brand source_domain → h24_alias
+
+Da qui il drill-down porta alle pagine specifiche dove si possono generare/revocare codici, modificare le mailbox H24 inline, vedere i dettagli body delle mail di richiesta.
 
 ### 7.1 Codici monouso — ciclo di vita
 

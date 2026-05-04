@@ -1,47 +1,12 @@
 {% extends "admin/_base.html" %}
+{% import "admin/_group_form_macro.html" as gfmacro %}
 {% block title %}{{ 'Nuovo gruppo destinatari' if not group else group.name }} — Domarc SMTP Relay{% endblock %}
-{% block content %}
-<style>
-.wrap { padding: 1rem 1.4rem; }
-.section {
-    background: #f8fafc; padding: 1rem; border-radius: 6px;
-    margin-bottom: 1rem;
-}
-.section h3 { margin-top: 0; color: var(--primary-dark); font-size: 1rem; }
-.form-row {
-    display: grid; grid-template-columns: 1fr 1fr 1fr 100px 80px;
-    gap: 0.8rem; margin-bottom: 1rem;
-}
-.form-row label {
-    font-size: 0.8rem; color: #555; font-weight: 600;
-    display: block; margin-bottom: 0.2rem;
-}
-.form-row input, .form-row textarea {
-    padding: 0.5rem; border: 1px solid #cbd5e1; border-radius: 4px;
-    font-size: 0.9rem; width: 100%; box-sizing: border-box;
-}
-.member-list-textarea {
-    width: 100%; min-height: 80px; padding: 0.6rem;
-    border: 1px solid #cbd5e1; border-radius: 4px;
-    font-family: ui-monospace, monospace; font-size: 0.85rem;
-    box-sizing: border-box;
-}
-.members-grid {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 0.4rem; max-height: 360px; overflow-y: auto;
-    border: 1px solid #e2e8f0; padding: 0.5rem; border-radius: 4px;
-    background: white;
-}
-.member-row {
-    padding: 0.3rem; display: flex; align-items: center; gap: 0.4rem;
-    background: #d1fae5; border-radius: 4px;
-}
-.member-row label {
-    font-family: ui-monospace, monospace; font-size: 0.82rem;
-    cursor: pointer; flex: 1;
-}
-</style>
 
+{% block extra_head %}
+{{ gfmacro.group_form_styles() }}
+{% endblock %}
+
+{% block content %}
 <div class="wrap">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
         <h1 style="margin:0;">
@@ -64,45 +29,12 @@
     <form method="post">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-        <div class="section">
-            <h3>Anagrafica gruppo</h3>
-            <div class="form-row">
-                <div>
-                    <label>Codice (slug)</label>
-                    <input type="text" name="code" required pattern="[a-z0-9_-]+"
-                           value="{{ group.code if group else '' }}"
-                           placeholder="tecnici_no_fo">
-                </div>
-                <div>
-                    <label>Nome</label>
-                    <input type="text" name="name" required
-                           value="{{ group.name if group else '' }}"
-                           placeholder="Tecnici no fuori orario">
-                </div>
-                <div>
-                    <label>Descrizione</label>
-                    <input type="text" name="description"
-                           value="{{ group.description if group else '' }}"
-                           placeholder="Indirizzi da non disturbare fuori orario">
-                </div>
-                <div>
-                    <label>Colore</label>
-                    <input type="color" name="color"
-                           value="{{ group.color or '#6366f1' }}">
-                </div>
-                <div>
-                    <label>Stato</label>
-                    <label style="font-weight:normal; padding-top:0.4rem;">
-                        <input type="checkbox" name="enabled" value="1"
-                               {% if not group or group.enabled %}checked{% endif %}>
-                        Attivo
-                    </label>
-                </div>
-            </div>
-        </div>
+        {{ gfmacro.group_anagrafica(group,
+                                       code_placeholder='tecnici_no_fo',
+                                       name_placeholder='Tecnici no fuori orario') }}
 
         {% if group %}
-        <div class="section">
+        <div class="rf-section">
             <h3>Membri attuali ({{ members|length }})</h3>
             {% if members %}
             <p class="dr-hint" style="margin-top:0;">
@@ -135,29 +67,9 @@
         </div>
         {% endif %}
 
-        <div style="display:flex; gap:0.6rem; align-items:center; padding:0.5rem 0;">
-            <button type="submit" class="dr-btn dr-btn-primary">
-                <i class="fas fa-save"></i> {{ 'Salva modifiche' if group else 'Crea gruppo' }}
-            </button>
-            <a href="{{ url_for('recipient_groups.list_view') }}" class="dr-btn">Annulla</a>
-
-            {% if group %}
-            <span style="flex:1;"></span>
-            <button type="button" class="dr-btn"
-                    style="color:#dc2626; border-color:#dc2626;"
-                    onclick="if(confirm('Eliminare definitivamente il gruppo «{{ group.name }}»?')) document.getElementById('deleteForm').submit();">
-                <i class="fas fa-trash"></i> Elimina gruppo
-            </button>
-            {% endif %}
-        </div>
+        {{ gfmacro.group_actions(group,
+                                    list_url=url_for('recipient_groups.list_view'),
+                                    delete_url=url_for('recipient_groups.delete_view', group_id=group.id) if group else None) }}
     </form>
-
-    {% if group %}
-    <form id="deleteForm" method="post"
-          action="{{ url_for('recipient_groups.delete_view', group_id=group.id) }}"
-          style="display:none;">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    </form>
-    {% endif %}
 </div>
 {% endblock %}

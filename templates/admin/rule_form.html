@@ -223,9 +223,9 @@
             <div class="rf-subcard">
                 <div class="rf-subcard-header">
                     <span class="rf-subcard-icon"><i class="fas fa-paper-plane"></i></span>
-                    Origine (mittente)
+                    Origine (mittente + anagrafica cliente)
                     <span class="rf-subcard-stats">
-                        Filtra per <em>chi ha mandato</em> la mail
+                        Filtra per <em>chi ha mandato</em> la mail e per <em>stato del cliente</em>
                     </span>
                 </div>
                 <div class="rf-subcard-body">
@@ -262,6 +262,70 @@
                             </div>
                             <div id="tr_from" class="test-result"></div>
                             <div class="help">Per match solo dominio preferisci "From dominio" (più veloce).</div>
+                        </div>
+                    </div>
+                    <div style="margin: 0.6rem 0; padding: 0.5rem 0.7rem; background: #fce7f3;
+                                border-left: 3px solid #ec4899; border-radius: 0 4px 4px 0;
+                                font-size: 0.78rem; color: #9d174d;">
+                        <i class="fas fa-id-card"></i> <strong>Anagrafica del mittente</strong>:
+                        i campi sotto filtrano per attributi del cliente del mittente
+                        (codcli, contratto, gruppi). Tutti AND tra loro e con i campi from_*.
+                    </div>
+                    <div class="rf-row">
+                        <label>Cliente noto<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
+                            <strong>Indifferente</strong>: ignora.
+                            <strong>Sì</strong>: matcha solo se mittente collegato a un codcli
+                            del DB clienti.
+                            <strong>No</strong>: solo mittenti sconosciuti
+                            (utile per regole catch-all su mittenti non censiti).
+                        </span></span></label>
+                        <div>
+                            <select name="match_known_customer">
+                                <option value="">Indifferente</option>
+                                <option value="true"  {% if record.match_known_customer == 1 or record.match_known_customer is sameas true %}selected{% endif %}>Solo se mittente è in <code>client_domains</code></option>
+                                <option value="false" {% if record.match_known_customer == 0 or record.match_known_customer is sameas false %}selected{% endif %}>Solo se mittente NON è censito</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="rf-row">
+                        <label>Contratto<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
+                            <strong>Attivo</strong>: solo clienti con contratto attivo.
+                            <strong>Non attivo</strong>: clienti censiti ma senza contratto
+                            (template <code>always_billable_no_contract</code> override automatico).
+                        </span></span></label>
+                        <div>
+                            <select name="match_contract_active">
+                                <option value="">Indifferente</option>
+                                <option value="true"  {% if record.match_contract_active == 1 or record.match_contract_active is sameas true %}selected{% endif %}>Solo CON contratto attivo</option>
+                                <option value="false" {% if record.match_contract_active == 0 or record.match_contract_active is sameas false %}selected{% endif %}>Solo SENZA contratto attivo (ma censito)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="rf-row">
+                        <label>Gruppi clienti<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
+                            Selezione multipla. La regola scatta se il <strong>cliente del mittente</strong>
+                            appartiene ad almeno uno dei gruppi selezionati (logica OR).
+                            <br><br>
+                            Tieni Ctrl/Cmd per selezione multipla.
+                        </span></span></label>
+                        <div>
+                            {% set selected_groups = (record.match_customer_groups or '').split(',') | map('trim') | list %}
+                            <select name="match_customer_groups" multiple
+                                    style="width:100%; min-height:120px; font-family:ui-monospace, monospace; font-size:0.85rem;">
+                                {% for g in (customer_groups or []) %}
+                                <option value="{{ g.code }}"
+                                        {% if g.code in selected_groups %}selected{% endif %}
+                                        {% if g.is_system %}style="background:#f0f9ff; font-weight:600;"{% endif %}>
+                                    {% if g.is_system %}⚙ {% endif %}{{ g.code }} — {{ g.name }} ({{ g.member_count }} membri){% if g.is_system %} [auto]{% endif %}
+                                </option>
+                                {% else %}
+                                <option disabled>Nessun gruppo definito</option>
+                                {% endfor %}
+                            </select>
+                            <div class="help">
+                                <a href="{{ url_for('customer_groups.list_view') }}">Gestisci gruppi clienti</a>.
+                                Logica OR: la regola scatta se cliente è in almeno uno dei gruppi.
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -370,86 +434,7 @@
                 </div>
             </div>
 
-            {# 3.4 CLIENTE & CONTRATTO === #}
-            <div class="rf-subcard">
-                <div class="rf-subcard-header">
-                    <span class="rf-subcard-icon" style="background:#fce7f3; color:#9d174d;"><i class="fas fa-id-card"></i></span>
-                    Cliente &amp; contratto
-                    <span class="rf-subcard-stats">
-                        Filtra per <em>stato anagrafica</em> del cliente del mittente
-                    </span>
-                </div>
-                <div class="rf-subcard-body">
-                    <div class="rf-row">
-                        <label>Cliente noto<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
-                            <strong>Indifferente</strong>: ignora.
-                            <strong>Sì</strong>: matcha solo se mittente collegato a codcli.
-                            <strong>No</strong>: solo mittenti sconosciuti.
-                        </span></span></label>
-                        <div>
-                            <select name="match_known_customer">
-                                <option value="">Indifferente</option>
-                                <option value="true"  {% if record.match_known_customer == 1 or record.match_known_customer is sameas true %}selected{% endif %}>Solo se mittente è in <code>client_domains</code></option>
-                                <option value="false" {% if record.match_known_customer == 0 or record.match_known_customer is sameas false %}selected{% endif %}>Solo se mittente NON è censito</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="rf-row">
-                        <label>Contratto<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
-                            <strong>Attivo</strong>: solo clienti con contratto attivo.
-                            <strong>Non attivo</strong>: clienti censiti ma senza contratto
-                            (auto-reply "always_billable_no_contract").
-                        </span></span></label>
-                        <div>
-                            <select name="match_contract_active">
-                                <option value="">Indifferente</option>
-                                <option value="true"  {% if record.match_contract_active == 1 or record.match_contract_active is sameas true %}selected{% endif %}>Solo CON contratto attivo</option>
-                                <option value="false" {% if record.match_contract_active == 0 or record.match_contract_active is sameas false %}selected{% endif %}>Solo SENZA contratto attivo (ma censito)</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="rf-row">
-                        <label>Eccezione oggi<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
-                            Cliente con override calendario oggi (festività locale, ponte).
-                            Si applica indipendentemente dal contratto.
-                        </span></span></label>
-                        <div>
-                            <select name="match_has_exception_today">
-                                <option value="">Indifferente</option>
-                                <option value="true"  {% if record.match_has_exception_today == 1 or record.match_has_exception_today is sameas true %}selected{% endif %}>Solo se cliente ha eccezione oggi</option>
-                                <option value="false" {% if record.match_has_exception_today == 0 or record.match_has_exception_today is sameas false %}selected{% endif %}>Solo se nessuna eccezione</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="rf-row">
-                        <label>Gruppi clienti<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
-                            Selezione multipla. Logica OR: la regola scatta se cliente
-                            è in <strong>almeno uno</strong> dei gruppi.
-                        </span></span></label>
-                        <div>
-                            {% set selected_groups = (record.match_customer_groups or '').split(',') | map('trim') | list %}
-                            <select name="match_customer_groups" multiple
-                                    style="width:100%; min-height:120px; font-family:ui-monospace, monospace; font-size:0.85rem;">
-                                {% for g in (customer_groups or []) %}
-                                <option value="{{ g.code }}"
-                                        {% if g.code in selected_groups %}selected{% endif %}
-                                        {% if g.is_system %}style="background:#f0f9ff; font-weight:600;"{% endif %}>
-                                    {% if g.is_system %}⚙ {% endif %}{{ g.code }} — {{ g.name }} ({{ g.member_count }} membri){% if g.is_system %} [auto]{% endif %}
-                                </option>
-                                {% else %}
-                                <option disabled>Nessun gruppo definito</option>
-                                {% endfor %}
-                            </select>
-                            <div class="help">
-                                Tieni Ctrl/Cmd per selezione multipla.
-                                <a href="{{ url_for('customer_groups.list_view') }}">Gestisci gruppi</a>.
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {# 3.5 ORARIO E CALENDARIO === #}
+            {# 3.4 ORARIO E CALENDARIO === #}
             <div class="rf-subcard">
                 <div class="rf-subcard-header">
                     <span class="rf-subcard-icon" style="background:#dbeafe; color:#1e40af;"><i class="fas fa-clock"></i></span>
@@ -473,6 +458,20 @@
                                 <option value="">Indifferente — applica sempre</option>
                                 <option value="true"  {% if record.match_in_service == 1 or record.match_in_service is sameas true %}selected{% endif %}>Solo in servizio</option>
                                 <option value="false" {% if record.match_in_service == 0 or record.match_in_service is sameas false %}selected{% endif %}>Solo fuori servizio</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="rf-row">
+                        <label>Eccezione oggi<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
+                            Cliente del mittente con override calendario oggi (festività locale,
+                            ponte, chiusura aziendale, apertura straordinaria).
+                            Si applica indipendentemente dal contratto.
+                        </span></span></label>
+                        <div>
+                            <select name="match_has_exception_today">
+                                <option value="">Indifferente</option>
+                                <option value="true"  {% if record.match_has_exception_today == 1 or record.match_has_exception_today is sameas true %}selected{% endif %}>Solo se cliente ha eccezione oggi</option>
+                                <option value="false" {% if record.match_has_exception_today == 0 or record.match_has_exception_today is sameas false %}selected{% endif %}>Solo se nessuna eccezione</option>
                             </select>
                         </div>
                     </div>

@@ -45,7 +45,7 @@ PAGES: list[tuple[str, str, str]] = [
     ("/templates", "15_templates.png", "Template di reply"),
     ("/users", "16_users.png", "Utenti & ruoli"),
     ("/manual", "17_technical_manual.png", "Manuale tecnico auto-generato"),
-    # Nuove pagine — Migration 022/025/026/027
+    # Nuove pagine — Migration 022/025/026/027 + UI refactor 2026-05-05
     ("/addresses-to", "18_addresses_to.png", "Destinatari noti — bulk action gruppi"),
     ("/recipient-groups/", "19_recipient_groups.png", "Gruppi destinatari"),
     ("/h24-codes", "20_h24_codes_list.png", "Codici permanenti H24"),
@@ -53,7 +53,8 @@ PAGES: list[tuple[str, str, str]] = [
     ("/auth-codes", "22_auth_codes_lifecycle.png", "Codici monouso — ciclo di vita"),
     ("/customer-groups/", "23_customer_groups.png", "Gruppi clienti"),
     ("/privacy-bypass/", "24_privacy_bypass.png", "Privacy bypass list"),
-    ("/rules/new", "25_rule_form_new.png", "Form regola — match + forward gruppi"),
+    ("/rules/new", "25_rule_form_new.png", "Form regola — 5 sotto-card + mutex"),
+    ("/codes-h24/", "26_codes_h24_overview.png", "Codici H24 — panoramica con tab"),
 ]
 
 

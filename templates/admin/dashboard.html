@@ -63,9 +63,17 @@
         </a>
     </div>
     <div class="dr-kpi">
-        <a href="{{ url_for('auth_codes.list_view') }}">
-            <div class="label"><i class="fas fa-key"></i> Codici attivi</div>
+        <a href="{{ url_for('codes_h24.index') }}#oneshot">
+            <div class="label"><i class="fas fa-key"></i> Codici monouso</div>
             <div class="value">{{ kpi.auth_codes_active }}</div>
+            <div class="sub">{{ kpi.auth_codes_pending }} pending · {{ kpi.auth_codes_accepted }} accepted</div>
+        </a>
+    </div>
+    <div class="dr-kpi">
+        <a href="{{ url_for('codes_h24.index') }}#permanent">
+            <div class="label"><i class="fas fa-shield-halved"></i> Codici permanenti</div>
+            <div class="value">{{ kpi.h24_perm_active }}</div>
+            <div class="sub">{{ kpi.h24_perm_uses }} utilizzi · {{ kpi.h24_targets_active }} mailbox H24</div>
         </a>
     </div>
 </div>

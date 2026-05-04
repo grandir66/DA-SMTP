@@ -1,11 +1,71 @@
 {% extends "admin/_base.html" %}
 {% block title %}Aggregazioni errori{% endblock %}
 {% block content %}
+<style>
+.tabs-bar {
+    display: flex; gap: 0; align-items: center; border-bottom: 2px solid #cbd5e1;
+    margin: 1rem 0 1.2rem;
+}
+.tab-link {
+    padding: 0.65rem 1.1rem; cursor: pointer; font-weight: 600;
+    color: #64748b; border-bottom: 3px solid transparent; margin-bottom: -2px;
+    text-decoration: none; transition: all 0.12s;
+    display: inline-flex; align-items: center; gap: 0.4rem;
+}
+.tab-link:hover { color: var(--primary-dark); }
+.tab-link.active { color: var(--primary-dark); border-bottom-color: var(--accent); background: #f8fafc; }
+.tab-link.violet.active { border-bottom-color: #7c3aed; color: #5b21b6; }
+.tab-info {
+    background: #eff6ff; border-left: 3px solid #3b82f6;
+    padding: 0.7rem 1rem; border-radius: 0 6px 6px 0;
+    font-size: 0.85rem; color: #1e40af; margin-bottom: 1rem;
+}
+</style>
+
 <section class="dr-section">
-    <h2><i class="fas fa-layer-group"></i> Aggregazioni errori ({{ aggregations|length }})</h2>
-    <a href="{{ url_for('aggregations.form_view') }}" class="dr-btn dr-btn-primary" style="width:auto;"><i class="fas fa-plus"></i> Nuova</a>
-    <a href="{{ url_for('aggregations.occurrences_view') }}" class="dr-btn" style="width:auto;"><i class="fas fa-stream"></i> Occurrences</a>
-    <form method="get" class="dr-filters" style="margin-left:auto;">
+    <h2><i class="fas fa-layer-group"></i> Aggregazioni errori</h2>
+    <p class="dr-hint" style="margin-top:0.3rem;">
+        Due meccanismi paralleli per de-duplicare alert ripetitivi:
+        <strong>statiche</strong> (regex deterministica) — qui sotto —
+        e <strong>semantiche</strong> (AI embedding) — gestite da AI Assistant.
+    </p>
+</section>
+
+<div class="tabs-bar">
+    <a class="tab-link active"
+       href="{{ url_for('aggregations.list_view') }}">
+        <i class="fas fa-code"></i> Statiche (regex)
+        <span style="background:#e2e8f0; color:#475569; padding:0.05rem 0.45rem; border-radius:9px; font-size:0.72rem;">
+            {{ aggregations|length }}
+        </span>
+    </a>
+    <a class="tab-link violet"
+       href="{{ url_for('ai.clusters_list') }}">
+        <i class="fas fa-brain"></i> Semantiche (AI cluster)
+        <small style="background:#ede9fe; color:#5b21b6; padding:0.05rem 0.45rem; border-radius:9px; font-size:0.72rem;">
+            embedding
+        </small>
+    </a>
+    <span style="margin-left:auto;"></span>
+    <a href="{{ url_for('aggregations.form_view') }}" class="dr-btn dr-btn-primary" style="width:auto;">
+        <i class="fas fa-plus"></i> Nuova aggregazione
+    </a>
+    <a href="{{ url_for('aggregations.occurrences_view') }}" class="dr-btn" style="width:auto; margin-left:0.4rem;">
+        <i class="fas fa-stream"></i> Occurrences
+    </a>
+</div>
+
+<div class="tab-info">
+    <strong><i class="fas fa-info-circle"></i> Aggregazioni statiche</strong>:
+    fingerprint deterministico calcolato da subject/from/body con regex configurate.
+    Quando una stessa fingerprint compare N volte (soglia) entro la finestra temporale,
+    il sistema apre <strong>un solo</strong> ticket aggregato invece di N.
+    Per dedup <em>semantica</em> (es. "backup failed srv01" e "backup error host01" trattati come stesso problema),
+    vai sui <a href="{{ url_for('ai.clusters_list') }}"><strong>cluster AI</strong></a>.
+</div>
+
+<section class="dr-section">
+    <form method="get" class="dr-filters">
         <select name="state" onchange="this.form.submit()">
             <option value="all" {% if filter_state=='all' %}selected{% endif %}>Tutte</option>
             <option value="enabled" {% if filter_state=='enabled' %}selected{% endif %}>Attive</option>

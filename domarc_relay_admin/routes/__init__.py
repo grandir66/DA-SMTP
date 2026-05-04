@@ -31,6 +31,18 @@ def index():
     auth_codes = storage.list_auth_codes(tenant_id=tid, only_active=True, limit=1000)
     occurrences = storage.list_occurrences(tenant_id=tid, filter_state="active")
     occ_with_ticket = sum(1 for o in occurrences if o.get("ticket_id"))
+    # H24 KPIs (assorbiti dalla ex /h24-codes/dashboard)
+    try:
+        h24_perm = storage.list_h24_codes(tenant_id=tid, only_active=False, limit=1000)
+        h24_perm_active = sum(1 for c in h24_perm if c.get("enabled") and not c.get("revoked_at"))
+        h24_perm_uses = sum(int(c.get("used_count") or 0) for c in h24_perm)
+        h24_targets = storage.list_h24_targets(tenant_id=tid)
+        h24_targets_active = sum(1 for t in h24_targets if t.get("enabled"))
+    except Exception:  # noqa: BLE001
+        h24_perm_active = h24_perm_uses = h24_targets_active = 0
+    all_auth_codes = storage.list_auth_codes(tenant_id=tid, only_active=False, limit=2000)
+    auth_codes_pending = sum(1 for c in all_auth_codes if (c.get("state") or "pending") == "pending")
+    auth_codes_accepted = sum(1 for c in all_auth_codes if c.get("state") == "accepted")
 
     # Hourly series 24h
     now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
@@ -89,9 +101,14 @@ def index():
             "events_24h": len(events_recent),
             "events_total": total_events,
             "auth_codes_active": len(auth_codes),
+            "auth_codes_pending": auth_codes_pending,
+            "auth_codes_accepted": auth_codes_accepted,
             "occurrences_active": len(occurrences),
             "occurrences_with_ticket": occ_with_ticket,
             "dispatch_dead_24h": dispatch_dead_24h,
+            "h24_perm_active": h24_perm_active,
+            "h24_perm_uses": h24_perm_uses,
+            "h24_targets_active": h24_targets_active,
         },
         stats={
             "hourly_series": hourly_series,

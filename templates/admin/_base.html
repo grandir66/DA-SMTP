@@ -41,10 +41,12 @@
         {% if session.get('username') %}
         {% set ep = request.endpoint or '' %}
         {% set in_ops = ep.startswith('events') or ep.startswith('activity') or ep.startswith('queue') or ep.startswith('routes') %}
-        {% set in_rules = ep.startswith('rules') or ep.startswith('templates') or ep.startswith('aggregations') or ep.startswith('auth_codes') or ep.startswith('h24_codes') %}
-        {% set in_anag = ep.startswith('customers') or ep.startswith('addresses') or ep.startswith('domains') or ep.startswith('customer_groups') %}
+        {% set in_rules = ep.startswith('rules') or ep.startswith('templates') or ep.startswith('aggregations') %}
+        {% set in_h24   = ep.startswith('h24_codes') or ep.startswith('auth_codes') or ep == 'codes_h24.index' %}
+        {% set in_anag  = ep.startswith('customers') or ep.startswith('addresses') or ep.startswith('domains') or ep.startswith('customer_groups') or ep.startswith('recipient_groups') or ep.startswith('privacy_bypass') %}
         {% set in_orari = ep.startswith('service_hours') or ep.startswith('profiles') %}
-        {% set in_config = ep.startswith('settings') or ep.startswith('connection') or ep.startswith('tenants') or ep.startswith('users') %}
+        {% set in_ai    = ep.startswith('ai.') %}
+        {% set in_sys   = ep.startswith('settings') or ep.startswith('connection') or ep.startswith('tenants') or ep.startswith('users') or ep.startswith('integrations') or ep.startswith('secrets_modules') or ep == 'health.system_dashboard' or ep.startswith('manual') %}
         <nav class="dr-mainnav">
             <a href="{{ url_for('dashboard.index') }}" class="{% if ep.startswith('dashboard') %}active{% endif %}">
                 <i class="fas fa-gauge-high"></i> Dashboard
@@ -54,16 +56,21 @@
                 <i class="fas fa-stream"></i> Flusso mail
             </a>
             <div class="dr-nav-dropdown {% if in_rules %}active{% endif %}">
-                <button type="button" class="dr-nav-btn"><i class="fas fa-filter"></i> Regole <i class="fas fa-caret-down"></i></button>
+                <button type="button" class="dr-nav-btn"><i class="fas fa-filter"></i> Regole &amp; Mail flow <i class="fas fa-caret-down"></i></button>
                 <div class="dr-nav-menu">
                     <a href="{{ url_for('rules.list_view') }}" class="{% if ep.startswith('rules') %}active{% endif %}"><i class="fas fa-filter"></i> Regole SMTP</a>
-                    <a href="{{ url_for('templates.list_view') }}" class="{% if ep.startswith('templates') %}active{% endif %}"><i class="fas fa-envelope-open-text"></i> Template</a>
+                    <a href="{{ url_for('templates.list_view') }}" class="{% if ep.startswith('templates') %}active{% endif %}"><i class="fas fa-envelope-open-text"></i> Template di risposta</a>
                     <a href="{{ url_for('aggregations.list_view') }}" class="{% if ep.startswith('aggregations') %}active{% endif %}"><i class="fas fa-layer-group"></i> Aggregazioni errori</a>
-                    <a href="{{ url_for('auth_codes.list_view') }}" class="{% if ep.startswith('auth_codes') %}active{% endif %}"><i class="fas fa-key"></i> Codici autorizzazione (monouso)</a>
-                    <a href="{{ url_for('h24_codes.dashboard_view') }}" class="{% if ep == 'h24_codes.dashboard_view' %}active{% endif %}"><i class="fas fa-chart-line"></i> H24 — Dashboard</a>
-                    <a href="{{ url_for('h24_codes.list_view') }}" class="{% if ep == 'h24_codes.list_view' or ep == 'h24_codes.create_view' or ep == 'h24_codes.usages_view' or ep == 'h24_codes.revoke_view' %}active{% endif %}"><i class="fas fa-shield-halved"></i> H24 — Codici permanenti</a>
-                    <a href="{{ url_for('h24_codes.targets_list_view') }}" class="{% if ep.startswith('h24_codes.targets') %}active{% endif %}"><i class="fas fa-envelope-open-text"></i> H24 — Mailbox di rientro</a>
-                    <a href="{{ url_for('h24_codes.settings_view') }}" class="{% if ep == 'h24_codes.settings_view' %}active{% endif %}"><i class="fas fa-cog"></i> H24 — Settings</a>
+                </div>
+            </div>
+            <div class="dr-nav-dropdown {% if in_h24 %}active{% endif %}">
+                <button type="button" class="dr-nav-btn"><i class="fas fa-shield-halved"></i> H24 &amp; Autorizzazioni <i class="fas fa-caret-down"></i></button>
+                <div class="dr-nav-menu">
+                    <a href="{{ url_for('codes_h24.index') }}" class="{% if ep == 'codes_h24.index' %}active{% endif %}"><i class="fas fa-key"></i> Codici (panoramica)</a>
+                    <a href="{{ url_for('auth_codes.list_view') }}" class="{% if ep.startswith('auth_codes') %}active{% endif %}"><i class="fas fa-key"></i> Codici monouso</a>
+                    <a href="{{ url_for('h24_codes.list_view') }}" class="{% if ep == 'h24_codes.list_view' or ep == 'h24_codes.create_view' or ep == 'h24_codes.usages_view' or ep == 'h24_codes.revoke_view' %}active{% endif %}"><i class="fas fa-shield-halved"></i> Codici permanenti</a>
+                    <a href="{{ url_for('h24_codes.targets_list_view') }}" class="{% if ep.startswith('h24_codes.targets') %}active{% endif %}"><i class="fas fa-envelope-open-text"></i> Mailbox di rientro</a>
+                    <a href="{{ url_for('h24_codes.settings_view') }}" class="{% if ep == 'h24_codes.settings_view' %}active{% endif %}"><i class="fas fa-cog"></i> Settings H24</a>
                 </div>
             </div>
             <div class="dr-nav-dropdown {% if in_anag %}active{% endif %}">
@@ -86,28 +93,54 @@
                     <a href="{{ url_for('profiles.list_view') }}" class="{% if ep.startswith('profiles') %}active{% endif %}"><i class="fas fa-business-time"></i> Profili orari</a>
                 </div>
             </div>
-            <div class="dr-nav-dropdown {% if in_config %}active{% endif %}">
-                <button type="button" class="dr-nav-btn"><i class="fas fa-gear"></i> Configurazione <i class="fas fa-caret-down"></i></button>
+            {% if session.role in ('admin', 'superadmin') %}
+            <a href="{{ url_for('ai.dashboard') }}" class="{% if in_ai %}active{% endif %}"
+               style="display:inline-flex; align-items:center; gap:0.4rem; color:#7c3aed;">
+                <i class="fas fa-robot"></i> AI Assistant
+            </a>
+            <div class="dr-nav-dropdown {% if in_sys %}active{% endif %}">
+                <button type="button" class="dr-nav-btn"><i class="fas fa-gear"></i> Sistema <i class="fas fa-caret-down"></i></button>
                 <div class="dr-nav-menu">
-                    {% if session.role in ('admin', 'superadmin') %}
                     <a href="{{ url_for('users.list_view') }}" class="{% if ep.startswith('users') %}active{% endif %}"><i class="fas fa-user-shield"></i> Utenti</a>
-                    <a href="{{ url_for('ai.dashboard') }}" class="{% if ep.startswith('ai.') %}active{% endif %}" style="color:#7c3aed;"><i class="fas fa-robot"></i> AI Assistant</a>
-                    {% endif %}
                     <a href="{{ url_for('health.system_dashboard') }}" class="{% if ep == 'health.system_dashboard' %}active{% endif %}"><i class="fas fa-heart-pulse"></i> Health sistema</a>
-                    {% if session.role in ('admin', 'superadmin') %}
                     <a href="{{ url_for('integrations.index') }}" class="{% if ep.startswith('integrations') %}active{% endif %}" style="color:#2563eb;"><i class="fas fa-plug"></i> Integrazioni</a>
                     <a href="{{ url_for('settings.settings_view') }}" class="{% if ep.startswith('settings') %}active{% endif %}"><i class="fas fa-sliders"></i> Settings</a>
                     <a href="{{ url_for('secrets_modules.api_keys_list') }}" class="{% if ep.startswith('secrets_modules.api') %}active{% endif %}"><i class="fas fa-key"></i> Chiavi API</a>
                     <a href="{{ url_for('secrets_modules.modules_list') }}" class="{% if ep.startswith('secrets_modules.module') %}active{% endif %}"><i class="fas fa-cube"></i> Moduli Python</a>
                     <a href="{{ url_for('connection.connection_view') }}" class="{% if ep.startswith('connection') %}active{% endif %}"><i class="fas fa-plug"></i> Connessione &amp; API</a>
-                    {% endif %}
+                    <a href="{{ url_for('manual.user_manual') }}" class="{% if ep.startswith('manual') %}active{% endif %}"><i class="fas fa-book"></i> Documentazione</a>
                     {% if session.role == 'superadmin' %}
                     <a href="{{ url_for('tenants.list_view') }}" class="{% if ep.startswith('tenants') %}active{% endif %}"><i class="fas fa-users-rectangle"></i> Tenant</a>
                     {% endif %}
                 </div>
             </div>
+            {% else %}
+            <a href="{{ url_for('manual.user_manual') }}" class="{% if ep.startswith('manual') %}active{% endif %}"
+               style="display:inline-flex; align-items:center; gap:0.4rem;">
+                <i class="fas fa-book"></i> Documentazione
+            </a>
+            {% endif %}
         </nav>
         <div class="dr-user">
+            {# Kill switch indicator: sempre visibile nell'header. Verde quando relay opera
+               normalmente (rule engine + IA attivi), rosso quando passthrough_only ON (bypass tutto). #}
+            {% if RELAY_PASSTHROUGH_ONLY %}
+            <a href="{{ url_for('dashboard.index') }}#kill-switch"
+               title="KILL SWITCH ATTIVO: rule engine + IA bypassati. Click per disattivare dal dashboard."
+               style="display:inline-flex; align-items:center; gap:0.3rem; padding:0.2rem 0.55rem;
+                      background:#dc2626; color:white; border-radius:6px; font-size:0.78rem;
+                      font-weight:600; text-decoration:none; animation: kspulse 2s infinite;">
+                <i class="fas fa-power-off"></i> KILL ON
+            </a>
+            <style>@keyframes kspulse { 50% { background:#991b1b; } }</style>
+            {% else %}
+            <span title="Sistema operativo: rule engine + IA attivi"
+                  style="display:inline-flex; align-items:center; gap:0.3rem; padding:0.2rem 0.55rem;
+                         background:rgba(16,185,129,0.15); color:#10b981; border-radius:6px;
+                         font-size:0.78rem; font-weight:600;">
+                <i class="fas fa-circle-check"></i> OK
+            </span>
+            {% endif %}
             {% if tenant_ctx and tenant_ctx.can_switch_tenant and tenant_ctx.tenants_count > 1 %}
             <form method="get" action="" class="dr-tenant-switcher" title="Switch tenant (superadmin)">
                 <select name="tenant_id" onchange="this.form.submit()">

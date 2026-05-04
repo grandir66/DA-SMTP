@@ -1,0 +1,109 @@
+{# ===========================================================================
+   Macro condivisa per i form di gruppo (customer_group + recipient_group).
+   I due form sono pattern gemelli: anagrafica gruppo + lista membri editabile.
+   Differenze: il "tipo" del membro (codcli vs email) e il bottone delete.
+   =========================================================================== #}
+
+{% macro group_anagrafica(group, code_placeholder='top_customer', name_placeholder='Top Customer') %}
+<div class="rf-section">
+    <h3>Anagrafica gruppo</h3>
+    <div class="form-row">
+        <div>
+            <label>Codice (slug)</label>
+            <input type="text" name="code" required pattern="[a-z0-9_-]+"
+                   value="{{ group.code if group else '' }}"
+                   placeholder="{{ code_placeholder }}">
+        </div>
+        <div>
+            <label>Nome</label>
+            <input type="text" name="name" required
+                   value="{{ group.name if group else '' }}"
+                   placeholder="{{ name_placeholder }}">
+        </div>
+        <div>
+            <label>Descrizione</label>
+            <input type="text" name="description"
+                   value="{{ group.description if group else '' }}">
+        </div>
+        <div>
+            <label>Colore</label>
+            <input type="color" name="color"
+                   value="{{ group.color or '#6366f1' }}">
+        </div>
+        <div>
+            <label>Stato</label>
+            <label style="font-weight:normal; padding-top:0.4rem;">
+                <input type="checkbox" name="enabled" value="1"
+                       {% if not group or group.enabled %}checked{% endif %}>
+                Attivo
+            </label>
+        </div>
+    </div>
+</div>
+{% endmacro %}
+
+
+{% macro group_actions(group, list_url, delete_url=None) %}
+<div style="display:flex; gap:0.6rem; align-items:center; padding:0.5rem 0;">
+    <button type="submit" class="dr-btn dr-btn-primary">
+        <i class="fas fa-save"></i> {{ 'Salva modifiche' if group else 'Crea gruppo' }}
+    </button>
+    <a href="{{ list_url }}" class="dr-btn">Annulla</a>
+    {% if group and delete_url %}
+    <span style="flex:1;"></span>
+    <button type="button" class="dr-btn"
+            style="color:#dc2626; border-color:#dc2626;"
+            onclick="if(confirm('Eliminare definitivamente il gruppo «{{ group.name }}»?')) document.getElementById('deleteForm').submit();">
+        <i class="fas fa-trash"></i> Elimina gruppo
+    </button>
+    <form id="deleteForm" method="post" action="{{ delete_url }}" style="display:none;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    </form>
+    {% endif %}
+</div>
+{% endmacro %}
+
+
+{# Stile condiviso da includere nei form via {% block extra_head %}{{ group_form_styles() }}{% endblock %} #}
+{% macro group_form_styles() %}
+<style>
+.wrap { padding: 1rem 1.4rem; }
+.rf-section {
+    background: #f8fafc; padding: 1rem; border-radius: 6px;
+    margin-bottom: 1rem;
+}
+.rf-section h3 { margin-top: 0; color: var(--primary-dark); font-size: 1rem; }
+.form-row {
+    display: grid; grid-template-columns: 1fr 1fr 1fr 100px 80px;
+    gap: 0.8rem; margin-bottom: 1rem;
+}
+.form-row label {
+    font-size: 0.8rem; color: #555; font-weight: 600;
+    display: block; margin-bottom: 0.2rem;
+}
+.form-row input, .form-row textarea {
+    padding: 0.5rem; border: 1px solid #cbd5e1; border-radius: 4px;
+    font-size: 0.9rem; width: 100%; box-sizing: border-box;
+}
+.member-list-textarea {
+    width: 100%; min-height: 80px; padding: 0.6rem;
+    border: 1px solid #cbd5e1; border-radius: 4px;
+    font-family: ui-monospace, monospace; font-size: 0.85rem;
+    box-sizing: border-box;
+}
+.members-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 0.4rem; max-height: 360px; overflow-y: auto;
+    border: 1px solid #e2e8f0; padding: 0.5rem; border-radius: 4px;
+    background: white;
+}
+.member-row {
+    padding: 0.3rem; display: flex; align-items: center; gap: 0.4rem;
+    background: #d1fae5; border-radius: 4px;
+}
+.member-row label {
+    font-family: ui-monospace, monospace; font-size: 0.82rem;
+    cursor: pointer; flex: 1;
+}
+</style>
+{% endmacro %}

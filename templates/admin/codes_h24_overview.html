@@ -1,0 +1,246 @@
+{% extends "admin/_base.html" %}
+{% block title %}Codici H24 — Panoramica{% endblock %}
+{% block content %}
+<style>
+.kpi-row {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 0.7rem; margin-bottom: 1.2rem;
+}
+.kpi-card {
+    background: #fff; border: 1px solid #cbd5e1; border-radius: 6px;
+    padding: 0.8rem 1rem; border-left: 3px solid var(--accent);
+}
+.kpi-card.violet { border-left-color: #7c3aed; }
+.kpi-card.green { border-left-color: #10b981; }
+.kpi-card.amber { border-left-color: #f59e0b; }
+.kpi-card .lbl { font-size: 0.75rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.04em; }
+.kpi-card .val { font-size: 1.5rem; font-weight: 700; color: #0b2a4a; line-height: 1.1; padding-top: 0.2rem; }
+.kpi-card .sub { font-size: 0.78rem; color: #64748b; margin-top: 0.2rem; }
+
+.tabs-bar {
+    display: flex; gap: 0; border-bottom: 2px solid #cbd5e1;
+    margin-bottom: 1rem;
+}
+.tab-link {
+    padding: 0.7rem 1.2rem; cursor: pointer; font-weight: 600;
+    color: #64748b; border-bottom: 3px solid transparent; margin-bottom: -2px;
+    text-decoration: none; transition: color 0.12s;
+    display: inline-flex; align-items: center; gap: 0.4rem;
+}
+.tab-link:hover { color: var(--primary-dark); }
+.tab-link.active { color: var(--primary-dark); border-bottom-color: var(--accent); background: #f8fafc; }
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+.intro-card {
+    background: #eff6ff; border-left: 3px solid #3b82f6;
+    padding: 0.8rem 1rem; border-radius: 0 6px 6px 0;
+    margin-bottom: 1rem; font-size: 0.86rem; color: #1e40af;
+}
+</style>
+
+<section class="dr-section">
+    <h2 style="margin:0;"><i class="fas fa-shield-halved"></i> Codici H24 — Panoramica</h2>
+    <p class="dr-hint">
+        Vista unificata dei tre meccanismi del flusso H24: codici <strong>monouso</strong> generati al volo,
+        codici <strong>permanenti</strong> assegnati ai clienti, e <strong>mailbox di rientro</strong> multi-brand.
+    </p>
+</section>
+
+<div class="kpi-row">
+    <div class="kpi-card amber">
+        <div class="lbl">Monouso totali</div>
+        <div class="val">{{ oneshots_total }}</div>
+        <div class="sub">{{ oneshots_pending }} pending · {{ oneshots_accepted }} accepted · {{ oneshots_expired }} expired</div>
+    </div>
+    <div class="kpi-card violet">
+        <div class="lbl">Permanenti attivi</div>
+        <div class="val">{{ perm_active }}</div>
+        <div class="sub">{{ perm_total }} totali · {{ perm_revoked }} revocati · {{ perm_total_uses }} utilizzi cumul.</div>
+    </div>
+    <div class="kpi-card green">
+        <div class="lbl">Mailbox rientro</div>
+        <div class="val">{{ targets_active }}</div>
+        <div class="sub">{{ targets_total }} mappature · {{ distinct_aliases }} alias distinti</div>
+    </div>
+    <div class="kpi-card">
+        <div class="lbl">Acceptance rate (monouso)</div>
+        <div class="val">
+            {% if oneshots_total > 0 %}
+                {{ '%.0f'|format(oneshots_accepted / oneshots_total * 100) }}%
+            {% else %}—{% endif %}
+        </div>
+        <div class="sub">% accettati su totale generati</div>
+    </div>
+</div>
+
+<div class="intro-card">
+    <strong><i class="fas fa-info-circle"></i> Quale tipo di codice serve?</strong>
+    <ul style="margin:0.4rem 0 0 1.2rem; padding:0;">
+        <li><strong>Monouso</strong>: generato dal listener al fuori orario, valido 24-48h, una sola volta. <em>Fee a pagamento</em>.</li>
+        <li><strong>Permanente</strong>: assegnato a un cliente (es. <code>DOMARC-DATIA</code>), riutilizzabile, contrattuale. <em>No fee</em>.</li>
+        <li><strong>Mailbox di rientro</strong>: configurazione multi-brand <code>source_domain → h24_alias</code> usata per costruire i mailto button nei template auto-reply.</li>
+    </ul>
+</div>
+
+<div class="tabs-bar">
+    <a class="tab-link active" data-tab="oneshot" onclick="selectTab('oneshot')">
+        <i class="fas fa-key"></i> Monouso ({{ oneshots_total }})
+    </a>
+    <a class="tab-link" data-tab="permanent" onclick="selectTab('permanent')">
+        <i class="fas fa-shield-halved"></i> Permanenti ({{ perm_active }}/{{ perm_total }})
+    </a>
+    <a class="tab-link" data-tab="targets" onclick="selectTab('targets')">
+        <i class="fas fa-envelope-open-text"></i> Mailbox di rientro ({{ targets_total }})
+    </a>
+</div>
+
+<div class="tab-content active" id="tab_oneshot">
+    <div style="margin-bottom:0.7rem;">
+        <a href="{{ url_for('auth_codes.list_view') }}" class="dr-btn dr-btn-primary"
+           style="width:auto;">
+            <i class="fas fa-arrow-right"></i> Vai a gestione monouso
+        </a>
+        <small style="color:#64748b; margin-left:0.7rem;">
+            Genera nuovi codici, vedi ciclo di vita completo (spedito → accettato), elimina codici scaduti.
+        </small>
+    </div>
+    <div class="dr-table-wrap">
+        <table class="dr-table">
+            <thead>
+                <tr>
+                    <th data-sort="text">Codice</th>
+                    <th data-sort="text">Stato</th>
+                    <th data-sort="text">Cliente</th>
+                    <th data-sort="text">Spedito a</th>
+                    <th data-sort="text">Accettato da</th>
+                    <th data-sort="date">Generato</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for c in oneshots %}
+                <tr>
+                    <td><code style="font-weight:600;">{{ c.code }}</code></td>
+                    <td>
+                        {% set st = c.state or ('accepted' if c.used_at else 'pending') %}
+                        {% if st == 'accepted' %}<span class="dr-badge dr-badge-ok">accepted</span>
+                        {% elif st == 'expired' %}<span class="dr-badge dr-badge-error">expired</span>
+                        {% elif st == 'pending' %}<span class="dr-badge dr-badge-warn">pending</span>
+                        {% else %}<span class="dr-badge">{{ st }}</span>{% endif %}
+                    </td>
+                    <td>{{ c.codice_cliente or '—' }}</td>
+                    <td><small style="font-family:ui-monospace, monospace;">{{ (c.sent_to_email or '')|truncate(30) }}</small></td>
+                    <td><small style="font-family:ui-monospace, monospace;">{{ (c.accepted_by_email or c.used_by or '')|truncate(30) }}</small></td>
+                    <td><small>{{ c.generated_at }}</small></td>
+                </tr>
+                {% else %}
+                <tr><td colspan="6" class="dr-empty">Nessun codice monouso emesso.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="tab-content" id="tab_permanent">
+    <div style="margin-bottom:0.7rem;">
+        <a href="{{ url_for('h24_codes.list_view') }}" class="dr-btn dr-btn-primary"
+           style="width:auto;">
+            <i class="fas fa-arrow-right"></i> Vai a gestione permanenti
+        </a>
+        <small style="color:#64748b; margin-left:0.7rem;">
+            Crea/revoca codici cliente, vedi tab utilizzi con dettaglio body delle mail di richiesta.
+        </small>
+    </div>
+    <div class="dr-table-wrap">
+        <table class="dr-table">
+            <thead>
+                <tr>
+                    <th data-sort="text">Codice</th>
+                    <th data-sort="text">Cliente</th>
+                    <th data-sort="text">Etichetta</th>
+                    <th data-sort="text">Stato</th>
+                    <th data-sort="num">Utilizzi</th>
+                    <th data-sort="date">Ultimo uso</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for c in permanents %}
+                <tr>
+                    <td><a href="{{ url_for('h24_codes.usages_view', code_id=c.id) }}"
+                          style="font-family:ui-monospace, monospace; font-weight:600;">{{ c.code }}</a></td>
+                    <td>{{ c.codice_cliente }}</td>
+                    <td>{{ c.label or '—' }}</td>
+                    <td>
+                        {% if c.revoked_at %}<span class="dr-badge dr-badge-error">revocato</span>
+                        {% elif not c.enabled %}<span class="dr-badge">disabilitato</span>
+                        {% else %}<span class="dr-badge dr-badge-ok">attivo</span>{% endif %}
+                    </td>
+                    <td>{{ c.used_count or 0 }}</td>
+                    <td><small>{{ c.last_used_at or '—' }}</small></td>
+                </tr>
+                {% else %}
+                <tr><td colspan="6" class="dr-empty">Nessun codice permanente.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="tab-content" id="tab_targets">
+    <div style="margin-bottom:0.7rem;">
+        <a href="{{ url_for('h24_codes.targets_list_view') }}" class="dr-btn dr-btn-primary"
+           style="width:auto;">
+            <i class="fas fa-arrow-right"></i> Vai a gestione mailbox di rientro
+        </a>
+        <small style="color:#64748b; margin-left:0.7rem;">
+            Configura il routing source_domain/source_email → h24_alias per multi-brand.
+        </small>
+    </div>
+    <div class="dr-table-wrap">
+        <table class="dr-table">
+            <thead>
+                <tr>
+                    <th data-sort="text">Source domain</th>
+                    <th data-sort="text">Source email</th>
+                    <th data-sort="text">H24 alias</th>
+                    <th data-sort="num">Fee € urgente</th>
+                    <th data-sort="text">Note</th>
+                    <th data-sort="text">Stato</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for t in targets %}
+                <tr>
+                    <td><code>{{ t.source_domain }}</code></td>
+                    <td><small style="font-family:ui-monospace,monospace;">{{ t.source_email or '— (tutto il dominio) —' }}</small></td>
+                    <td><strong>{{ t.h24_alias }}</strong></td>
+                    <td>{{ t.urgent_fee_eur or '—' }}</td>
+                    <td><small>{{ (t.note or '')|truncate(40) }}</small></td>
+                    <td>
+                        {% if t.enabled %}<span class="dr-badge dr-badge-ok">attivo</span>
+                        {% else %}<span class="dr-badge">disattivato</span>{% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="6" class="dr-empty">Nessuna mailbox di rientro configurata.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+function selectTab(name) {
+    document.querySelectorAll('.tab-link').forEach(a =>
+        a.classList.toggle('active', a.dataset.tab === name));
+    document.querySelectorAll('.tab-content').forEach(c =>
+        c.classList.toggle('active', c.id === 'tab_' + name));
+    history.replaceState({}, '', '#' + name);
+}
+// On load, restore tab from hash
+window.addEventListener('DOMContentLoaded', () => {
+    const h = (location.hash || '').replace('#', '');
+    if (h && document.getElementById('tab_' + h)) selectTab(h);
+});
+</script>
+{% endblock %}
