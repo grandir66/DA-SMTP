@@ -33,14 +33,21 @@
             </thead>
             <tbody>
                 {% for g in groups %}
-                <tr>
+                <tr {% if g.is_system %}style="background:#f8fafc;"{% endif %}>
                     <td>
                         {% if g.color %}
                         <span style="display:inline-block; width:0.7rem; height:0.7rem; background:{{ g.color }}; border-radius:50%; margin-right:0.4rem; vertical-align:middle;"></span>
                         {% endif %}
                         <code>{{ g.code }}</code>
                     </td>
-                    <td><strong>{{ g.name }}</strong></td>
+                    <td>
+                        <strong>{{ g.name }}</strong>
+                        {% if g.is_system %}
+                        <span class="pill pill-muted" title="Gruppo automatico, non modificabile" style="margin-left:0.4rem;">
+                            <i class="fas fa-cog"></i> automatico
+                        </span>
+                        {% endif %}
+                    </td>
                     <td style="color:#64748b; font-size:0.85rem;">{{ g.description or '—' }}</td>
                     <td style="text-align:center;">
                         <span class="pill pill-info">{{ g.member_count }}</span>
@@ -53,10 +60,14 @@
                         {% endif %}
                     </td>
                     <td>
+                        {% if g.is_system %}
+                        <span style="color:#94a3b8; font-size:0.8rem;">—</span>
+                        {% else %}
                         <a href="{{ url_for('customer_groups.detail_view', group_id=g.id) }}"
                            class="dr-btn" title="Modifica">
                             <i class="fas fa-pen"></i>
                         </a>
+                        {% endif %}
                     </td>
                 </tr>
                 {% else %}

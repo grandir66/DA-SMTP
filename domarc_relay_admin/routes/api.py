@@ -118,6 +118,9 @@ def customer_groups_active():
     """
     storage = _storage()
     tenant_id = 1  # multi-tenant TODO: estrarre da header/query
+    # Solo gruppi reali con id: i gruppi virtuali (all_contract / no_contract)
+    # sono ricostruiti dal listener in _event_dict basandosi su contract_active,
+    # quindi non vanno in cache lato listener.
     groups = [
         {
             "id": int(g["id"]),
@@ -127,7 +130,7 @@ def customer_groups_active():
         }
         for g in storage.list_customer_groups(tenant_id=tenant_id, only_enabled=True)
     ]
-    # Aggrega membership per codcli
+    # Aggrega membership per codcli (solo gruppi reali — i virtuali sono auto)
     members_map: dict[str, list[str]] = {}
     for row in storage.list_all_customer_group_memberships(tenant_id=tenant_id):
         members_map.setdefault(row["codice_cliente"], []).append(row["group_code"])
@@ -344,6 +347,8 @@ def aggregations_active():
             "ticket_urgenza": a.get("ticket_urgenza"),
             "ticket_codice_cliente": a.get("ticket_codice_cliente"),
             "priority": int(a.get("priority", 100)),
+            "delay_minutes": (int(a["delay_minutes"])
+                              if a.get("delay_minutes") not in (None, "") else None),
         })
     return jsonify({
         "synced_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),

@@ -42,8 +42,11 @@ def _actor() -> str:
 @customer_groups_bp.route("/")
 @login_required()
 def list_view():
+    from ..customer_groups_virtuals import merge_with_virtuals
     storage = _storage()
-    groups = storage.list_customer_groups(tenant_id=_tid())
+    real_groups = storage.list_customer_groups(tenant_id=_tid())
+    db_path = current_app.extensions["domarc_config"].db_path
+    groups = merge_with_virtuals(real_groups, db_path, _tid())
     return render_template("admin/customer_groups_list.html", groups=groups)
 
 

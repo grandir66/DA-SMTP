@@ -121,11 +121,28 @@
 <details class="agg-card" open>
     <summary><i class="fas fa-gauge"></i> 3. Soglia e fingerprint <small>quando aprire un ticket</small></summary>
     <div class="agg-card-body">
+        <div class="agg-row" style="background:#f0f9ff; padding:0.6rem; border-radius:6px; margin-bottom:0.5rem;">
+            <label><strong>Timer mode</strong></label>
+            <div>
+                <input type="number" name="delay_minutes" min="1" max="1440"
+                       value="{{ record.delay_minutes or '' }}"
+                       placeholder="(vuoto = modalità count-based)" style="width:160px;">
+                <span style="margin-left:0.5rem; color:#64748b;">minuti</span>
+                <div class="field-help">
+                    <strong>Se valorizzato</strong>: l'aggregation apre un ticket SOLO se la
+                    fingerprint NON viene resettata entro N minuti dalla prima occorrenza.
+                    Soglia e finestra (sotto) <strong>vengono ignorate</strong>.<br>
+                    Pensato per alert auto-recovery (Cloudtik, syslog, ICMP probes).
+                    Lascia vuoto per usare il comportamento count-based classico.
+                </div>
+            </div>
+        </div>
         <div class="agg-row">
             <label>Soglia *</label>
             <div>
                 <input type="number" name="threshold" min="1" max="100" value="{{ record.threshold or 2 }}" style="width:120px;">
-                <div class="field-help">Numero di occorrenze per aprire un ticket.</div>
+                <div class="field-help">Numero di occorrenze per aprire un ticket
+                <em>(modalità count-based; ignorato in timer mode)</em>.</div>
             </div>
         </div>
         <div class="agg-row">

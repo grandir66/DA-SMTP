@@ -1,9 +1,62 @@
 # Changelog
 
+
 Tutte le modifiche rilevanti a questo progetto vengono documentate in questo file.
 Il formato è basato su [Keep a Changelog](https://keepachangelog.com/it/1.1.0/).
 
 ## [Unreleased]
+
+### Aggiunte — Timer mode per error_aggregations (delay_minutes)
+
+Estensione generica del modello `error_aggregations` per gestire alert
+auto-recovery (es. Cloudtik OptiWize, syslog backup, ICMP probes): apre
+ticket SOLO se la fingerprint NON viene resettata entro N minuti dalla
+prima occorrenza, indipendentemente dal threshold/window.
+
+- Migration 021: `error_aggregations.delay_minutes INTEGER` (NULL=count-based legacy).
+- Listener:
+  - `aggregations_cache.delay_minutes`, `error_occurrences_local.pending_ticket_until`.
+  - Pipeline: timer-mode branching in `_process_aggregations` (set pending_until alla prima occorrenza).
+  - Reset path azzera anche `pending_ticket_until`.
+  - Nuovo loop scheduler `_pending_tickets_loop` (60s): scansiona occurrences
+    scadute e enqueue dispatch_queue per ticket. Event_uuid sintetico.
+- Admin: API `/api/v1/relay/aggregations/active` include `delay_minutes`.
+  Storage `upsert_aggregation` accetta il campo.
+- UI: form aggregation con campo "Timer mode" (minuti) in cima al pannello
+  Soglia. Tooltip: ignora threshold/window quando valorizzato.
+- Aggregation `Cloudtik OptiWize` configurata in timer mode 15min:
+  fingerprint per (device, alert_type), reset su Resolved, ticket dopo 15min.
+
+Test e2e verificato:
+- Problem → pending_until settato (T+15min).
+- Resolved → pending_until=NULL, count=0 (reset).
+- Problem senza Resolved → ticket dopo timer scaduto (qid in dispatch_queue).
+
+
+### Aggiunte — Gruppi clienti virtuali (automatici)
+
+- Due gruppi sintetici sempre presenti, calcolati a runtime in base a
+  `contract_active`:
+  - `all_contract` — "Tutti i clienti con contratto" (cliente noto +
+    contratto attivo).
+  - `no_contract` — "Tutti i clienti senza contratto" (cliente noto
+    senza contratto).
+- Permettono regole estese a tutti i clienti senza dover popolare 1490
+  righe di membership esplicite.
+- Visualizzati con badge "automatico" nella lista `/customer-groups`,
+  con sfondo evidenziato e prefisso ⚙ nel selettore del form regole.
+  Edit/delete disabilitati (flag `is_system`).
+- Pagina "Assegna gruppi" del cliente non li mostra (membership
+  automatica).
+- Listener `_event_dict` (`pipeline.py`) aggiunge il codice giusto a
+  `customer_groups` se `ctx.codcli` è valorizzato; il rule engine
+  funziona invariato (intersezione CSV ⋂ set evento).
+- API `/api/v1/relay/customer-groups/active` NON serializza i virtuali:
+  il listener li ricostruisce localmente per evitare 502 su `int(id)`
+  con id NULL.
+- Helper `domarc_relay_admin/customer_groups_virtuals.py` con conteggi
+  da `customers_pg_cache`.
+
 
 ### Aggiunte — Kill switch passthrough + wizard privacy bypass (pre-cutover)
 - **Kill switch globale** `relay_passthrough_only` (setting boolean):

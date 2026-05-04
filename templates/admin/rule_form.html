@@ -285,8 +285,9 @@
                             style="width:100%; min-height:120px; font-family:ui-monospace, monospace; font-size:0.85rem;">
                         {% for g in (customer_groups or []) %}
                         <option value="{{ g.code }}"
-                                {% if g.code in selected_groups %}selected{% endif %}>
-                            {{ g.code }} — {{ g.name }} ({{ g.member_count }} membri)
+                                {% if g.code in selected_groups %}selected{% endif %}
+                                {% if g.is_system %}style="background:#f0f9ff; font-weight:600;"{% endif %}>
+                            {% if g.is_system %}⚙ {% endif %}{{ g.code }} — {{ g.name }} ({{ g.member_count }} membri){% if g.is_system %} [auto]{% endif %}
                         </option>
                         {% else %}
                         <option disabled>Nessun gruppo definito</option>

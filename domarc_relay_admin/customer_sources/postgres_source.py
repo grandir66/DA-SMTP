@@ -244,25 +244,31 @@ class PostgresCustomerSource(CustomerSource):
 
             # === Costruisco i record ===
             now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
-            # Universo: union di clienti (rs_map) + clienti con settings (settings_map).
-            # Se settings ha exclude_from_list/is_active=FALSE → escludo dal cache.
+            # Universo: TUTTI i clienti master (rs_map) + eventuali settings orfani.
+            # contract_active riflette il valore reale di customer_settings.is_active
+            # (FALSE nei 1167 inattivi, TRUE nei 322 attivi su solution@4.41).
+            # I clienti con exclude_from_list=TRUE vengono saltati interamente.
             new_codcli_set = set(rs_map.keys()) | set(settings_map.keys())
-            # Filtra clienti esplicitamente disabilitati in customer_settings
             for codcli, settings in list(settings_map.items()):
-                if not settings.get("is_active", True):
+                if settings.get("exclude_from_list", False):
                     new_codcli_set.discard(codcli)
 
             with sqlite_conn:
                 for codcli in new_codcli_set:
-                    # Settings: fallback sicuro se cliente non ha riga in customer_settings
-                    settings = settings_map.get(codcli) or {
-                        "is_active": True,
-                        "contract_expiry_date": None,
-                        "contract_notes": None,
-                        "timezone": "Europe/Rome",
-                        "availability_type": None,
-                        "contract_type": None,
-                    }
+                    # Settings: per clienti senza riga in customer_settings (caso raro)
+                    # ricadiamo a is_active=True per non bloccare il flusso operativo,
+                    # ma loggiamo perché è anomalia da investigare.
+                    settings = settings_map.get(codcli)
+                    if settings is None:
+                        settings = {
+                            "is_active": True,
+                            "exclude_from_list": False,
+                            "contract_expiry_date": None,
+                            "contract_notes": None,
+                            "timezone": "Europe/Rome",
+                            "availability_type": None,
+                            "contract_type": None,
+                        }
                     domains = domains_map.get(codcli, [])
                     aliases = aliases_map.get(codcli, [])
                     rs = rs_map.get(codcli, "")
@@ -288,14 +294,16 @@ class PostgresCustomerSource(CustomerSource):
                     sqlite_conn.execute(
                         """INSERT INTO customers_pg_cache
                                (codcli, ragione_sociale, domains_json, aliases_json,
-                                contract_active, tipologia_servizio, service_hours_json,
-                                contract_expiry, timezone, raw_json, last_synced_at)
-                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                contract_active, contract_type, tipologia_servizio,
+                                service_hours_json, contract_expiry, timezone,
+                                raw_json, last_synced_at)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                            ON CONFLICT(codcli) DO UPDATE SET
                                ragione_sociale = excluded.ragione_sociale,
                                domains_json = excluded.domains_json,
                                aliases_json = excluded.aliases_json,
                                contract_active = excluded.contract_active,
+                               contract_type = excluded.contract_type,
                                tipologia_servizio = excluded.tipologia_servizio,
                                service_hours_json = excluded.service_hours_json,
                                contract_expiry = excluded.contract_expiry,
@@ -307,7 +315,8 @@ class PostgresCustomerSource(CustomerSource):
                             json.dumps(domains, ensure_ascii=False),
                             json.dumps(aliases, ensure_ascii=False),
                             1 if settings.get("is_active", True) else 0,
-                            avail.get("code") or "standard",
+                            (contract.get("code") if contract else None),
+                            avail.get("code") if avail else None,
                             json.dumps(sh, ensure_ascii=False) if sh else None,
                             settings.get("contract_expiry_date"),
                             settings.get("timezone", "Europe/Rome"),
@@ -385,10 +394,15 @@ class PostgresCustomerSource(CustomerSource):
 
         Schema introspettivo: usa solo le colonne che esistono davvero nel DB
         (varianti su customer_settings: con/senza contract_*, con/senza timezone).
+
+        Database: `solution` (NON stormshield) — l'inventario tabelle PG (2026-05-04)
+        ha mostrato che `customer_settings`, `customer_availability_types` e
+        `customer_contract_types` sono popolate su `solution` mentre su
+        `stormshield` esistono come scheletro vuoto.
         """
         out: dict[str, dict[str, Any]] = {}
         try:
-            with self._pg_connect(psycopg2, self._cfg.stormshield_db) as conn:
+            with self._pg_connect(psycopg2, self._cfg.solution_db) as conn:
                 with conn.cursor() as cur:
                     cur.execute("""SELECT to_regclass('public.customer_settings') AS t""")
                     if not cur.fetchone()[0]:
@@ -409,10 +423,13 @@ class PostgresCustomerSource(CustomerSource):
                     """)
                     av_cols = {r[0] for r in cur.fetchall()}
 
-                    # Costruzione SELECT difensiva
+                    # Costruzione SELECT difensiva. Carichiamo TUTTI i record:
+                    # is_active e exclude_from_list sono fatti propri di ogni cliente,
+                    # le decisioni di filtro le prende _do_sync.
                     cs_part = ["cs.codcli", "cs.is_active"]
                     cs_part.append("cs.contract_expiry_date" if "contract_expiry_date" in cs_cols else "NULL")
                     cs_part.append("cs.timezone" if "timezone" in cs_cols else "NULL")
+                    cs_part.append("COALESCE(cs.exclude_from_list, FALSE)" if "exclude_from_list" in cs_cols else "FALSE")
                     av_part = ["av.code"] if "code" in av_cols else ["NULL::text"]
                     av_part.append("av.description" if "description" in av_cols else "NULL::text")
                     contract_part = []
@@ -428,8 +445,6 @@ class PostgresCustomerSource(CustomerSource):
                           FROM customer_settings cs
                           LEFT JOIN customer_availability_types av ON av.id = cs.availability_type_id
                           {contract_join}
-                         WHERE cs.is_active = TRUE
-                           AND COALESCE(cs.exclude_from_list, FALSE) = FALSE
                     """
                     cur.execute(sql)
                     for r in cur.fetchall():
@@ -440,13 +455,13 @@ class PostgresCustomerSource(CustomerSource):
                         out[cc] = {
                             "is_active": bool(r[1]),
                             "contract_expiry_date": expiry,
-                            "contract_notes": None,
                             "timezone": r[3] or "Europe/Rome",
+                            "exclude_from_list": bool(r[4]),
                             "availability_type": (
-                                {"code": r[4], "description": r[5]} if r[4] else None
+                                {"code": r[5], "description": r[6]} if r[5] else None
                             ),
                             "contract_type": (
-                                {"code": r[6], "description": r[7]} if r[6] else None
+                                {"code": r[7], "description": r[8]} if r[7] else None
                             ),
                         }
         except Exception as exc:  # noqa: BLE001
@@ -454,6 +469,10 @@ class PostgresCustomerSource(CustomerSource):
         return out
 
     def _load_client_domains(self, psycopg2) -> dict[str, list[str]]:
+        """Domini per cliente. Tabella su `stormshield` (1212 righe su 4.41,
+        1189 su 4.42). Schema divergente: 4.41 ha colonna `excluded`, 4.42 no
+        — query difensiva via column discovery.
+        """
         out: dict[str, list[str]] = {}
         try:
             with self._pg_connect(psycopg2, self._cfg.stormshield_db) as conn:
@@ -462,9 +481,15 @@ class PostgresCustomerSource(CustomerSource):
                     if not cur.fetchone()[0]:
                         return {}
                     cur.execute("""
-                        SELECT codice_cliente, dominio FROM client_domains
-                         WHERE COALESCE(excluded, FALSE) = FALSE AND dominio IS NOT NULL
+                        SELECT column_name FROM information_schema.columns
+                         WHERE table_name = 'client_domains'
                     """)
+                    cols = {r[0] for r in cur.fetchall()}
+                    where = ["dominio IS NOT NULL"]
+                    if "excluded" in cols:
+                        where.append("COALESCE(excluded, FALSE) = FALSE")
+                    sql = "SELECT codice_cliente, dominio FROM client_domains WHERE " + " AND ".join(where)
+                    cur.execute(sql)
                     for codcli, dominio in cur.fetchall():
                         cc = (codcli or "").strip().upper()
                         d = (dominio or "").strip().lower()
@@ -475,18 +500,43 @@ class PostgresCustomerSource(CustomerSource):
         return out
 
     def _load_customer_aliases(self, psycopg2) -> dict[str, list[str]]:
-        """Alias degli account specifici (es. assistenza@cliente.it)."""
+        """Alias degli account specifici (es. assistenza@cliente.it).
+
+        Database: `solution` con schema introspettivo (la versione su stormshield
+        è scheletro vuoto a 0 righe, quella reale è solution.customer_aliases con
+        colonne codcli/alias_name/alias_type/is_searchable).
+        """
         out: dict[str, list[str]] = {}
         try:
-            with self._pg_connect(psycopg2, self._cfg.stormshield_db) as conn:
+            with self._pg_connect(psycopg2, self._cfg.solution_db) as conn:
                 with conn.cursor() as cur:
                     cur.execute("SELECT to_regclass('public.customer_aliases') AS t")
                     if not cur.fetchone()[0]:
                         return {}
+                    # Discovery colonne (varianti tra dev/prod)
                     cur.execute("""
-                        SELECT codice_cliente, alias FROM customer_aliases
-                         WHERE COALESCE(enabled, TRUE) = TRUE AND alias IS NOT NULL
+                        SELECT column_name FROM information_schema.columns
+                         WHERE table_name = 'customer_aliases'
                     """)
+                    cols = {r[0] for r in cur.fetchall()}
+                    # Nome colonna codcli (preferisci codcli, fallback codice_cliente)
+                    cc_col = "codcli" if "codcli" in cols else (
+                              "codice_cliente" if "codice_cliente" in cols else None)
+                    # Nome colonna alias (preferisci alias_name, fallback alias)
+                    al_col = "alias_name" if "alias_name" in cols else (
+                              "alias" if "alias" in cols else None)
+                    if cc_col is None or al_col is None:
+                        logger.info("customer_aliases skip: schema inatteso (cols=%s)", cols)
+                        return {}
+                    # Filtro is_searchable (se presente) altrimenti enabled (se presente)
+                    where_clauses = [f"{al_col} IS NOT NULL"]
+                    if "is_searchable" in cols:
+                        where_clauses.append("COALESCE(is_searchable, TRUE) = TRUE")
+                    elif "enabled" in cols:
+                        where_clauses.append("COALESCE(enabled, TRUE) = TRUE")
+                    sql = (f"SELECT {cc_col}, {al_col} FROM customer_aliases "
+                           f"WHERE " + " AND ".join(where_clauses))
+                    cur.execute(sql)
                     for codcli, alias in cur.fetchall():
                         cc = (codcli or "").strip().upper()
                         a = (alias or "").strip().lower()

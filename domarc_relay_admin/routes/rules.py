@@ -104,7 +104,10 @@ def form_view(rule_id: int | None = None):
     ai_active_bindings, ai_providers_map, ai_global_status, ai_recent_decisions = \
         _build_ai_form_context(rule_id)
 
-    customer_groups = _storage().list_customer_groups(tenant_id=_tid())
+    from ..customer_groups_virtuals import merge_with_virtuals
+    real_groups = _storage().list_customer_groups(tenant_id=_tid())
+    db_path = current_app.extensions["domarc_config"].db_path
+    customer_groups = merge_with_virtuals(real_groups, db_path, _tid())
 
     return render_template(
         "admin/rule_form.html",

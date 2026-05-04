@@ -1341,7 +1341,8 @@ class SqliteStorage(Storage):
                           fingerprint_template = ?, threshold = ?, consecutive_only = ?,
                           window_hours = ?, reset_subject_regex = ?, reset_from_regex = ?,
                           ticket_settore = ?, ticket_urgenza = ?, ticket_codice_cliente = ?,
-                          enabled = ?, priority = ?, updated_at = datetime('now')
+                          enabled = ?, priority = ?, delay_minutes = ?,
+                          updated_at = datetime('now')
                        WHERE id = ?""",
                     (
                         data["name"].strip(), data.get("description") or None,
@@ -1359,6 +1360,7 @@ class SqliteStorage(Storage):
                         data.get("ticket_codice_cliente") or None,
                         1 if data.get("enabled", True) else 0,
                         int(data.get("priority", 100)),
+                        int(data["delay_minutes"]) if data.get("delay_minutes") not in (None, "") else None,
                         int(aid),
                     ),
                 )
@@ -1370,8 +1372,8 @@ class SqliteStorage(Storage):
                         fingerprint_template, threshold, consecutive_only, window_hours,
                         reset_subject_regex, reset_from_regex,
                         ticket_settore, ticket_urgenza, ticket_codice_cliente,
-                        enabled, priority, created_by)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        enabled, priority, created_by, delay_minutes)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     int(tenant_id),
                     data["name"].strip(), data.get("description") or None,
@@ -1390,6 +1392,7 @@ class SqliteStorage(Storage):
                     1 if data.get("enabled", True) else 0,
                     int(data.get("priority", 100)),
                     (data.get("created_by") or "ui")[:100],
+                    int(data["delay_minutes"]) if data.get("delay_minutes") not in (None, "") else None,
                 ),
             )
             return int(cur.lastrowid or 0)
