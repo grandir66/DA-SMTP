@@ -249,8 +249,11 @@
         {% set cc = c.codice_cliente %}
         {% set sh = sh_records.get(cc) %}
         {% set has_today_exc = exceptions_today.get(cc, 0) %}
-        {% set prof = (c.tipologia_servizio or 'UNK')|upper %}
+        {% set prof = (c.tipologia_servizio or '')|upper %}
         {% if prof == 'STANDARD' %}{% set prof = 'STD' %}{% endif %}
+        {# Senza contratto attivo → trattato come NO (sempre a pagamento) #}
+        {% if not c.contract_active and not prof %}{% set prof = 'NO' %}{% endif %}
+        {% if not prof %}{% set prof = 'UNK' %}{% endif %}
         {% set ctype = contract_type_by_codcli.get(cc, '') %}
         <div class="cust-row" data-codcli="{{ cc }}">
             <div>
@@ -263,7 +266,11 @@
                 {% if c.contract_expiry_date %}<small>scad. {{ c.contract_expiry_date }}</small>{% endif %}
             </div>
             <div>
+                {% if prof == 'NO' and not c.contract_active %}
+                <span class="profile-badge NO" title="Cliente senza contratto attivo: sempre a pagamento">NO</span>
+                {% else %}
                 <span class="profile-badge {{ prof }}">{{ prof }}</span>
+                {% endif %}
             </div>
             <div>
                 {% if c.contract_active %}
@@ -300,8 +307,16 @@
                     {% elif sh.schedule_exceptions and sh.schedule_exceptions|length %}
                     <br><small style="color:var(--dr-gray-dark);">{{ sh.schedule_exceptions|length }} eccez. totali</small>
                     {% endif %}
+                {% elif not c.contract_active %}
+                    <small style="color:#dc2626; font-weight:600;" title="Cliente senza contratto attivo: ogni richiesta è a pagamento">
+                        <i class="fas fa-euro-sign"></i> sempre a pagamento
+                    </small>
+                {% elif c.tipologia_servizio %}
+                    <small style="color:var(--dr-gray-dark);">profilo «{{ prof }}» — orari di default</small>
                 {% else %}
-                <small style="color:var(--dr-gray);">— da profilo default —</small>
+                    <small style="color:#92400e;" title="Contratto attivo ma profilo orario non assegnato">
+                        <i class="fas fa-exclamation-triangle"></i> profilo non assegnato
+                    </small>
                 {% endif %}
             </div>
             <div>

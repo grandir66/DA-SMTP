@@ -130,75 +130,143 @@
 </section>
 
 <!-- Lista mappature -->
+<style>
+.h24-edit-input {
+    width:100%; padding:0.3rem 0.5rem; font-size:0.85rem;
+    border:1px solid transparent; border-radius:4px; background:transparent;
+    font-family:ui-monospace,monospace; transition:all 0.15s;
+}
+.h24-edit-input:hover { border-color:#cbd5e1; background:#fff; }
+.h24-edit-input:focus { border-color:#2563eb; background:#fff; outline:none;
+    box-shadow:0 0 0 3px rgba(37,99,235,0.15); }
+.h24-edit-input.dirty { background:#fef9c3; border-color:#facc15; }
+.h24-row-saved { background:#dcfce7 !important; transition:background 0.5s; }
+.h24-fee-input { text-align:right; font-weight:600; }
+.h24-tr-disabled { opacity:0.55; }
+.h24-actions-cell { display:flex; gap:0.3rem; align-items:center; }
+.h24-save-btn {
+    background:#2563eb; color:#fff; border:none; padding:0.3rem 0.7rem;
+    border-radius:4px; cursor:pointer; font-size:0.78rem;
+    opacity:0.5; transition:opacity 0.2s;
+}
+.h24-save-btn.has-changes { opacity:1; box-shadow:0 0 0 2px rgba(37,99,235,0.3); }
+.h24-save-btn:hover { background:#1d4ed8; }
+.match-pill { font-size:0.65rem; padding:1px 5px; border-radius:8px;
+              font-weight:600; margin-right:4px; vertical-align:middle; }
+.match-pill.email { background:#dbeafe; color:#1e40af; }
+.match-pill.dom   { background:#f1f5f9; color:#475569; }
+</style>
+
 <div class="table-outer">
     <div class="table-scroll">
         <table class="fw-table">
             <thead>
                 <tr>
-                    <th>Match<br>
+                    <th style="width:40px; text-align:center;">Tipo</th>
+                    <th style="width:240px;">Email specifica<br>
                         <small style="font-weight:400; color:#64748b;">
-                            email specifica o dominio
+                            vince sul dominio
                         </small></th>
-                    <th>Mailbox H24<br>
+                    <th style="width:160px;">Dominio<br>
                         <small style="font-weight:400; color:#64748b;">
-                            (mostrata nel pulsante mailto)
+                            catch-all dominio
                         </small></th>
-                    <th style="text-align:right;">Importo<br>
+                    <th style="width:240px;">Mailbox H24 *<br>
                         <small style="font-weight:400; color:#64748b;">
-                            override
+                            destinazione mailto
+                        </small></th>
+                    <th style="width:100px; text-align:right;">Importo €<br>
+                        <small style="font-weight:400; color:#64748b;">
+                            (vuoto=default)
                         </small></th>
                     <th>Note interne</th>
-                    <th>Stato</th>
-                    <th>Aggiornato</th>
-                    <th style="width:100px;">Azioni</th>
+                    <th style="width:80px; text-align:center;">Attivo</th>
+                    <th style="width:130px;">Aggiornato</th>
+                    <th style="width:120px;">Azioni</th>
                 </tr>
             </thead>
             <tbody>
                 {% for t in targets %}
-                <tr {% if not t.enabled %}style="background:#f8fafc; color:#94a3b8;"{% endif %}>
-                    <td>
+                <tr id="row-{{ t.id }}" {% if not t.enabled %}class="h24-tr-disabled"{% endif %}>
+                    <td style="text-align:center;">
                         {% if t.source_email %}
-                        <span class="pill pill-info" style="margin-right:0.3rem;" title="Match esatto sull'indirizzo">email</span>
-                        <code>{{ t.source_email }}</code>
+                        <span class="match-pill email" title="Match esatto sull'indirizzo">EM</span>
                         {% else %}
-                        <span class="pill pill-muted" style="margin-right:0.3rem;" title="Match su tutti i mittenti del dominio">dom</span>
-                        <code>{{ t.source_domain }}</code>
+                        <span class="match-pill dom" title="Match su tutti i mittenti del dominio">DM</span>
                         {% endif %}
                     </td>
                     <td>
-                        <i class="fas fa-arrow-right" style="color:#94a3b8;"></i>
-                        <code>{{ t.h24_alias }}</code>
+                        <form method="post" action="{{ url_for('h24_codes.targets_upsert_view') }}"
+                              id="form-{{ t.id }}" style="display:contents;">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="id" value="{{ t.id }}">
+                            <input type="email" class="h24-edit-input" name="source_email"
+                                   value="{{ t.source_email or '' }}"
+                                   placeholder="es. nome@gmail.com (vuoto = match dominio)"
+                                   onchange="markDirty('{{ t.id }}')">
+                        </form>
                     </td>
-                    <td style="text-align:right;">
-                        {% if t.urgent_fee_eur %}
-                        <strong>{{ t.urgent_fee_eur }} €</strong>
-                        {% else %}
-                        <small style="color:#94a3b8;">(default)</small>
-                        {% endif %}
-                    </td>
-                    <td><small>{{ t.note or '—' }}</small></td>
                     <td>
-                        {% if t.enabled %}
-                        <span class="pill pill-success">attivo</span>
-                        {% else %}
-                        <span class="pill pill-muted">spento</span>
-                        {% endif %}
+                        <input type="text" class="h24-edit-input" name="source_domain"
+                               form="form-{{ t.id }}"
+                               value="{{ t.source_domain or '' }}"
+                               placeholder="es. datia.it"
+                               pattern="[a-z0-9.-]+\.[a-z]{2,}"
+                               onchange="markDirty('{{ t.id }}')"
+                               style="text-transform:lowercase;">
                     </td>
-                    <td><small>{{ t.updated_at }}</small></td>
                     <td>
+                        <input type="email" class="h24-edit-input" name="h24_alias"
+                               form="form-{{ t.id }}" required
+                               value="{{ t.h24_alias }}"
+                               onchange="markDirty('{{ t.id }}')"
+                               style="text-transform:lowercase; font-weight:500;">
+                    </td>
+                    <td>
+                        <input type="number" class="h24-edit-input h24-fee-input" name="urgent_fee_eur"
+                               form="form-{{ t.id }}"
+                               value="{{ t.urgent_fee_eur or '' }}"
+                               placeholder="default" min="0" max="10000"
+                               onchange="markDirty('{{ t.id }}')">
+                    </td>
+                    <td>
+                        <input type="text" class="h24-edit-input" name="note"
+                               form="form-{{ t.id }}"
+                               value="{{ t.note or '' }}"
+                               placeholder="note libere"
+                               onchange="markDirty('{{ t.id }}')"
+                               style="font-family:inherit;">
+                    </td>
+                    <td style="text-align:center;">
+                        <label style="display:inline-flex; align-items:center; cursor:pointer;">
+                            <input type="checkbox" name="enabled" value="1"
+                                   form="form-{{ t.id }}"
+                                   {% if t.enabled %}checked{% endif %}
+                                   onchange="markDirty('{{ t.id }}')"
+                                   style="cursor:pointer;">
+                        </label>
+                    </td>
+                    <td><small style="color:#64748b;">{{ t.updated_at }}</small></td>
+                    <td class="h24-actions-cell">
+                        <button type="submit" form="form-{{ t.id }}"
+                                id="save-{{ t.id }}" class="h24-save-btn"
+                                title="Salva modifiche">
+                            <i class="fas fa-save"></i> Salva
+                        </button>
                         <form method="post"
                               action="{{ url_for('h24_codes.targets_delete_view', target_id=t.id) }}"
                               style="display:inline;"
-                              onsubmit="return confirm('Eliminare la mappatura {{ t.source_domain }} → {{ t.h24_alias }}?');">
+                              onsubmit="return confirm('Eliminare la mappatura definitivamente?');">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <button class="dr-btn dr-btn-danger" title="Elimina">
+                            <button class="dr-btn dr-btn-danger" title="Elimina"
+                                    style="padding:0.3rem 0.5rem;">
                                 <i class="fas fa-trash"></i>
                             </button>
                         </form>
                     </td>
                 </tr>
                 {% else %}
-                <tr><td colspan="7" style="text-align:center; color:#94a3b8; padding:2rem;">
+                <tr><td colspan="9" style="text-align:center; color:#94a3b8; padding:2rem;">
                     Nessuna mappatura configurata. L'auto-reply userà sempre
                     il fallback globale (<code>{{ fallback_alias or 'non configurato' }}</code>).
                 </td></tr>
@@ -207,4 +275,29 @@
         </table>
     </div>
 </div>
+
+<p style="font-size:0.78rem; color:#64748b; margin-top:0.6rem;">
+<i class="fas fa-pen-to-square" style="margin-right:4px;"></i>
+Le righe sono editabili: modifica i campi e premi <kbd>Salva</kbd>. Le modifiche
+non salvate sono evidenziate in giallo. Il pulsante Salva diventa attivo solo
+se ci sono modifiche pendenti.
+</p>
+
+<script>
+function markDirty(rowId) {
+    const row = document.getElementById('row-' + rowId);
+    const btn = document.getElementById('save-' + rowId);
+    if (row) {
+        row.querySelectorAll('.h24-edit-input').forEach(el => {
+            // marca solo i campi modificati (rispetto a default attribute)
+            if (el.value !== (el.defaultValue || '')) {
+                el.classList.add('dirty');
+            } else {
+                el.classList.remove('dirty');
+            }
+        });
+    }
+    if (btn) btn.classList.add('has-changes');
+}
+</script>
 {% endblock %}
