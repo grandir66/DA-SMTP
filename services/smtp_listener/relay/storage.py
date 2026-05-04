@@ -272,6 +272,21 @@ CREATE TABLE IF NOT EXISTS error_occurrences_local (
 );
 CREATE INDEX IF NOT EXISTS idx_occurrences_active
     ON error_occurrences_local(aggregation_id, last_seen DESC);
+
+-- H24 multi-brand: cache mappatura source_domain → h24_alias.
+-- Sync periodico da admin via /api/v1/relay/h24-targets/active.
+-- Usato da auto_reply per popolare {{ h24_inbound_alias }} basato sul
+-- dominio del MITTENTE (Fase E).
+CREATE TABLE IF NOT EXISTS h24_targets_cache (
+    id              INTEGER PRIMARY KEY,
+    source_domain   TEXT NOT NULL UNIQUE,
+    h24_alias       TEXT NOT NULL,
+    urgent_fee_eur  INTEGER,
+    enabled         INTEGER NOT NULL DEFAULT 1,
+    synced_at       TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_h24_targets_active
+    ON h24_targets_cache(source_domain) WHERE enabled = 1;
 """
 
 
@@ -891,6 +906,51 @@ class Storage:
                    WHERE aggregation_id = ? AND fingerprint = ?""",
                 (pending_until_iso, aggregation_id, fingerprint),
             )
+
+    # ----------------------------------- H24 targets cache (multi-brand) --
+
+    def replace_h24_targets(self, targets: list[dict[str, Any]]) -> int:
+        """Sostituisce la cache mappatura source_domain → h24_alias.
+        Chiamato dal sync periodico (Fase E).
+        """
+        synced = _now_iso()
+        with self.transaction() as conn:
+            conn.execute("DELETE FROM h24_targets_cache;")
+            for t in targets:
+                if not t.get("source_domain") or not t.get("h24_alias"):
+                    continue
+                conn.execute(
+                    """INSERT INTO h24_targets_cache
+                           (id, source_domain, h24_alias, urgent_fee_eur,
+                            enabled, synced_at)
+                       VALUES (?, ?, ?, ?, ?, ?)""",
+                    (
+                        int(t["id"]),
+                        (t["source_domain"] or "").strip().lower(),
+                        (t["h24_alias"] or "").strip().lower(),
+                        int(t["urgent_fee_eur"]) if t.get("urgent_fee_eur") not in (None, "") else None,
+                        1 if t.get("enabled", True) else 0,
+                        synced,
+                    ),
+                )
+            self._set_sync_meta(conn, "h24_targets", synced)
+        return len(targets)
+
+    def find_h24_target_by_domain(self, source_domain: str) -> dict[str, Any] | None:
+        """Lookup brand-aware: dato il dominio del mittente, ritorna l'alias
+        H24 da inserire nel mailto. Usato da auto_reply.build_context."""
+        d = (source_domain or "").strip().lower()
+        if not d:
+            return None
+        with self._connect() as conn:
+            row = conn.execute(
+                """SELECT * FROM h24_targets_cache
+                     WHERE source_domain = ? AND enabled = 1""",
+                (d,),
+            ).fetchone()
+            return dict(row) if row else None
+
+    # ------------------------------------------------------ pending tickets --
 
     def find_due_pending_occurrences(self, now_iso: str | None = None) -> list[sqlite3.Row]:
         """Restituisce le occurrences in timer mode che hanno superato la scadenza

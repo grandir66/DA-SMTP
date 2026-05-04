@@ -112,6 +112,15 @@ class CustomerGroupsPayload:
 
 
 @dataclass
+class H24TargetsPayload:
+    """Mappatura source_domain → h24_alias multi-brand (Fase E).
+    Cached lato listener per popolare h24_inbound_alias in build_context auto_reply.
+    """
+    synced_at: str
+    targets: list[dict[str, Any]] = field(default_factory=list)
+
+
+@dataclass
 class PrivacyBypassPayload:
     """Lista privacy-bypass attiva (migration 011 admin).
 
@@ -541,6 +550,14 @@ class StormshieldManagerBackend(ManagerBackend):
         return AggregationsPayload(
             synced_at=data.get("synced_at", ""),
             aggregations=list(data.get("aggregations", [])),
+        )
+
+    def fetch_active_h24_targets(self) -> H24TargetsPayload:
+        """Mappatura source_domain → h24_alias (Fase E)."""
+        data = self._get_json("/api/v1/relay/h24-targets/active")
+        return H24TargetsPayload(
+            synced_at=data.get("synced_at", ""),
+            targets=list(data.get("targets", [])),
         )
 
     def replicate_occurrence(self, agg_id: int, payload: dict[str, Any]) -> bool:

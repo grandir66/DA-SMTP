@@ -356,6 +356,27 @@ def aggregations_active():
     }), 200
 
 
+@api_bp.route("/h24-targets/active", methods=["GET"])
+@require_api_key
+def h24_targets_active():
+    """Mappatura source_domain → h24_alias per multi-brand (Fase E).
+    Sincronizzato dal listener per popolare {{ h24_inbound_alias }} nei
+    template auto_reply basato sul dominio del mittente."""
+    storage = _storage()
+    rows = storage.list_h24_targets(only_enabled=True)
+    out = [{
+        "id": int(r["id"]),
+        "source_domain": r["source_domain"],
+        "h24_alias": r["h24_alias"],
+        "urgent_fee_eur": r["urgent_fee_eur"],
+        "enabled": bool(r["enabled"]),
+    } for r in rows]
+    return jsonify({
+        "synced_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "targets": out,
+    }), 200
+
+
 @api_bp.route("/events", methods=["POST"])
 @require_api_key
 def events_post():
@@ -693,6 +714,21 @@ def auth_codes_validate():
         "usage_id": None,
         "extracted_from_subject": extracted,
     }), 200
+
+
+@api_bp.route("/maintenance/cleanup-oneshot-codes", methods=["POST"])
+@require_api_key
+def maintenance_cleanup_oneshot():
+    """Cleanup nightly dei codici monouso scaduti e non usati.
+    Chiamato dal listener scheduler (Fase E).
+    """
+    body = request.get_json(silent=True) or {}
+    try:
+        days = int(body.get("retention_days") or 7)
+    except (TypeError, ValueError):
+        days = 7
+    deleted = _storage().cleanup_expired_oneshot_codes(retention_days=days)
+    return jsonify({"ok": True, "deleted": deleted, "retention_days": days}), 200
 
 
 @api_bp.route("/auth-codes/usage/<int:usage_id>/ticket", methods=["POST"])

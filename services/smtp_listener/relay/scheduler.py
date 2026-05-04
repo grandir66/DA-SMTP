@@ -362,6 +362,71 @@ async def _pending_tickets_loop(storage: Storage, stop: asyncio.Event) -> None:
             continue
 
 
+async def _h24_maintenance_loop(cfg: RelayConfig, stop: asyncio.Event) -> None:
+    """H24 Fase E — cleanup nightly codici monouso scaduti.
+
+    Ogni 24h (sleep 86400s) chiama POST /api/v1/relay/maintenance/cleanup-oneshot-codes
+    con retention_days=7. Skippa se admin non raggiungibile (best-effort).
+    """
+    import httpx
+    interval = 86400  # 1 giorno
+    base_url = cfg.manager.base_url.rstrip("/")
+    api_key = cfg.manager.api_key
+    while not stop.is_set():
+        # Aspetta 60s al boot per non sovrapporsi al primo sync
+        try:
+            await asyncio.wait_for(stop.wait(), timeout=60)
+            break  # stop arrivato
+        except asyncio.TimeoutError:
+            pass
+        try:
+            with httpx.Client(timeout=30.0, verify=cfg.manager.verify_tls) as cli:
+                resp = cli.post(
+                    f"{base_url}/api/v1/relay/maintenance/cleanup-oneshot-codes",
+                    json={"retention_days": 7},
+                    headers={"X-API-Key": api_key},
+                )
+            if resp.status_code == 200:
+                deleted = resp.json().get("deleted", 0)
+                if deleted:
+                    logger.info("H24 maintenance: %d codici monouso scaduti eliminati", deleted)
+            else:
+                logger.warning("H24 maintenance HTTP %d: %s", resp.status_code, resp.text[:200])
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("H24 maintenance skip (admin non raggiungibile): %s", exc)
+        # Aspetta 24h o stop
+        try:
+            await asyncio.wait_for(stop.wait(), timeout=interval)
+        except asyncio.TimeoutError:
+            continue
+
+
+async def _h24_usage_flush_loop(cfg: RelayConfig, storage: Storage, stop: asyncio.Event) -> None:
+    """H24 Fase E (stub) — rendicontazione utilizzi codici permanenti al manager.
+
+    Predisposto per il futuro: ogni 5 min chiama un endpoint manager (TBD)
+    che riceve il batch di customer_h24_codes_usage non ancora reportati,
+    poi chiama mark_h24_usages_reported.
+
+    OGGI: l'endpoint manager per la rendicontazione H24 NON ESISTE ANCORA.
+    Il loop logga DEBUG e attende. Al momento dell'introduzione dell'endpoint
+    si abilita il chiamante effettivo (TODO).
+    """
+    interval = 300  # 5 min
+    while not stop.is_set():
+        try:
+            await asyncio.wait_for(stop.wait(), timeout=interval)
+        except asyncio.TimeoutError:
+            pass
+        # TODO: quando manager espone POST /api/v1/relay/h24-events:
+        #   1. lista non rendicontati via API admin (list_unreported_h24_usages)
+        #   2. POST batch al manager
+        #   3. su 200, chiama POST /api/v1/relay/auth-codes/usage/<id>/reported
+        #      (endpoint da aggiungere in admin per chiamare mark_h24_usages_reported)
+        # Per ora, log silenzioso che il loop è vivo:
+        logger.debug("H24 usage flush loop tick (rendicontazione manager non ancora attiva)")
+
+
 async def run_scheduler(cfg: RelayConfig, backend: ManagerBackend, storage: Storage) -> None:
     stop = asyncio.Event()
     tasks = [
@@ -371,6 +436,8 @@ async def run_scheduler(cfg: RelayConfig, backend: ManagerBackend, storage: Stor
         asyncio.create_task(_outbound_drain_loop(cfg, storage, stop), name="outbound_drain"),
         asyncio.create_task(_dispatch_drain_loop(cfg, backend, storage, stop), name="dispatch_drain"),
         asyncio.create_task(_pending_tickets_loop(storage, stop), name="pending_tickets"),
+        asyncio.create_task(_h24_maintenance_loop(cfg, stop), name="h24_maintenance"),
+        asyncio.create_task(_h24_usage_flush_loop(cfg, storage, stop), name="h24_usage_flush"),
     ]
 
     logger.info("Scheduler avviato con %d loop attivi", len(tasks))

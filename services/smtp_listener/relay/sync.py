@@ -115,6 +115,18 @@ def sync_customers_and_rules(backend: ManagerBackend, storage: Storage) -> dict[
         logger.warning("Sync privacy bypass fallito: %s", exc)
         result["errors"].append(f"privacy_bypass: {exc}")
 
+    # H24 Fase E — sync mappatura source_domain → h24_alias (multi-brand)
+    try:
+        h24t_payload = backend.fetch_active_h24_targets()
+        n = storage.replace_h24_targets(h24t_payload.targets)
+        result["h24_targets"] = {"synced_at": h24t_payload.synced_at, "count": n}
+        if n:
+            logger.info("Sync H24 targets OK: %d mappature", n)
+    except (ManagerError, AttributeError) as exc:
+        # AttributeError: backend pre-Fase-E senza fetch_active_h24_targets
+        logger.debug("Sync H24 targets skip/fallito: %s", exc)
+        result["errors"].append(f"h24_targets: {exc}")
+
     return result
 
 

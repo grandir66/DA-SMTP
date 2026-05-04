@@ -2857,6 +2857,20 @@ class SqliteStorage(Storage):
             )
             return cur.rowcount > 0
 
+    def cleanup_expired_oneshot_codes(self, *, retention_days: int = 7) -> int:
+        """Cancella i codici monouso scaduti da più di N giorni che non sono
+        mai stati usati. Mantiene per audit i codici usati (anche se scaduti).
+        Eseguito nightly dallo scheduler listener (Fase E).
+        """
+        with self.transaction() as conn:
+            cur = conn.execute(
+                """DELETE FROM authorization_codes
+                    WHERE used_at IS NULL
+                      AND valid_until < datetime('now', '-' || ? || ' days')""",
+                (int(retention_days),),
+            )
+            return cur.rowcount or 0
+
     def list_unreported_h24_usages(self, *, limit: int = 500) -> list[dict[str, Any]]:
         """Per la rendicontazione futura verso il manager. Restituisce gli
         usage non ancora reported_to_manager_at."""
