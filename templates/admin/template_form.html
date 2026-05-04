@@ -2,13 +2,96 @@
 {% block title %}{{ 'Nuovo template' if is_new else record.name }}{% endblock %}
 
 {% block extra_head %}
+<!-- CodeMirror 5 — editor HTML con syntax highlighting via CDN -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/eclipse.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/htmlmixed/htmlmixed.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/xml/xml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/css/css.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closetag.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchtags.min.js"></script>
+
 <style>
     .tf-row { display:grid; grid-template-columns:160px 1fr; gap:0.8rem; align-items:start; margin-bottom:0.7rem; }
     .tf-row label { font-weight:500; padding-top:0.4rem; color:#0b2a4a; font-size:0.88rem; }
     .tf-row input[type=text], .tf-row textarea { width:100%; padding:0.45rem 0.6rem; border:1px solid #cbd5e1; border-radius:5px; font-family:inherit; font-size:0.88rem; }
     .tf-row .help { font-size:0.78rem; color:#64748b; margin-top:0.2rem; }
-    textarea.html-editor { font-family:ui-monospace, Menlo, monospace; font-size:0.82rem; min-height:240px; }
     .att-row { display:flex; align-items:center; gap:0.5rem; padding:0.4rem 0.6rem; border:1px solid #cbd5e1; border-radius:5px; margin-bottom:0.3rem; background:#fff; }
+
+    /* === Editor HTML + preview side-by-side === */
+    .editor-grid {
+        display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;
+        margin-top: 0.4rem;
+    }
+    .editor-pane, .preview-pane {
+        display: flex; flex-direction: column;
+        border: 1px solid #cbd5e1; border-radius: 6px; overflow: hidden;
+        background: #fff;
+    }
+    .pane-header {
+        display: flex; align-items: center; gap: 0.5rem;
+        padding: 0.4rem 0.7rem; background: #f1f5f9;
+        border-bottom: 1px solid #cbd5e1;
+        font-size: 0.78rem; font-weight: 600; color: #475569;
+    }
+    .pane-header .switch { margin-left: auto; }
+    .pane-header button {
+        padding: 0.2rem 0.55rem; border: 1px solid #cbd5e1; background: white;
+        border-radius: 4px; font-size: 0.72rem; cursor: pointer;
+    }
+    .pane-header button.active { background: var(--primary-dark); color: white; border-color: var(--primary-dark); }
+
+    /* CodeMirror */
+    .CodeMirror { height: 480px; font-size: 0.82rem; }
+
+    /* Preview */
+    .preview-iframe {
+        width: 100%; height: 480px; border: 0; background: white;
+    }
+    .preview-text {
+        height: 480px; padding: 1rem; overflow: auto;
+        font-family: ui-monospace, monospace; font-size: 0.82rem;
+        white-space: pre-wrap; background: #fafafa;
+    }
+    .preview-subject {
+        padding: 0.5rem 0.8rem; background: #fffbeb;
+        border-bottom: 1px solid #f6c23e; font-size: 0.85rem;
+        font-family: ui-monospace, monospace;
+    }
+    .preview-subject .lbl { color: #92400e; font-weight: 600; margin-right: 0.4rem; }
+
+    .preview-errors {
+        background: #fee2e2; color: #991b1b; padding: 0.5rem 0.8rem;
+        font-size: 0.78rem; border-bottom: 1px solid #fca5a5;
+    }
+
+    /* Toolbar variabili Jinja */
+    .var-toolbar {
+        display: flex; gap: 0.3rem; flex-wrap: wrap; padding: 0.4rem;
+        background: #f8fafc; border-bottom: 1px solid #cbd5e1;
+    }
+    .var-btn {
+        background: #e0e7ff; color: #4338ca; border: 1px solid #c7d2fe;
+        padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.72rem;
+        font-family: ui-monospace, monospace; cursor: pointer; user-select: none;
+    }
+    .var-btn:hover { background: #c7d2fe; }
+    .var-btn.h24 { background: #fee2e2; color: #991b1b; border-color: #fecaca; }
+    .var-btn.h24:hover { background: #fecaca; }
+
+    .live-badge {
+        display: inline-flex; align-items: center; gap: 0.3rem;
+        background: #d1fae5; color: #065f46; padding: 0.05rem 0.4rem;
+        border-radius: 9px; font-size: 0.7rem; font-weight: 600;
+    }
+    .live-badge.stale { background: #fef3c7; color: #92400e; }
+    .live-dot {
+        width: 6px; height: 6px; border-radius: 50%;
+        background: currentColor; animation: livedot 1.5s infinite;
+    }
+    @keyframes livedot { 50% { opacity: 0.3; } }
 </style>
 {% endblock %}
 
@@ -22,7 +105,7 @@
     </div>
 </section>
 
-<form method="post" action="" style="max-width:900px;">
+<form method="post" action="" style="max-width:1400px;">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 <section class="dr-card">
     <div class="tf-row">
@@ -35,19 +118,72 @@
     </div>
     <div class="tf-row">
         <label>Oggetto *</label>
-        <input type="text" name="subject_tmpl" required value="{{ record.subject_tmpl or '' }}" placeholder="Re: {{ '{{subject}}' }} — risposta fuori orario">
+        <input type="text" name="subject_tmpl" id="subject_tmpl" required
+               value="{{ record.subject_tmpl or '' }}"
+               placeholder="Re: {{ '{{subject}}' }} — risposta fuori orario"
+               oninput="schedulePreview()">
     </div>
+
     <div class="tf-row">
-        <label>Corpo HTML *</label>
+        <label>Editor HTML *
+            <span class="live-badge" id="liveBadge">
+                <span class="live-dot"></span> Anteprima live
+            </span>
+        </label>
         <div>
-            <textarea name="body_html_tmpl" class="html-editor" required>{{ record.body_html_tmpl or '' }}</textarea>
-            <div class="help">Jinja2 sandboxed. Variabili disponibili: <code>{{ '{{ from_address }}' }}</code>, <code>{{ '{{ codice_cliente }}' }}</code>, <code>{{ '{{ subject }}' }}</code>, <code>{{ '{{ auth_code }}' }}</code>.</div>
+            <div class="var-toolbar">
+                <small style="color:#64748b; padding:0.2rem 0.4rem;">Inserisci variabile:</small>
+                <span class="var-btn" onclick="insertVar('{{ '{{ subject }}' }}')">{{ '{{ subject }}' }}</span>
+                <span class="var-btn" onclick="insertVar('{{ '{{ from_address }}' }}')">{{ '{{ from_address }}' }}</span>
+                <span class="var-btn" onclick="insertVar('{{ '{{ received_at }}' }}')">{{ '{{ received_at }}' }}</span>
+                <span class="var-btn" onclick="insertVar('{{ '{{ codice_cliente }}' }}')">{{ '{{ codice_cliente }}' }}</span>
+                <span class="var-btn" onclick="insertVar('{{ '{{ ragione_sociale }}' }}')">{{ '{{ ragione_sociale }}' }}</span>
+                <span class="var-btn" onclick="insertVar('{{ '{{ ticket_id }}' }}')">{{ '{{ ticket_id }}' }}</span>
+                <span class="var-btn h24" onclick="insertVar('{{ '{{ auth_code }}' }}')">{{ '{{ auth_code }}' }}</span>
+                <span class="var-btn h24" onclick="insertVar('{{ '{{ auth_code_valid_until }}' }}')">{{ '{{ auth_code_valid_until }}' }}</span>
+                <span class="var-btn h24" onclick="insertVar('{{ '{{ h24_inbound_alias }}' }}')">{{ '{{ h24_inbound_alias }}' }}</span>
+                <span class="var-btn h24" onclick="insertVar('{{ '{{ urgent_fee }}' }}')">{{ '{{ urgent_fee }}' }}</span>
+                <span class="var-btn" onclick="insertVar('{% if h24_billable %}{% endif %}', 14)">{% raw %}{% if h24_billable %}…{% endif %}{% endraw %}</span>
+            </div>
+            <div class="editor-grid">
+                <div class="editor-pane">
+                    <div class="pane-header">
+                        <i class="fas fa-code"></i> HTML (Jinja2)
+                        <span style="margin-left:auto;">
+                            <button type="button" id="btn_html" class="active" onclick="switchEditor('html')">HTML</button>
+                            <button type="button" id="btn_text" onclick="switchEditor('text')">Testo</button>
+                        </span>
+                    </div>
+                    <textarea name="body_html_tmpl" id="body_html_tmpl" required>{{ record.body_html_tmpl or '' }}</textarea>
+                    <textarea name="body_text_tmpl" id="body_text_tmpl" style="display:none;">{{ record.body_text_tmpl or '' }}</textarea>
+                </div>
+                <div class="preview-pane">
+                    <div class="pane-header">
+                        <i class="fas fa-eye"></i> Anteprima rendering Jinja
+                        <span style="margin-left:auto;">
+                            <button type="button" id="prev_html" class="active" onclick="switchPreview('html')">HTML</button>
+                            <button type="button" id="prev_text" onclick="switchPreview('text')">Testo</button>
+                        </span>
+                    </div>
+                    <div id="preview_subject" class="preview-subject" style="display:none;"></div>
+                    <div id="preview_errors" class="preview-errors" style="display:none;"></div>
+                    <iframe id="preview_iframe" class="preview-iframe" sandbox="allow-same-origin"></iframe>
+                    <div id="preview_text" class="preview-text" style="display:none;"></div>
+                </div>
+            </div>
+            <div class="help" style="margin-top:0.5rem;">
+                <strong>Jinja2 sandboxed</strong>. Variabili disponibili (oltre a quelle in toolbar):
+                <code>{{ '{{ contract_active }}' }}</code>,
+                <code>{{ '{{ in_service }}' }}</code>,
+                <code>{{ '{{ h24_billable }}' }}</code>,
+                <code>{{ '{{ auth_code_ttl_hours }}' }}</code>.
+                L'anteprima usa context demo (subject "Backup failed", from monitoring@cliente.it,
+                cliente DEMO 12345, codice AUTH-87XK29M).
+                Auto-update: 600ms dopo l'ultima modifica.
+            </div>
         </div>
     </div>
-    <div class="tf-row">
-        <label>Corpo testo</label>
-        <textarea name="body_text_tmpl" rows="4">{{ record.body_text_tmpl or '' }}</textarea>
-    </div>
+
     <div class="tf-row">
         <label>Mittente: nome</label>
         <input type="text" name="reply_from_name" value="{{ record.reply_from_name or '' }}" placeholder="Assistenza Domarc">
@@ -110,8 +246,141 @@
 </section>
 </form>
 
-{% if not is_new %}
 <script>
+// === CodeMirror init ===
+let cmHtml = null;
+let cmText = null;
+let currentEditor = 'html';
+let currentPreview = 'html';
+let previewTimer = null;
+
+document.addEventListener('DOMContentLoaded', () => {
+    cmHtml = CodeMirror.fromTextArea(document.getElementById('body_html_tmpl'), {
+        mode: 'htmlmixed',
+        theme: 'eclipse',
+        lineNumbers: true,
+        lineWrapping: true,
+        indentUnit: 2,
+        tabSize: 2,
+        autoCloseTags: true,
+    });
+    cmText = CodeMirror.fromTextArea(document.getElementById('body_text_tmpl'), {
+        mode: null,  // plain text
+        lineNumbers: true,
+        lineWrapping: true,
+        indentUnit: 2,
+        tabSize: 2,
+    });
+    // Nascondi cmText all'inizio (default = HTML editor visibile)
+    cmText.getWrapperElement().style.display = 'none';
+
+    cmHtml.on('change', schedulePreview);
+    cmText.on('change', schedulePreview);
+
+    // Init preview
+    schedulePreview();
+});
+
+function switchEditor(which) {
+    currentEditor = which;
+    document.getElementById('btn_html').classList.toggle('active', which === 'html');
+    document.getElementById('btn_text').classList.toggle('active', which === 'text');
+    cmHtml.getWrapperElement().style.display = which === 'html' ? '' : 'none';
+    cmText.getWrapperElement().style.display = which === 'text' ? '' : 'none';
+    if (which === 'html') cmHtml.refresh(); else cmText.refresh();
+}
+
+function switchPreview(which) {
+    currentPreview = which;
+    document.getElementById('prev_html').classList.toggle('active', which === 'html');
+    document.getElementById('prev_text').classList.toggle('active', which === 'text');
+    document.getElementById('preview_iframe').style.display = which === 'html' ? '' : 'none';
+    document.getElementById('preview_text').style.display = which === 'text' ? '' : 'none';
+}
+
+function insertVar(text, cursorOffset) {
+    const cm = currentEditor === 'html' ? cmHtml : cmText;
+    if (!cm) return;
+    const cursor = cm.getCursor();
+    cm.replaceRange(text, cursor);
+    if (cursorOffset !== undefined) {
+        const newCursor = { line: cursor.line, ch: cursor.ch + cursorOffset };
+        cm.setCursor(newCursor);
+    }
+    cm.focus();
+    schedulePreview();
+}
+
+function schedulePreview() {
+    const badge = document.getElementById('liveBadge');
+    badge.classList.add('stale');
+    clearTimeout(previewTimer);
+    previewTimer = setTimeout(doPreview, 600);
+}
+
+async function doPreview() {
+    const subject = document.getElementById('subject_tmpl').value;
+    const html = cmHtml ? cmHtml.getValue() : document.getElementById('body_html_tmpl').value;
+    const text = cmText ? cmText.getValue() : document.getElementById('body_text_tmpl').value;
+    const csrfInput = document.querySelector('input[name="csrf_token"]');
+    const csrf = csrfInput ? csrfInput.value : '';
+    try {
+        const resp = await fetch('{{ url_for("templates.preview_render") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrf,
+            },
+            body: JSON.stringify({
+                subject_tmpl: subject,
+                body_html_tmpl: html,
+                body_text_tmpl: text,
+            }),
+        });
+        const data = await resp.json();
+        if (!data.ok) {
+            showErrors([data.error || 'errore']);
+            return;
+        }
+        // Subject
+        const subjBox = document.getElementById('preview_subject');
+        if (data.subject) {
+            subjBox.innerHTML = '<span class="lbl">Subject:</span>' +
+                                escapeHtml(data.subject);
+            subjBox.style.display = 'block';
+        } else {
+            subjBox.style.display = 'none';
+        }
+        // Errors
+        showErrors(data.errors || []);
+        // HTML iframe
+        const iframe = document.getElementById('preview_iframe');
+        iframe.srcdoc = data.html || '<p style="color:#94a3b8; padding:1rem; font-family:sans-serif;">— nessun contenuto HTML —</p>';
+        // Text
+        document.getElementById('preview_text').textContent = data.text || '— nessun contenuto testo —';
+        // Badge
+        document.getElementById('liveBadge').classList.remove('stale');
+    } catch (err) {
+        showErrors(['network: ' + err.message]);
+    }
+}
+
+function showErrors(errs) {
+    const box = document.getElementById('preview_errors');
+    if (!errs || !errs.length) {
+        box.style.display = 'none';
+        return;
+    }
+    box.innerHTML = '<strong><i class="fas fa-triangle-exclamation"></i> Errori Jinja:</strong> ' +
+                    errs.map(escapeHtml).join(' · ');
+    box.style.display = 'block';
+}
+
+function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+
+{% if not is_new %}
 async function uploadAtt(file) {
     if (!file) return;
     var fd = new FormData(); fd.append('file', file);
@@ -131,6 +400,12 @@ async function deleteAtt(filename) {
         else alert('Errore: ' + (res.error || ''));
     } catch (e) { alert('Errore di rete: ' + e); }
 }
-</script>
 {% endif %}
+
+// Sync CodeMirror → textarea prima del submit (CodeMirror non lo fa di default su tutti i browser)
+document.querySelector('form').addEventListener('submit', () => {
+    if (cmHtml) cmHtml.save();
+    if (cmText) cmText.save();
+});
+</script>
 {% endblock %}

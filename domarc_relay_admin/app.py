@@ -51,6 +51,14 @@ def create_app(config: AppConfig | None = None, *, init_db: bool = True) -> Flas
         # Esenzione totale del blueprint api.
         from .routes.api import api_bp as _api_bp
         csrf.exempt(_api_bp)
+        # Esento il singolo endpoint preview_render: idempotente, solo render
+        # Jinja in memoria, niente scrittura DB. Il fetch JS dal browser non
+        # passa naturalmente il token CSRF — esentarlo è la soluzione più pulita.
+        try:
+            from .routes.templates import preview_render as _tpl_preview
+            csrf.exempt(_tpl_preview)
+        except Exception:  # noqa: BLE001
+            pass
         app.extensions["domarc_csrf"] = csrf
     except Exception as exc:  # noqa: BLE001
         logging.warning("Flask-WTF CSRF non disponibile: %s — running senza protection", exc)

@@ -73,6 +73,72 @@ def form_view(template_id: int | None = None):
     return render_template("admin/template_form.html", is_new=is_new, record=record)
 
 
+@templates_bp.route("/templates/preview", methods=["POST"])
+@login_required()
+def preview_render():
+    """Render live di un template Jinja2 sandboxed con context demo.
+
+    Body JSON: {subject_tmpl, body_html_tmpl, body_text_tmpl}
+    Risposta: {ok, subject, html, text, errors[]}
+
+    Usato dall'editor HTML del form template per anteprima live.
+    """
+    body = request.get_json(silent=True) or {}
+    subject_tmpl = body.get("subject_tmpl") or ""
+    body_html_tmpl = body.get("body_html_tmpl") or ""
+    body_text_tmpl = body.get("body_text_tmpl") or ""
+
+    # Context demo: variabili comuni dei template auto-reply
+    from datetime import datetime as _dt
+    ctx = {
+        "subject": "Backup failed on srv01.cliente.it",
+        "from_address": "monitoring@cliente.it",
+        "received_at": _dt.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "codice_cliente": "12345",
+        "ragione_sociale": "Cliente Demo S.r.l.",
+        "contract_active": True,
+        "auth_code": "AUTH-87XK29M",
+        "auth_code_valid_until": "2026-05-06 22:00:00",
+        "auth_code_ttl_hours": 24,
+        "h24_inbound_alias": "h24@datia.it",
+        "h24_billable": True,
+        "urgent_fee": 250,
+        "ticket_id": "TKT-2026-001234",
+        "in_service": False,
+    }
+
+    errors = []
+    out_subject = ""
+    out_html = ""
+    out_text = ""
+    try:
+        from jinja2.sandbox import SandboxedEnvironment
+        env = SandboxedEnvironment(autoescape=False)
+        try:
+            out_subject = env.from_string(subject_tmpl).render(**ctx) if subject_tmpl else ""
+        except Exception as exc:  # noqa: BLE001
+            errors.append(f"subject: {exc}")
+        try:
+            out_html = env.from_string(body_html_tmpl).render(**ctx) if body_html_tmpl else ""
+        except Exception as exc:  # noqa: BLE001
+            errors.append(f"body_html: {exc}")
+        try:
+            out_text = env.from_string(body_text_tmpl).render(**ctx) if body_text_tmpl else ""
+        except Exception as exc:  # noqa: BLE001
+            errors.append(f"body_text: {exc}")
+    except Exception as exc:  # noqa: BLE001
+        return jsonify({"ok": False, "error": str(exc)}), 500
+
+    return jsonify({
+        "ok": True,
+        "subject": out_subject,
+        "html": out_html,
+        "text": out_text,
+        "errors": errors,
+        "context_keys": sorted(ctx.keys()),
+    }), 200
+
+
 @templates_bp.route("/templates/<int:template_id>/delete", methods=["POST"])
 @login_required(role="admin")
 def delete_view(template_id: int):

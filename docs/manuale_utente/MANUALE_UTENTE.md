@@ -608,6 +608,23 @@ Template Jinja2 per le risposte automatiche. Variabili disponibili nel contesto:
 - `h24_inbound_alias`, `urgent_fee` (multi-brand)
 - `h24_billable` (bool: monouso=true, permanente=false)
 
+### 11.1 Editor HTML con preview live
+
+![Editor HTML CodeMirror + preview live](img/15_templates_editor.png)
+
+Il form di modifica template ha un **editor HTML con syntax highlighting** (CodeMirror 5) affiancato da un'**anteprima live** che renderizza il template Jinja con context demo aggiornandosi 600ms dopo l'ultima modifica.
+
+Funzionalità:
+- **Editor CodeMirror** con `htmlmixed` mode: highlight HTML/CSS/JS, indentazione automatica, `autoCloseTags`, line numbers, line wrapping.
+- **Toolbar variabili Jinja**: pulsanti che inseriscono al cursore le variabili comuni (`{{ subject }}`, `{{ from_address }}`, `{{ auth_code }}`, ecc.). Le H24-related sono in rosso per distinguerle.
+- **Anteprima iframe sandbox**: rendering del template con contesto demo realistico (mail di alert "Backup failed", cliente "Demo SrL", codice "AUTH-87XK29M"). Sandbox per sicurezza.
+- **Preview testo**: tab dedicato per `body_text_tmpl` (versione plain text).
+- **Anteprima subject**: preview del subject renderizzato con le variabili sostituite, in alto.
+- **Errori Jinja**: se il template ha errori di sintassi, vengono mostrati in banner rosso senza bloccare l'editor.
+- **Badge "live"**: verde quando preview aggiornata, ambra durante il typing.
+
+Endpoint backend: `POST /templates/preview` (esentato CSRF perché idempotente, solo render in memoria).
+
 Template di sistema (non eliminabili):
 
 | ID | Nome | Uso |
