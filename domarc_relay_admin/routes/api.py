@@ -547,11 +547,16 @@ def _upsert_address_from_event(storage, evt: dict) -> None:
 @api_bp.route("/auth-codes", methods=["POST"])
 @require_api_key
 def auth_codes_post():
-    """Genera un codice autorizzazione (chiamato dal listener fuori orario)."""
+    """Genera un codice autorizzazione (chiamato dal listener fuori orario).
+
+    `event_uuid` opzionale: lega il codice all'evento originario per il
+    threading conversazione quando il rientro arriva sulla mailbox H24.
+    """
     body = request.get_json(silent=True) or {}
     codcli = (body.get("codice_cliente") or "").strip().upper() or None
     rule_id = body.get("rule_id")
     note = body.get("note") or None
+    event_uuid = body.get("event_uuid") or None
     try:
         ttl_hours = int(body.get("ttl_hours") or 48)
     except (TypeError, ValueError):
@@ -562,8 +567,144 @@ def auth_codes_post():
             tenant_id=tenant_id, codice_cliente=codcli,
             rule_id=int(rule_id) if rule_id else None,
             ttl_hours=ttl_hours, note=note,
+            event_uuid=event_uuid,
         )
         return jsonify(result), 200
+    except Exception as exc:  # noqa: BLE001
+        return jsonify({"ok": False, "error": str(exc)}), 500
+
+
+@api_bp.route("/auth-codes/validate", methods=["POST"])
+@require_api_key
+def auth_codes_validate():
+    """Valida un codice di autorizzazione (chiamato dal listener al rientro).
+
+    Estrae il codice dal subject (server-side) o accetta il codice esplicito,
+    poi tenta in cascata:
+      1. validate_oneshot_code(consume=True) — codice monouso
+      2. validate_h24_customer_code() — codice permanente cliente
+    Race-safe: il consume del monouso è atomico (UPDATE … WHERE used_at IS NULL).
+
+    Body request (tutti opzionali tranne `subject` o `code`):
+        {
+          "code": "AUTH-XYZ234",        // se assente, estratto da subject
+          "subject": "[OptiWize] ...",  // fallback: extract_auth_code(subject)
+          "event_uuid": "...",          // per audit + threading
+          "from_address": "...",
+          "inbound_alias": "h24@datia.it",
+          "tenant_id": 1
+        }
+
+    Response:
+        {
+          "valid": bool,
+          "kind": "oneshot" | "permanent" | null,
+          "reason": "ok" | "not_found" | "already_used" | "expired" | "revoked" | "no_code_in_subject",
+          "code": "AUTH-XYZ234",
+          "code_info": { ...record... } | null,
+          "usage_id": int | null,        // solo per permanente
+          "extracted_from_subject": bool
+        }
+    """
+    body = request.get_json(silent=True) or {}
+    tenant_id = int(body.get("tenant_id") or 1)
+    code = (body.get("code") or "").strip().upper()
+    subject = body.get("subject") or ""
+    event_uuid = body.get("event_uuid") or None
+    from_address = body.get("from_address") or None
+    inbound_alias = body.get("inbound_alias") or None
+    extracted = False
+
+    # Estrazione server-side se code non fornito
+    if not code and subject:
+        from ..h24_code_extractor import extract_auth_code
+        storage = _storage()
+        custom_re = storage.get_setting("h24.subject_extract_regex") or None
+        extracted_code = extract_auth_code(subject, custom_regex=custom_re)
+        if extracted_code:
+            code = extracted_code
+            extracted = True
+
+    if not code:
+        return jsonify({
+            "valid": False,
+            "kind": None,
+            "reason": "no_code_in_subject",
+            "code": None,
+            "code_info": None,
+            "usage_id": None,
+            "extracted_from_subject": False,
+        }), 200
+
+    storage = _storage()
+
+    # Cascade 1: oneshot (consume atomico).
+    # I codici monouso sono salvati in DB SENZA prefisso (es. "87UDL5"),
+    # ma il mailto del template usa "AUTH-87UDL5" per leggibilità.
+    # Stripiamo il prefisso AUTH- per la lookup oneshot, lasciamo intatto
+    # il codice originale (con prefisso) per la cascade permanente.
+    oneshot_code = code[5:] if code.startswith("AUTH-") else code
+    used_by = f"h24:{inbound_alias}" if inbound_alias else "h24"
+    one = storage.validate_oneshot_code(
+        oneshot_code, consume=True, used_by=used_by, tenant_id=tenant_id,
+    )
+    if one["valid"]:
+        # Aggiorna event_uuid sul codice se non presente (legame post-fact)
+        # e logga from_address se mancante
+        return jsonify({
+            "valid": True,
+            "kind": "oneshot",
+            "reason": "ok",
+            "code": code,
+            "code_info": one["code_info"],
+            "usage_id": None,
+            "extracted_from_subject": extracted,
+        }), 200
+
+    # Cascade 2: permanente
+    perm = storage.validate_h24_customer_code(
+        code, tenant_id=tenant_id, event_uuid=event_uuid,
+        from_address=from_address, subject=subject, inbound_alias=inbound_alias,
+    )
+    if perm["valid"]:
+        return jsonify({
+            "valid": True,
+            "kind": "permanent",
+            "reason": "ok",
+            "code": code,
+            "code_info": perm["code_info"],
+            "usage_id": perm.get("usage_id"),
+            "extracted_from_subject": extracted,
+        }), 200
+
+    # Nessuno valido: prefer reason più informativo (oneshot > permanente)
+    # Se oneshot ha trovato il codice (ma scaduto/usato), usa quel reason.
+    # Se non l'ha trovato per niente, ricadi sul reason permanente.
+    final_reason = (one["reason"]
+                    if one["reason"] in ("already_used", "expired")
+                    else perm["reason"])
+    final_info = one["code_info"] or perm["code_info"]
+    return jsonify({
+        "valid": False,
+        "kind": None,
+        "reason": final_reason,
+        "code": code,
+        "code_info": final_info,
+        "usage_id": None,
+        "extracted_from_subject": extracted,
+    }), 200
+
+
+@api_bp.route("/auth-codes/usage/<int:usage_id>/ticket", methods=["POST"])
+@require_api_key
+def auth_codes_usage_ticket(usage_id: int):
+    """Aggiorna il ticket_id su una usage_id (chiamato dal listener post
+    apertura ticket sul manager)."""
+    body = request.get_json(silent=True) or {}
+    ticket_id = (body.get("ticket_id") or "").strip() or None
+    try:
+        ok = _storage().update_h24_usage_ticket(usage_id, ticket_id)
+        return jsonify({"ok": ok}), 200
     except Exception as exc:  # noqa: BLE001
         return jsonify({"ok": False, "error": str(exc)}), 500
 
