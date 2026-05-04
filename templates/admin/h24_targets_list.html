@@ -60,48 +60,72 @@
 <!-- Form -->
 <section class="dr-section">
     <h3><i class="fas fa-plus-circle"></i> Aggiungi / modifica mappatura</h3>
+
+    <div style="background:#fef3c7; border-left:4px solid #d97706; padding:8px 12px; border-radius:4px; font-size:0.85rem; color:#374151; margin-bottom:0.7rem;">
+        ⚠ <strong>Per webmail pubblici (gmail, yahoo, libero, outlook.com, icloud, …)</strong>
+        usa il campo <em>indirizzo completo</em> e lascia vuoto il dominio.
+        Mappare un dominio pubblico catturerebbe TUTTI i mittenti di quella
+        webmail (rischio sicurezza).
+    </div>
+
     <form method="post" action="{{ url_for('h24_codes.targets_upsert_view') }}"
-          style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:end;">
+          style="display:grid; grid-template-columns:1fr 1fr; gap:0.7rem; align-items:end;">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
         <div>
-            <small><strong>Dominio del cliente *</strong>
-                <span style="color:#64748b;">(es. il dominio @ del mittente)</span>
+            <small><strong>Indirizzo email completo</strong>
+                <span style="color:#64748b;">(uso: webmail pubblici)</span>
             </small><br>
-            <input type="text" name="source_domain" required
+            <input type="email" name="source_email"
+                   placeholder="es. r.grandi@gmail.com"
+                   style="width:100%; text-transform:lowercase;">
+            <div style="font-size:0.78rem; color:#64748b;">Match SOLO su questo indirizzo. Vince sul dominio.</div>
+        </div>
+
+        <div>
+            <small><strong>Oppure dominio cliente</strong>
+                <span style="color:#64748b;">(uso: clienti aziendali)</span>
+            </small><br>
+            <input type="text" name="source_domain"
                    placeholder="es. datia.it"
                    pattern="[a-z0-9.-]+\.[a-z]{2,}"
-                   style="text-transform:lowercase;">
+                   style="width:100%; text-transform:lowercase;">
+            <div style="font-size:0.78rem; color:#64748b;">Match TUTTI i mittenti di questo dominio.</div>
         </div>
-        <div>
+
+        <div style="grid-column: 1 / -1;">
             <small><strong>Mailbox H24 da mostrare nel pulsante *</strong>
                 <span style="color:#64748b;">(dove arriva il rientro)</span>
             </small><br>
             <input type="email" name="h24_alias" required
                    placeholder="es. h24@datia.it"
-                   style="text-transform:lowercase;">
+                   style="width:100%; text-transform:lowercase;">
         </div>
+
         <div>
             <small>Importo override (€)<br>
                 <span style="color:#64748b;">solo se diverso dal default</span>
             </small><br>
             <input type="number" name="urgent_fee_eur"
                    placeholder="default settings" min="0" max="10000"
-                   style="width:140px;">
+                   style="width:100%;">
         </div>
-        <div style="flex:1; min-width:200px;">
+
+        <div>
             <small>Note interne (per audit)</small><br>
             <input type="text" name="note" style="width:100%;"
-                   placeholder="es. 'pilota 2026', 'attivato dopo migrazione'">
+                   placeholder="es. 'pilota 2026', 'test gmail Riccardo'">
         </div>
-        <div>
-            <label style="display:flex; align-items:center; gap:0.3rem;">
+
+        <div style="grid-column: 1 / -1; display:flex; gap:0.7rem; align-items:center;">
+            <label style="display:flex; align-items:center; gap:0.3rem; font-weight:400;">
                 <input type="checkbox" name="enabled" value="1" checked>
                 <small>Attivo</small>
             </label>
+            <button class="dr-btn dr-btn-primary" style="width:auto;">
+                <i class="fas fa-save"></i> Salva
+            </button>
         </div>
-        <button class="dr-btn dr-btn-primary" style="width:auto;">
-            <i class="fas fa-save"></i> Salva
-        </button>
     </form>
 </section>
 
@@ -111,9 +135,9 @@
         <table class="fw-table">
             <thead>
                 <tr>
-                    <th>Dominio del cliente<br>
+                    <th>Match<br>
                         <small style="font-weight:400; color:#64748b;">
-                            (lookup su mittente)
+                            email specifica o dominio
                         </small></th>
                     <th>Mailbox H24<br>
                         <small style="font-weight:400; color:#64748b;">
@@ -132,7 +156,15 @@
             <tbody>
                 {% for t in targets %}
                 <tr {% if not t.enabled %}style="background:#f8fafc; color:#94a3b8;"{% endif %}>
-                    <td><code>{{ t.source_domain }}</code></td>
+                    <td>
+                        {% if t.source_email %}
+                        <span class="pill pill-info" style="margin-right:0.3rem;" title="Match esatto sull'indirizzo">email</span>
+                        <code>{{ t.source_email }}</code>
+                        {% else %}
+                        <span class="pill pill-muted" style="margin-right:0.3rem;" title="Match su tutti i mittenti del dominio">dom</span>
+                        <code>{{ t.source_domain }}</code>
+                        {% endif %}
+                    </td>
                     <td>
                         <i class="fas fa-arrow-right" style="color:#94a3b8;"></i>
                         <code>{{ t.h24_alias }}</code>

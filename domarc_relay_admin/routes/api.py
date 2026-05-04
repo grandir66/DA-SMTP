@@ -367,6 +367,7 @@ def h24_targets_active():
     out = [{
         "id": int(r["id"]),
         "source_domain": r["source_domain"],
+        "source_email": r.get("source_email") or None,
         "h24_alias": r["h24_alias"],
         "urgent_fee_eur": r["urgent_fee_eur"],
         "enabled": bool(r["enabled"]),

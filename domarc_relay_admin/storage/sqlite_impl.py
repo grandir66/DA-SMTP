@@ -2916,6 +2916,41 @@ class SqliteStorage(Storage):
                 params,
             ).fetchall()]
 
+    def get_h24_target_by_email(self, from_address: str, *,
+                                   tenant_id: int = 1) -> dict[str, Any] | None:
+        """Lookup cascade: prima match esatto su source_email (per webmail
+        pubblici tipo gmail/yahoo dove il dominio non è mappabile in
+        sicurezza), poi fallback su source_domain.
+        """
+        em = (from_address or "").strip().lower()
+        if not em or "@" not in em:
+            return None
+        domain = em.rsplit("@", 1)[1]
+        with self._connect() as conn:
+            # 1. Match esatto sull'email completa (priorità più alta)
+            row = conn.execute(
+                """SELECT * FROM smtp_relay_h24_targets
+                     WHERE tenant_id = ? AND source_email = ? AND enabled = 1
+                     LIMIT 1""",
+                (int(tenant_id), em),
+            ).fetchone()
+            if row:
+                return dict(row)
+            # 2. Fallback su source_domain (solo se non c'è source_email per
+            #    quel dominio: evitiamo che un'entry domain-only catturi
+            #    mittenti di webmail pubblici).
+            row = conn.execute(
+                """SELECT * FROM smtp_relay_h24_targets
+                     WHERE tenant_id = ?
+                       AND source_domain = ?
+                       AND (source_email IS NULL OR source_email = '')
+                       AND enabled = 1
+                     LIMIT 1""",
+                (int(tenant_id), domain),
+            ).fetchone()
+            return dict(row) if row else None
+
+    # Backward-compat: alcuni call site chiamano ancora _by_domain
     def get_h24_target_by_domain(self, source_domain: str, *,
                                     tenant_id: int = 1) -> dict[str, Any] | None:
         d = (source_domain or "").strip().lower()
@@ -2924,7 +2959,11 @@ class SqliteStorage(Storage):
         with self._connect() as conn:
             row = conn.execute(
                 """SELECT * FROM smtp_relay_h24_targets
-                     WHERE tenant_id = ? AND source_domain = ? AND enabled = 1""",
+                     WHERE tenant_id = ?
+                       AND source_domain = ?
+                       AND (source_email IS NULL OR source_email = '')
+                       AND enabled = 1
+                     LIMIT 1""",
                 (int(tenant_id), d),
             ).fetchone()
             return dict(row) if row else None
@@ -2935,31 +2974,47 @@ class SqliteStorage(Storage):
                             h24_alias: str,
                             urgent_fee_eur: int | None = None,
                             note: str | None = None,
-                            enabled: bool = True) -> int:
-        sd = (source_domain or "").strip().lower()
+                            enabled: bool = True,
+                            source_email: str | None = None) -> int:
+        """Insert/update mappatura H24.
+
+        Modalità:
+        - source_email valorizzato: match per indirizzo completo (priorità).
+          source_domain viene comunque popolato col dominio estratto per
+          mantenere la NOT NULL constraint sul DB.
+        - source_email vuoto: match per dominio (catch-all per quel dominio).
+        """
         ha = (h24_alias or "").strip().lower()
-        if not sd or "@" in sd:
-            raise ValueError("source_domain non valido (deve essere un dominio, non email)")
+        em = (source_email or "").strip().lower() or None
         if "@" not in ha:
             raise ValueError("h24_alias deve essere un'email completa (es. h24@domarc.it)")
+        if em:
+            if "@" not in em:
+                raise ValueError("source_email non valido (deve essere email completa)")
+            sd = em.rsplit("@", 1)[1]  # estrai dominio dall'email
+        else:
+            sd = (source_domain or "").strip().lower()
+            if not sd or "@" in sd:
+                raise ValueError("source_domain non valido (deve essere un dominio, non email)")
         with self.transaction() as conn:
             if target_id:
                 conn.execute(
                     """UPDATE smtp_relay_h24_targets SET
-                           source_domain = ?, h24_alias = ?,
+                           source_domain = ?, source_email = ?,
+                           h24_alias = ?,
                            urgent_fee_eur = ?, note = ?, enabled = ?,
                            updated_at = datetime('now')
                        WHERE id = ?""",
-                    (sd, ha, urgent_fee_eur, note,
+                    (sd, em, ha, urgent_fee_eur, note,
                      1 if enabled else 0, int(target_id)),
                 )
                 return int(target_id)
             cur = conn.execute(
                 """INSERT INTO smtp_relay_h24_targets
-                       (tenant_id, source_domain, h24_alias, urgent_fee_eur,
-                        note, enabled)
-                   VALUES (?, ?, ?, ?, ?, ?)""",
-                (int(tenant_id), sd, ha, urgent_fee_eur, note,
+                       (tenant_id, source_domain, source_email, h24_alias,
+                        urgent_fee_eur, note, enabled)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (int(tenant_id), sd, em, ha, urgent_fee_eur, note,
                  1 if enabled else 0),
             )
             return int(cur.lastrowid or 0)

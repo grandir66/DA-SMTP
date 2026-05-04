@@ -133,10 +133,17 @@ def targets_list_view():
 def targets_upsert_view():
     target_id = request.form.get("id")
     source_domain = (request.form.get("source_domain") or "").strip().lower()
+    source_email = (request.form.get("source_email") or "").strip().lower() or None
     h24_alias = (request.form.get("h24_alias") or "").strip().lower()
     fee = request.form.get("urgent_fee_eur")
     note = (request.form.get("note") or "").strip() or None
     enabled = request.form.get("enabled") == "1"
+
+    # Validazione: serve almeno uno tra source_email e source_domain
+    if not source_email and not source_domain:
+        flash("Devi specificare un indirizzo email completo OPPURE un dominio.", "error")
+        return redirect(url_for("h24_codes.targets_list_view"))
+
     try:
         fee_int = int(fee) if fee and str(fee).strip() else None
     except ValueError:
@@ -146,12 +153,14 @@ def targets_upsert_view():
             tenant_id=_tid(),
             target_id=int(target_id) if target_id else None,
             source_domain=source_domain,
+            source_email=source_email,
             h24_alias=h24_alias,
             urgent_fee_eur=fee_int,
             note=note,
             enabled=enabled,
         )
-        flash(f"✓ Target salvato (id {tid}): {source_domain} → {h24_alias}.",
+        match_label = source_email or source_domain
+        flash(f"✓ Target salvato (id {tid}): {match_label} → {h24_alias}.",
               "success")
     except ValueError as exc:
         flash(f"Errore: {exc}", "error")

@@ -279,7 +279,8 @@ CREATE INDEX IF NOT EXISTS idx_occurrences_active
 -- dominio del MITTENTE (Fase E).
 CREATE TABLE IF NOT EXISTS h24_targets_cache (
     id              INTEGER PRIMARY KEY,
-    source_domain   TEXT NOT NULL UNIQUE,
+    source_domain   TEXT NOT NULL,
+    source_email    TEXT,                               -- NULL = match per dominio
     h24_alias       TEXT NOT NULL,
     urgent_fee_eur  INTEGER,
     enabled         INTEGER NOT NULL DEFAULT 1,
@@ -287,6 +288,7 @@ CREATE TABLE IF NOT EXISTS h24_targets_cache (
 );
 CREATE INDEX IF NOT EXISTS idx_h24_targets_active
     ON h24_targets_cache(source_domain) WHERE enabled = 1;
+-- Index su source_email creato dalla mini-migration dopo l'ALTER ADD COLUMN.
 """
 
 
@@ -329,6 +331,7 @@ class Storage:
                 # N minuti se la fingerprint non viene resettata da reset_*_regex).
                 ("aggregations_cache", "delay_minutes", "ALTER TABLE aggregations_cache ADD COLUMN delay_minutes INTEGER"),
                 ("error_occurrences_local", "pending_ticket_until", "ALTER TABLE error_occurrences_local ADD COLUMN pending_ticket_until TEXT"),
+                ("h24_targets_cache", "source_email", "ALTER TABLE h24_targets_cache ADD COLUMN source_email TEXT"),
             ):
                 try:
                     conn.execute(ddl)
@@ -336,6 +339,15 @@ class Storage:
                 except sqlite3.OperationalError as exc:
                     if "duplicate column name" not in str(exc).lower():
                         raise
+            # Index su h24_targets_cache.source_email (richiede colonna esistente)
+            try:
+                conn.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_h24_targets_email "
+                    "ON h24_targets_cache(source_email) "
+                    "WHERE source_email IS NOT NULL AND enabled = 1"
+                )
+            except sqlite3.OperationalError:
+                pass
             # CREATE TABLE IF NOT EXISTS già nel _SCHEMA, ma per DB esistente è già stata creata
             # all'init e i nuovi schema vengono ignorati. La tabella templates_cache viene
             # creata dal _SCHEMA stesso (CREATE TABLE IF NOT EXISTS), quindi nessuna ALTER serve.
@@ -910,7 +922,7 @@ class Storage:
     # ----------------------------------- H24 targets cache (multi-brand) --
 
     def replace_h24_targets(self, targets: list[dict[str, Any]]) -> int:
-        """Sostituisce la cache mappatura source_domain → h24_alias.
+        """Sostituisce la cache mappatura source_domain/source_email → h24_alias.
         Chiamato dal sync periodico (Fase E).
         """
         synced = _now_iso()
@@ -921,12 +933,13 @@ class Storage:
                     continue
                 conn.execute(
                     """INSERT INTO h24_targets_cache
-                           (id, source_domain, h24_alias, urgent_fee_eur,
-                            enabled, synced_at)
-                       VALUES (?, ?, ?, ?, ?, ?)""",
+                           (id, source_domain, source_email, h24_alias,
+                            urgent_fee_eur, enabled, synced_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
                     (
                         int(t["id"]),
                         (t["source_domain"] or "").strip().lower(),
+                        (t.get("source_email") or "").strip().lower() or None,
                         (t["h24_alias"] or "").strip().lower(),
                         int(t["urgent_fee_eur"]) if t.get("urgent_fee_eur") not in (None, "") else None,
                         1 if t.get("enabled", True) else 0,
@@ -936,16 +949,49 @@ class Storage:
             self._set_sync_meta(conn, "h24_targets", synced)
         return len(targets)
 
+    def find_h24_target_by_email(self, from_address: str) -> dict[str, Any] | None:
+        """Lookup cascade brand-aware:
+        1. Match esatto su source_email (priorità per webmail pubblici).
+        2. Match per source_domain (catch-all dominio).
+        Ritorna la riga con `h24_alias` e `urgent_fee_eur` (override per brand).
+        """
+        em = (from_address or "").strip().lower()
+        if not em or "@" not in em:
+            return None
+        domain = em.rsplit("@", 1)[1]
+        with self._connect() as conn:
+            # Priority 1: match esatto email
+            row = conn.execute(
+                """SELECT * FROM h24_targets_cache
+                     WHERE source_email = ? AND enabled = 1
+                     LIMIT 1""",
+                (em,),
+            ).fetchone()
+            if row:
+                return dict(row)
+            # Priority 2: match dominio (solo per entry domain-only)
+            row = conn.execute(
+                """SELECT * FROM h24_targets_cache
+                     WHERE source_domain = ?
+                       AND (source_email IS NULL OR source_email = '')
+                       AND enabled = 1
+                     LIMIT 1""",
+                (domain,),
+            ).fetchone()
+            return dict(row) if row else None
+
+    # Backward-compat
     def find_h24_target_by_domain(self, source_domain: str) -> dict[str, Any] | None:
-        """Lookup brand-aware: dato il dominio del mittente, ritorna l'alias
-        H24 da inserire nel mailto. Usato da auto_reply.build_context."""
         d = (source_domain or "").strip().lower()
         if not d:
             return None
         with self._connect() as conn:
             row = conn.execute(
                 """SELECT * FROM h24_targets_cache
-                     WHERE source_domain = ? AND enabled = 1""",
+                     WHERE source_domain = ?
+                       AND (source_email IS NULL OR source_email = '')
+                       AND enabled = 1
+                     LIMIT 1""",
                 (d,),
             ).fetchone()
             return dict(row) if row else None
