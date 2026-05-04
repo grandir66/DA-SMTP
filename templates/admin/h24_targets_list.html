@@ -16,7 +16,7 @@
     <p style="color:#64748b; font-size:0.85rem; margin-top:0.5rem;">
         <strong>Fallback globale</strong>: <code>{{ fallback_alias }}</code>
         (usato quando il dominio mittente non è in tabella).
-        Configurabile nel <a href="{{ url_for('settings.list_view') if 'settings' in request.url_rule.endpoint or true else '#' }}">setting <code>h24.default_inbound_alias</code></a>.
+        Configurabile in <a href="{{ url_for('h24_codes.settings_view') }}">Settings H24</a>.
     </p>
     {% endif %}
 </section>

@@ -164,3 +164,175 @@ def targets_delete_view(target_id: int):
     _storage().delete_h24_target(target_id)
     flash("Target eliminato.", "success")
     return redirect(url_for("h24_codes.targets_list_view"))
+
+
+# ----------------------------------------------------------- Settings H24 --
+
+H24_SETTINGS = [
+    {
+        "key": "h24.default_inbound_alias",
+        "label": "Mailbox H24 di rientro (fallback globale)",
+        "placeholder": "h24@domarc.it",
+        "help": "Indirizzo usato dai template auto-reply quando il dominio del "
+                "mittente non è in tabella Mailbox H24 di rientro multi-brand.",
+        "type": "email",
+    },
+    {
+        "key": "h24.default_urgent_fee_eur",
+        "label": "Importo intervento urgente (€)",
+        "placeholder": "250",
+        "help": "Default fattura per attivazione urgente. Override per brand "
+                "nella tabella targets, override per regola via "
+                "action_map.urgent_fee.",
+        "type": "number",
+    },
+    {
+        "key": "h24.code_one_shot_ttl_hours",
+        "label": "TTL codici monouso (ore)",
+        "placeholder": "24",
+        "help": "Tempo di validità massimo dei codici emessi via auto-reply. "
+                "Cap difensivo: anche se la regola chiede TTL maggiore, viene "
+                "ridotto a questo valore. Max raccomandato: 24h.",
+        "type": "number",
+    },
+    {
+        "key": "h24.permanent_code_prefix",
+        "label": "Prefisso codici permanenti auto-generati",
+        "placeholder": "H24-",
+        "help": "Prefisso per i codici permanenti generati automaticamente "
+                "(quando crei un codice senza specificare il code custom). "
+                "Es: 'H24-' produce codici tipo H24-XYZ12345ABCD.",
+        "type": "text",
+    },
+    {
+        "key": "h24.subject_extract_regex",
+        "label": "Regex estrazione codice (override avanzato)",
+        "placeholder": "(default hardcoded sicuro)",
+        "help": "Override del regex usato per estrarre codici dal subject. "
+                "Lascia vuoto per usare il default (consigliato). Settare solo "
+                "se hai pattern custom non standard. Errori di sintassi → "
+                "fallback automatico al default.",
+        "type": "text",
+    },
+]
+
+
+@h24_codes_bp.route("/h24-settings", methods=["GET", "POST"])
+@login_required(role="admin")
+def settings_view():
+    storage = _storage()
+    if request.method == "POST":
+        for s in H24_SETTINGS:
+            v = (request.form.get(s["key"]) or "").strip()
+            storage.upsert_setting(s["key"], v, s["help"])
+        flash("✓ Settings H24 aggiornate.", "success")
+        return redirect(url_for("h24_codes.settings_view"))
+
+    # GET: carica valori correnti
+    values = {s["key"]: (storage.get_setting(s["key"]) or "") for s in H24_SETTINGS}
+    return render_template(
+        "admin/h24_settings.html",
+        settings_meta=H24_SETTINGS,
+        values=values,
+    )
+
+
+@h24_codes_bp.route("/h24-dashboard")
+@login_required()
+def dashboard_view():
+    """Dashboard KPI H24: codici attivi, usi recenti, fatturato stimato."""
+    storage = _storage()
+    import sqlite3
+    db_path = current_app.extensions["domarc_config"].db_path
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        # KPI attive
+        kpi_perm_active = conn.execute(
+            "SELECT COUNT(*) FROM customer_h24_codes "
+            "WHERE enabled=1 AND revoked_at IS NULL AND tenant_id=?",
+            (_tid(),),
+        ).fetchone()[0]
+        kpi_perm_revoked = conn.execute(
+            "SELECT COUNT(*) FROM customer_h24_codes "
+            "WHERE revoked_at IS NOT NULL AND tenant_id=?",
+            (_tid(),),
+        ).fetchone()[0]
+        kpi_oneshot_active = conn.execute(
+            "SELECT COUNT(*) FROM authorization_codes "
+            "WHERE used_at IS NULL "
+            "  AND valid_until > datetime('now') AND tenant_id=?",
+            (_tid(),),
+        ).fetchone()[0]
+        # Usi ultimi 7 giorni
+        usages_7d = conn.execute(
+            "SELECT COUNT(*) FROM customer_h24_codes_usage u "
+            "JOIN customer_h24_codes c ON c.id = u.h24_code_id "
+            "WHERE u.used_at > datetime('now', '-7 days') AND c.tenant_id=?",
+            (_tid(),),
+        ).fetchone()[0]
+        used_oneshot_7d = conn.execute(
+            "SELECT COUNT(*) FROM authorization_codes "
+            "WHERE used_at > datetime('now', '-7 days') AND tenant_id=?",
+            (_tid(),),
+        ).fetchone()[0]
+        # Top clienti per usi
+        top_customers = [dict(r) for r in conn.execute(
+            "SELECT c.codice_cliente, c.code, COUNT(u.id) AS used_count "
+            "FROM customer_h24_codes c "
+            "LEFT JOIN customer_h24_codes_usage u ON u.h24_code_id = c.id "
+            "  AND u.used_at > datetime('now', '-30 days') "
+            "WHERE c.enabled=1 AND c.revoked_at IS NULL AND c.tenant_id=? "
+            "GROUP BY c.id ORDER BY used_count DESC LIMIT 10",
+            (_tid(),),
+        ).fetchall()]
+        # Targets
+        targets_count = conn.execute(
+            "SELECT COUNT(*) FROM smtp_relay_h24_targets "
+            "WHERE enabled=1 AND tenant_id=?",
+            (_tid(),),
+        ).fetchone()[0]
+        # Fatturato stimato 30gg (oneshot+permanent al fee default)
+        try:
+            fee = int(storage.get_setting("h24.default_urgent_fee_eur") or "250")
+        except (TypeError, ValueError):
+            fee = 250
+        used_oneshot_30d = conn.execute(
+            "SELECT COUNT(*) FROM authorization_codes "
+            "WHERE used_at > datetime('now', '-30 days') AND tenant_id=?",
+            (_tid(),),
+        ).fetchone()[0]
+        usages_30d = conn.execute(
+            "SELECT COUNT(*) FROM customer_h24_codes_usage u "
+            "JOIN customer_h24_codes c ON c.id = u.h24_code_id "
+            "WHERE u.used_at > datetime('now', '-30 days') AND c.tenant_id=?",
+            (_tid(),),
+        ).fetchone()[0]
+        # Recent usages
+        recent_usages = [dict(r) for r in conn.execute(
+            "SELECT u.*, c.code, c.codice_cliente, c.label "
+            "FROM customer_h24_codes_usage u "
+            "JOIN customer_h24_codes c ON c.id = u.h24_code_id "
+            "WHERE c.tenant_id=? "
+            "ORDER BY u.used_at DESC LIMIT 15",
+            (_tid(),),
+        ).fetchall()]
+
+    estimated_revenue_30d = (used_oneshot_30d + usages_30d) * fee
+
+    return render_template(
+        "admin/h24_dashboard.html",
+        kpi={
+            "perm_active": kpi_perm_active,
+            "perm_revoked": kpi_perm_revoked,
+            "oneshot_active": kpi_oneshot_active,
+            "usages_7d": usages_7d,
+            "used_oneshot_7d": used_oneshot_7d,
+            "targets_count": targets_count,
+            "estimated_revenue_30d": estimated_revenue_30d,
+            "usages_30d": usages_30d,
+            "used_oneshot_30d": used_oneshot_30d,
+            "fee_default": fee,
+        },
+        top_customers=top_customers,
+        recent_usages=recent_usages,
+    )

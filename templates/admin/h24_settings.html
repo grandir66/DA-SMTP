@@ -1,0 +1,71 @@
+{% extends "admin/_base.html" %}
+{% block title %}Settings H24{% endblock %}
+{% block content %}
+
+<section class="dr-section">
+    <h2><i class="fas fa-cog"></i> Settings H24</h2>
+    <p style="color:#64748b; font-size:0.88rem;">
+        Parametri operativi della feature "intervento urgente a pagamento".
+        Modificabili a caldo: il listener legge questi valori via sync settings,
+        l'admin via storage.get_setting() ad ogni richiesta.
+    </p>
+</section>
+
+<form method="post" action="{{ url_for('h24_codes.settings_view') }}"
+      style="max-width:780px;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    {% for s in settings_meta %}
+    <div style="background:#fff; border:1px solid #cbd5e1; border-radius:8px;
+                padding:1rem 1.2rem; margin-bottom:1rem;">
+        <label for="{{ s.key }}" style="display:block; font-weight:600; margin-bottom:0.3rem;">
+            {{ s.label }}
+        </label>
+        <code style="font-size:0.78rem; color:#64748b;">{{ s.key }}</code>
+        <input type="{{ s.type }}" name="{{ s.key }}" id="{{ s.key }}"
+               value="{{ values[s.key] }}"
+               placeholder="{{ s.placeholder }}"
+               style="display:block; width:100%; margin-top:0.5rem; padding:0.5rem;
+                      font-family:ui-monospace,monospace; border:1px solid #cbd5e1;
+                      border-radius:4px;">
+        <p style="font-size:0.82rem; color:#64748b; margin:0.5rem 0 0;">
+            {{ s.help }}
+        </p>
+    </div>
+    {% endfor %}
+
+    <div style="display:flex; gap:0.5rem;">
+        <button type="submit" class="dr-btn dr-btn-primary">
+            <i class="fas fa-save"></i> Salva tutte le settings
+        </button>
+        <a href="{{ url_for('h24_codes.dashboard_view') }}" class="dr-btn">
+            <i class="fas fa-chart-line"></i> Dashboard H24
+        </a>
+        <a href="{{ url_for('h24_codes.list_view') }}" class="dr-btn">
+            <i class="fas fa-shield-halved"></i> Codici permanenti
+        </a>
+        <a href="{{ url_for('h24_codes.targets_list_view') }}" class="dr-btn">
+            <i class="fas fa-envelope-open-text"></i> Mailbox di rientro
+        </a>
+    </div>
+</form>
+
+<section class="dr-section" style="margin-top:2rem; max-width:780px;">
+    <h3><i class="fas fa-info-circle"></i> Come funziona la cascade multi-brand</h3>
+    <p style="color:#64748b; font-size:0.88rem;">
+        Il listener risolve <code>h24_inbound_alias</code> nei template auto-reply
+        seguendo questa priorità (la prima trovata vince):
+    </p>
+    <ol style="color:#374151; font-size:0.88rem;">
+        <li><code>action_map.h24_inbound_alias</code> della regola che ha matchato</li>
+        <li>Tabella <a href="{{ url_for('h24_codes.targets_list_view') }}">Mailbox H24 di rientro</a>:
+            lookup per dominio del <strong>mittente</strong></li>
+        <li>Setting <code>h24.default_inbound_alias</code> (questa pagina)</li>
+    </ol>
+    <p style="color:#64748b; font-size:0.88rem;">
+        Se nessun valore è risolto e il template usa <code>{{ '{{ h24_inbound_alias }}' }}</code>,
+        il rendering fallisce in modo controllato e l'auto-reply NON parte
+        (preferiamo non mandare al cliente un mailto rotto).
+    </p>
+</section>
+{% endblock %}

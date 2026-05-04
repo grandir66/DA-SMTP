@@ -1,0 +1,164 @@
+{% extends "admin/_base.html" %}
+{% block title %}Dashboard H24{% endblock %}
+{% block content %}
+
+<section class="dr-section">
+    <h2><i class="fas fa-chart-line"></i> Dashboard H24</h2>
+    <p style="color:#64748b; font-size:0.88rem;">
+        KPI feature "intervento urgente a pagamento".
+        Stato attuale del sistema + utilizzi recenti + fatturato stimato.
+    </p>
+</section>
+
+<!-- KPI cards -->
+<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));
+            gap:0.8rem; margin-bottom:1.4rem;">
+    <div style="background:#fff; border:1px solid #cbd5e1; border-left:4px solid #16a34a;
+                border-radius:6px; padding:0.9rem 1rem;">
+        <div style="font-size:0.72rem; color:#64748b; text-transform:uppercase;">
+            Codici permanenti attivi
+        </div>
+        <div style="font-size:1.7rem; font-weight:600; color:#16a34a;">
+            {{ kpi.perm_active }}
+        </div>
+        <div style="font-size:0.75rem; color:#94a3b8;">
+            {{ kpi.perm_revoked }} revocati storici
+        </div>
+    </div>
+
+    <div style="background:#fff; border:1px solid #cbd5e1; border-left:4px solid #d97706;
+                border-radius:6px; padding:0.9rem 1rem;">
+        <div style="font-size:0.72rem; color:#64748b; text-transform:uppercase;">
+            Codici monouso attivi
+        </div>
+        <div style="font-size:1.7rem; font-weight:600; color:#d97706;">
+            {{ kpi.oneshot_active }}
+        </div>
+        <div style="font-size:0.75rem; color:#94a3b8;">
+            non usati, valid_until futuro
+        </div>
+    </div>
+
+    <div style="background:#fff; border:1px solid #cbd5e1; border-left:4px solid #2563eb;
+                border-radius:6px; padding:0.9rem 1rem;">
+        <div style="font-size:0.72rem; color:#64748b; text-transform:uppercase;">
+            Utilizzi 7gg (permanenti)
+        </div>
+        <div style="font-size:1.7rem; font-weight:600; color:#2563eb;">
+            {{ kpi.usages_7d }}
+        </div>
+        <div style="font-size:0.75rem; color:#94a3b8;">
+            +{{ kpi.used_oneshot_7d }} monouso consumati
+        </div>
+    </div>
+
+    <div style="background:#fff; border:1px solid #cbd5e1; border-left:4px solid #7c3aed;
+                border-radius:6px; padding:0.9rem 1rem;">
+        <div style="font-size:0.72rem; color:#64748b; text-transform:uppercase;">
+            Mailbox di rientro
+        </div>
+        <div style="font-size:1.7rem; font-weight:600; color:#7c3aed;">
+            {{ kpi.targets_count }}
+        </div>
+        <div style="font-size:0.75rem; color:#94a3b8;">
+            mappature multi-brand attive
+        </div>
+    </div>
+
+    <div style="background:#0b2a4a; color:#fff; border-radius:6px; padding:0.9rem 1rem;">
+        <div style="font-size:0.72rem; color:#cbd5e1; text-transform:uppercase;">
+            Fatturato stimato 30gg
+        </div>
+        <div style="font-size:1.7rem; font-weight:600;">
+            € {{ "{:,}".format(kpi.estimated_revenue_30d).replace(",", ".") }}
+        </div>
+        <div style="font-size:0.75rem; color:#94a3b8;">
+            ({{ kpi.usages_30d + kpi.used_oneshot_30d }} ticket × € {{ kpi.fee_default }})
+        </div>
+    </div>
+</div>
+
+<!-- Quick links -->
+<section class="dr-section">
+    <a href="{{ url_for('h24_codes.list_view') }}" class="dr-btn">
+        <i class="fas fa-shield-halved"></i> Codici permanenti
+    </a>
+    <a href="{{ url_for('h24_codes.targets_list_view') }}" class="dr-btn">
+        <i class="fas fa-envelope-open-text"></i> Mailbox di rientro
+    </a>
+    <a href="{{ url_for('h24_codes.settings_view') }}" class="dr-btn">
+        <i class="fas fa-cog"></i> Settings H24
+    </a>
+    <a href="{{ url_for('auth_codes.list_view') }}" class="dr-btn">
+        <i class="fas fa-key"></i> Codici monouso
+    </a>
+</section>
+
+<!-- Top customers + recent usages side by side -->
+<div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
+
+    <div>
+        <h3>Top clienti per usi (30gg)</h3>
+        <div class="table-outer">
+            <div class="table-scroll">
+                <table class="fw-table">
+                    <thead>
+                        <tr>
+                            <th>Cliente</th>
+                            <th>Codice</th>
+                            <th style="text-align:right;">Usi 30gg</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for c in top_customers %}
+                        <tr {% if not c.used_count %}style="color:#94a3b8;"{% endif %}>
+                            <td><strong>{{ c.codice_cliente }}</strong></td>
+                            <td><code style="font-size:0.78rem;">{{ c.code }}</code></td>
+                            <td style="text-align:right; font-weight:600;">
+                                {{ c.used_count }}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="3" style="text-align:center; color:#94a3b8;">
+                            Nessun codice permanente attivo.
+                        </td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div>
+        <h3>Utilizzi recenti</h3>
+        <div class="table-outer">
+            <div class="table-scroll">
+                <table class="fw-table">
+                    <thead>
+                        <tr>
+                            <th>Quando</th>
+                            <th>Cliente</th>
+                            <th>Codice</th>
+                            <th>Mailbox</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for u in recent_usages %}
+                        <tr>
+                            <td><small>{{ u.used_at[:16] }}</small></td>
+                            <td>{{ u.codice_cliente }}</td>
+                            <td><code style="font-size:0.75rem;">{{ u.code }}</code></td>
+                            <td><small>{{ u.inbound_alias or '—' }}</small></td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="4" style="text-align:center; color:#94a3b8;">
+                            Nessun utilizzo recente.
+                        </td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

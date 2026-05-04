@@ -60,8 +60,10 @@
                     <a href="{{ url_for('templates.list_view') }}" class="{% if ep.startswith('templates') %}active{% endif %}"><i class="fas fa-envelope-open-text"></i> Template</a>
                     <a href="{{ url_for('aggregations.list_view') }}" class="{% if ep.startswith('aggregations') %}active{% endif %}"><i class="fas fa-layer-group"></i> Aggregazioni errori</a>
                     <a href="{{ url_for('auth_codes.list_view') }}" class="{% if ep.startswith('auth_codes') %}active{% endif %}"><i class="fas fa-key"></i> Codici autorizzazione (monouso)</a>
-                    <a href="{{ url_for('h24_codes.list_view') }}" class="{% if ep == 'h24_codes.list_view' or ep == 'h24_codes.create_view' or ep == 'h24_codes.usages_view' or ep == 'h24_codes.revoke_view' %}active{% endif %}"><i class="fas fa-shield-halved"></i> Codici H24 (permanenti)</a>
-                    <a href="{{ url_for('h24_codes.targets_list_view') }}" class="{% if ep.startswith('h24_codes.targets') %}active{% endif %}"><i class="fas fa-envelope-open-text"></i> Mailbox H24 di rientro</a>
+                    <a href="{{ url_for('h24_codes.dashboard_view') }}" class="{% if ep == 'h24_codes.dashboard_view' %}active{% endif %}"><i class="fas fa-chart-line"></i> H24 — Dashboard</a>
+                    <a href="{{ url_for('h24_codes.list_view') }}" class="{% if ep == 'h24_codes.list_view' or ep == 'h24_codes.create_view' or ep == 'h24_codes.usages_view' or ep == 'h24_codes.revoke_view' %}active{% endif %}"><i class="fas fa-shield-halved"></i> H24 — Codici permanenti</a>
+                    <a href="{{ url_for('h24_codes.targets_list_view') }}" class="{% if ep.startswith('h24_codes.targets') %}active{% endif %}"><i class="fas fa-envelope-open-text"></i> H24 — Mailbox di rientro</a>
+                    <a href="{{ url_for('h24_codes.settings_view') }}" class="{% if ep == 'h24_codes.settings_view' %}active{% endif %}"><i class="fas fa-cog"></i> H24 — Settings</a>
                 </div>
             </div>
             <div class="dr-nav-dropdown {% if in_anag %}active{% endif %}">

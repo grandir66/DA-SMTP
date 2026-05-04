@@ -158,6 +158,7 @@ mittente → ESVA antispam → 192.168.4.25:25 (listener)
     │   └── Action dispatcher: ignore | flag_only | quarantine
     │                          | auto_reply | forward | redirect
     │                          | create_ticket | ai_classify
+    │                          | create_authorized_ticket (H24)
     ├── keep_original_delivery (CC al destinatario reale)
     ├── also_deliver_to (CC ad altri destinatari da regola)
     ├── Aggregations (cluster errori semantici)
@@ -381,5 +382,55 @@ con il suo CLAUDE.md.
 
 ---
 
-*Ultimo aggiornamento: 2026-04-30 — separazione del progetto SMTP relay
-dal manager gestionale.*
+## H24 — flusso autorizzazioni urgenti a pagamento
+
+Feature operativa per autorizzare apertura ticket urgenti a pagamento via
+codice nel subject mail. Implementata in 6 fasi (commit `2192501..57a7823`).
+
+### Componenti
+
+| Pezzo | Path | Cosa fa |
+|---|---|---|
+| Migration 022 | `domarc_relay_admin/migrations/022_h24_authorization_flow.sqlite.sql` | 3 tabelle nuove + ALTER `authorization_codes` + 5 settings seed |
+| Extractor codice | `domarc_relay_admin/h24_code_extractor.py` | Regex liberale, prefix prioritari `AUTH-`/`H24-`, fallback multi-trattino o lettere+cifre |
+| Storage CRUD | `domarc_relay_admin/storage/sqlite_impl.py` (sezione H24) | `create_h24_code`, `validate_*` (atomici), `list_h24_targets`, `cleanup_expired_oneshot_codes`, ecc. |
+| API admin | `domarc_relay_admin/routes/api.py` | `POST /auth-codes`, `POST /auth-codes/validate` (cascade oneshot→permanente), `GET /h24-targets/active`, `POST /maintenance/cleanup-oneshot-codes`, `POST /usage/<id>/ticket` |
+| UI admin | `domarc_relay_admin/routes/h24_codes.py` + 4 template | `/h24-dashboard`, `/h24-codes`, `/h24-targets`, `/h24-settings`, `/h24-codes/<id>/usages` |
+| Listener action | `services/smtp_listener/relay/actions.py:do_create_authorized_ticket` | Estrae codice, valida via API, costruisce payload ticket URGENZA=PAGAMENTO, manda ack/reject |
+| Listener cache | `services/smtp_listener/relay/storage.py:h24_targets_cache` | Sync da admin per multi-brand |
+| Loop scheduler | `services/smtp_listener/relay/scheduler.py:_h24_maintenance_loop` (24h cleanup) + `_h24_usage_flush_loop` (5min stub rendicontazione) | |
+| Reply templates | DB `reply_templates` (5 H24): `out_of_hours_with_paid_option`, `out_of_hours_no_paid_option`, `h24_ack`, `h24_already_used`, `h24_reject` | Jinja2 con `auth_code`, `h24_inbound_alias`, `urgent_fee`, `ticket_id` |
+| Runbook operativo | `docs/H24_RUNBOOK.md` | Setup step-by-step, test e2e, troubleshooting |
+
+### Concetti
+
+- **Codici MONOUSO** (`authorization_codes`): emessi da auto-reply fuori orario,
+  TTL ≤ 24h, consume atomico race-safe via `UPDATE … WHERE used_at IS NULL`.
+  Format `AUTH-XXXXXX` nel subject (alfabeto leggibile 32 char no I/O/0/1).
+- **Codici PERMANENTI** (`customer_h24_codes`): per clienti H24 contrattuale,
+  riusabili, audit completo in `customer_h24_codes_usage` (con
+  `reported_to_manager_at` predisposto per rendicontazione futura).
+- **Multi-brand** (`smtp_relay_h24_targets`): mapping `source_domain → h24_alias`
+  per il `mailto:` brand-aware. Cascade: `action_map` > target lookup > setting.
+- **Ticket urgente**: `URGENZA=URGENTE`, `SETTORE=S`, payload con note
+  arricchite (codice, tipo, importo, mailbox di rientro, evento originario).
+
+### Setup operativo (riferimento rapido)
+
+1. Settings `/h24-settings`: imposta default alias, fee, prefix.
+2. Targets `/h24-targets`: aggiungi `datia.it → h24@datia.it`,
+   `domarc.it → h24@domarc.it` (o redirezionato durante pilot).
+3. Codici permanenti `/h24-codes`: crea per ogni cliente H24 contrattuale.
+4. Regole pipeline (3):
+   - `auto_reply` su mailbox sorgente con `generate_auth_code=true` +
+     `auto_reply_template=out_of_hours_with_paid_option` + `only_outside_service_hours=true`.
+   - `create_authorized_ticket` su mailbox di rientro (priorità alta) con
+     `match_subject_regex=AUTH-|H24-|...` + `ack_template_id` + `reject_template_id`.
+   - `auto_reply` catch-all sulla stessa mailbox di rientro (priorità più bassa)
+     con `auto_reply_template=h24_reject`.
+
+Per dettagli, troubleshooting, comandi diagnostici: vedi `docs/H24_RUNBOOK.md`.
+
+---
+
+*Ultimo aggiornamento: 2026-05-04 — feature H24 completata + dashboard + settings UI + runbook + reindirizzamento pilota domarc.it→r.grandi@domarc.it.*
