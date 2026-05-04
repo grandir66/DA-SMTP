@@ -78,6 +78,24 @@ CREATE TABLE IF NOT EXISTS customer_group_members_cache (
 CREATE INDEX IF NOT EXISTS idx_customer_group_members_codcli
     ON customer_group_members_cache(codcli);
 
+-- Recipient groups cache (Migration 027 lato admin).
+-- Pattern: il pipeline carica le membership in dict {email: [group_id, ...]}
+-- per match O(1) durante valutazione regole.
+CREATE TABLE IF NOT EXISTS recipient_groups_cache (
+    id          INTEGER PRIMARY KEY,
+    code        TEXT NOT NULL UNIQUE,
+    name        TEXT,
+    enabled     INTEGER NOT NULL DEFAULT 1,
+    synced_at   TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS recipient_group_members_cache (
+    email      TEXT NOT NULL,
+    group_id   INTEGER NOT NULL,
+    PRIMARY KEY (email, group_id)
+);
+CREATE INDEX IF NOT EXISTS idx_recipient_group_members_email
+    ON recipient_group_members_cache(email);
+
 -- Privacy bypass list (admin migration 011): indirizzi/domini esclusi dal
 -- rule engine. Cached come tabelle dedicate per lookup O(1) durante la
 -- pipeline. Sostituite atomicamente al sync.
@@ -325,6 +343,10 @@ class Storage:
                 ("rules_cache", "match_has_exception_today", "ALTER TABLE rules_cache ADD COLUMN match_has_exception_today INTEGER"),
                 ("rules_cache", "match_customer_groups", "ALTER TABLE rules_cache ADD COLUMN match_customer_groups TEXT"),
                 ("rules_cache", "match_tag", "ALTER TABLE rules_cache ADD COLUMN match_tag TEXT"),
+                # Migration 027 — recipient groups
+                ("rules_cache", "match_to_group_id", "ALTER TABLE rules_cache ADD COLUMN match_to_group_id INTEGER"),
+                ("rules_cache", "forward_to_emails", "ALTER TABLE rules_cache ADD COLUMN forward_to_emails TEXT"),
+                ("rules_cache", "forward_to_group_id", "ALTER TABLE rules_cache ADD COLUMN forward_to_group_id INTEGER"),
                 ("routes_cache", "apply_rules", "ALTER TABLE routes_cache ADD COLUMN apply_rules INTEGER NOT NULL DEFAULT 1"),
                 ("domain_routing_cache", "apply_rules", "ALTER TABLE domain_routing_cache ADD COLUMN apply_rules INTEGER NOT NULL DEFAULT 1"),
                 # delay_minutes: timer mode per error_aggregations (apre ticket dopo
@@ -578,8 +600,11 @@ class Storage:
                             match_at_hours, match_in_service, match_contract_active,
                             match_known_customer, match_has_exception_today,
                             match_customer_groups, match_tag,
+                            match_to_group_id, forward_to_emails, forward_to_group_id,
                             action, action_map_json, continue_after_match, synced_at)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                               ?, ?, ?,
+                               ?, ?, ?, ?)""",
                     (
                         r["id"],
                         r.get("name"),
@@ -601,6 +626,9 @@ class Storage:
                         _tristate(r.get("match_has_exception_today")),
                         r.get("match_customer_groups"),
                         r.get("match_tag"),
+                        r.get("match_to_group_id"),
+                        r.get("forward_to_emails"),
+                        r.get("forward_to_group_id"),
                         r["action"],
                         json.dumps(r.get("action_map", {}), ensure_ascii=False),
                         1 if r.get("continue_after_match") else 0,
@@ -667,6 +695,57 @@ class Storage:
                     (codcli,),
                 ).fetchall()
             }
+
+    # --------------------------------------- recipient_groups_cache (Migration 027)
+
+    def replace_recipient_groups(self, groups: list[dict[str, Any]]) -> tuple[int, int]:
+        """Sostituisce atomicamente cache gruppi destinatari + membership."""
+        synced = _now_iso()
+        n_members = 0
+        with self.transaction() as conn:
+            conn.execute("DELETE FROM recipient_groups_cache;")
+            conn.execute("DELETE FROM recipient_group_members_cache;")
+            for g in groups:
+                if not g.get("id") or not g.get("code"):
+                    continue
+                conn.execute(
+                    """INSERT INTO recipient_groups_cache
+                           (id, code, name, enabled, synced_at)
+                       VALUES (?, ?, ?, ?, ?)""",
+                    (int(g["id"]), g["code"], g.get("name"),
+                     1 if g.get("enabled", True) else 0, synced),
+                )
+                for em in (g.get("members") or []):
+                    em = (em or "").strip().lower()
+                    if not em or "@" not in em:
+                        continue
+                    conn.execute(
+                        """INSERT OR IGNORE INTO recipient_group_members_cache
+                              (email, group_id) VALUES (?, ?)""",
+                        (em, int(g["id"])),
+                    )
+                    n_members += 1
+            self._set_sync_meta(conn, "recipient_groups", synced)
+        return (len(groups), n_members)
+
+    def get_recipient_group_ids_by_email(self, email: str) -> list[int]:
+        """Group_ids a cui appartiene questo destinatario."""
+        em = (email or "").strip().lower()
+        if not em:
+            return []
+        with self._connect() as conn:
+            return [int(r["group_id"]) for r in conn.execute(
+                "SELECT group_id FROM recipient_group_members_cache WHERE email = ?",
+                (em,),
+            ).fetchall()]
+
+    def get_recipient_groups_emails(self, group_id: int) -> list[str]:
+        """Emails membri del gruppo (per espansione forward_to_group_id)."""
+        with self._connect() as conn:
+            return [r["email"] for r in conn.execute(
+                "SELECT email FROM recipient_group_members_cache WHERE group_id = ?",
+                (int(group_id),),
+            ).fetchall()]
 
     # ------------------------------------------------------------------ routes_cache
 

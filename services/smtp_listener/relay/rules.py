@@ -267,6 +267,26 @@ class RuleEngine:
                 return {"matched": False, "reasons": reasons}
             reasons.append(f"match_tag '{rule_tag}': match")
 
+        # Match recipient group: la regola scatta se uno dei destinatari
+        # (To primario o gli altri in to_addresses) è membro del gruppo.
+        # Migration 027. Alternativa esclusiva a match_to_regex.
+        to_group_id = rule.get("match_to_group_id")
+        if to_group_id:
+            recipient_groups = event.get("recipient_groups") or {}
+            target_email = (event.get("to_address") or "").lower()
+            also_check = [a.lower() for a in (event.get("to_addresses") or [])]
+            ids_for_email: set[int] = set()
+            for em in [target_email, *also_check]:
+                if not em:
+                    continue
+                ids_for_email.update(int(x) for x in recipient_groups.get(em, []))
+            if int(to_group_id) not in ids_for_email:
+                reasons.append(
+                    f"match_to_group_id={to_group_id}: nessun destinatario nel gruppo"
+                )
+                return {"matched": False, "reasons": reasons}
+            reasons.append(f"match_to_group_id={to_group_id}: match")
+
         # Match customer groups (CSV "top,sanita" → cliente deve appartenere ad
         # almeno uno dei gruppi listati). Se il cliente non è risolto (codcli=None)
         # o non ha gruppi, la regola NON matcha.

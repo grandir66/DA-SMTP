@@ -121,6 +121,14 @@ class H24TargetsPayload:
 
 
 @dataclass
+class RecipientGroupsPayload:
+    """Gruppi destinatari + membri (Migration 027).
+    Cached lato listener per match_to_group_id e forward_to_group_id."""
+    synced_at: str
+    groups: list[dict[str, Any]] = field(default_factory=list)
+
+
+@dataclass
 class PrivacyBypassPayload:
     """Lista privacy-bypass attiva (migration 011 admin).
 
@@ -187,7 +195,8 @@ class ManagerBackend(ABC):
 
     @abstractmethod
     def issue_auth_code(self, *, codcli: str | None, rule_id: int | None,
-                        ttl_hours: int, note: str | None = None) -> AuthCodeResult: ...
+                        ttl_hours: int, note: str | None = None,
+                        sent_to_email: str | None = None) -> AuthCodeResult: ...
 
     @abstractmethod
     def fetch_active_aggregations(self) -> AggregationsPayload: ...
@@ -454,7 +463,8 @@ class StormshieldManagerBackend(ManagerBackend):
 
     def issue_auth_code(self, *, codcli: str | None, rule_id: int | None,
                         ttl_hours: int, note: str | None = None,
-                        event_uuid: str | None = None) -> AuthCodeResult:
+                        event_uuid: str | None = None,
+                        sent_to_email: str | None = None) -> AuthCodeResult:
         try:
             resp = self._client.post(
                 "/api/v1/relay/auth-codes",
@@ -464,6 +474,7 @@ class StormshieldManagerBackend(ManagerBackend):
                     "ttl_hours": int(ttl_hours),
                     "note": note,
                     "event_uuid": event_uuid,
+                    "sent_to_email": sent_to_email,
                 },
             )
         except httpx.HTTPError as exc:
@@ -558,6 +569,17 @@ class StormshieldManagerBackend(ManagerBackend):
         return H24TargetsPayload(
             synced_at=data.get("synced_at", ""),
             targets=list(data.get("targets", [])),
+        )
+
+    def fetch_active_recipient_groups(self) -> RecipientGroupsPayload:
+        """Gruppi destinatari + membri (Migration 027)."""
+        try:
+            data = self._get_json("/api/v1/relay/recipient-groups/active")
+        except Exception:  # noqa: BLE001
+            return RecipientGroupsPayload(synced_at="", groups=[])
+        return RecipientGroupsPayload(
+            synced_at=data.get("synced_at", ""),
+            groups=list(data.get("groups", [])),
         )
 
     def replicate_occurrence(self, agg_id: int, payload: dict[str, Any]) -> bool:

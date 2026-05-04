@@ -436,6 +436,8 @@ def do_auto_reply(
                 rule_id=rule_id,
                 ttl_hours=ttl,
                 note=f"auto-reply regola #{rule_id} ({rule_name})",
+                # Migration 026: traccia a chi viene spedito il codice
+                sent_to_email=(parsed.from_address or "").strip().lower() or None,
             )
             if ac.ok and ac.code:
                 ctx["auth_code"] = ac.code
@@ -464,6 +466,21 @@ def do_auto_reply(
         tpl_row = storage.find_template_by_id(template_name_raw)
         if tpl_row is None:
             tpl_row = storage.find_template_by_name(template_name_raw)
+
+    # Override no-contract: se il mittente è identificato come cliente
+    # ma `contract_active=False`, sostituisci il template con
+    # `always_billable_no_contract` (Migration 026 / Seed dedicato).
+    cust_known = bool((customer_context or {}).get("codcli"))
+    cust_contract = (customer_context or {}).get("contract_active")
+    if cust_known and cust_contract is False:
+        no_contract_tpl = storage.find_template_by_name(
+            "always_billable_no_contract")
+        if no_contract_tpl is not None:
+            logger.info(
+                "Cliente %s senza contratto attivo: override template %s",
+                (customer_context or {}).get("codcli"),
+                no_contract_tpl.get("name"))
+            tpl_row = no_contract_tpl
 
     # Opzioni reply_* da action_map (configurabili dall'admin)
     reply_subject_prefix = action_map.get("reply_subject_prefix") or None
@@ -559,6 +576,7 @@ def do_forward(
     cfg: RelayConfig,
     action_map: dict[str, Any],
     route_row: sqlite3.Row | None,
+    rule: dict[str, Any] | None = None,
 ) -> ActionResult:
     # Forward ha un target esplicito (è il senso dell'azione): non si applica
     # qui la logica "scegli smarthost dal dominio destinatario", perché chi crea
@@ -572,10 +590,34 @@ def do_forward(
             target_port = int(route_row["forward_port"])
         if route_row["forward_tls"]:
             target_tls = route_row["forward_tls"]
+    # Migration 027: se la regola usa forward_to_emails/forward_to_group_id ma
+    # non specifica forward_target, usa il default smarthost del cfg.
+    if not target and rule and (rule.get("forward_to_emails") or rule.get("forward_to_group_id")):
+        target = cfg.outbound.default_smarthost
+        target_port = cfg.outbound.default_smarthost_port
+        target_tls = cfg.outbound.default_tls
     if not target:
         return ActionResult(action="forward", ok=False, detail="nessun forward_target definito")
 
-    rcpt = list(parsed.to_addresses) or ([parsed.primary_to] if parsed.primary_to else [])
+    # Migration 027: rcpt override dalla regola
+    # (forward_to_emails ';' o forward_to_group_id) — sovrascrive gli rcpt originali
+    rcpt: list[str] = []
+    if rule:
+        emails_raw = (rule.get("forward_to_emails") or "").strip()
+        if emails_raw:
+            import re as _re
+            rcpt = [e.strip().lower() for e in _re.split(r"[\s,;]+", emails_raw)
+                    if e.strip() and "@" in e]
+        group_id = rule.get("forward_to_group_id")
+        if group_id:
+            try:
+                emails_from_group = storage.get_recipient_groups_emails(int(group_id))
+                rcpt.extend(emails_from_group)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("forward_to_group_id=%s lookup fallito: %s", group_id, exc)
+        rcpt = list(dict.fromkeys(rcpt))  # dedup preservando ordine
+    if not rcpt:
+        rcpt = list(parsed.to_addresses) or ([parsed.primary_to] if parsed.primary_to else [])
     if not rcpt:
         return ActionResult(action="forward", ok=False, detail="nessun rcpt nel MIME")
 

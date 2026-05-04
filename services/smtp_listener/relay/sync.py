@@ -127,6 +127,21 @@ def sync_customers_and_rules(backend: ManagerBackend, storage: Storage) -> dict[
         logger.debug("Sync H24 targets skip/fallito: %s", exc)
         result["errors"].append(f"h24_targets: {exc}")
 
+    # Recipient groups (Migration 027) — sync gruppi destinatari + membri
+    try:
+        rg_payload = backend.fetch_active_recipient_groups()
+        n_groups, n_members = storage.replace_recipient_groups(rg_payload.groups)
+        result["recipient_groups"] = {
+            "synced_at": rg_payload.synced_at,
+            "groups": n_groups, "members": n_members,
+        }
+        if n_groups:
+            logger.info("Sync recipient_groups OK: %d gruppi, %d membri",
+                        n_groups, n_members)
+    except (ManagerError, AttributeError) as exc:
+        logger.debug("Sync recipient_groups skip/fallito: %s", exc)
+        result["errors"].append(f"recipient_groups: {exc}")
+
     return result
 
 

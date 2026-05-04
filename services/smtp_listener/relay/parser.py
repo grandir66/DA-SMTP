@@ -11,9 +11,26 @@ import email
 import email.policy
 import logging
 from dataclasses import dataclass, field
+from email.header import decode_header, make_header
 from email.message import Message
 from email.utils import getaddresses, parseaddr
 from typing import Any
+
+
+def _decode_mime_header(raw: str | None) -> str:
+    """Decodifica RFC 2047 (=?UTF-8?B?...?=) → Unicode reale.
+
+    Preserva il valore originale se la decodifica fallisce. Da chiamare UNA SOLA
+    volta sui header di mail in entrata (Subject, From-display-name, ...) per
+    evitare che concatenazioni successive lascino encoded blob nei nuovi mail
+    in uscita (bug doppio encoding).
+    """
+    if not raw:
+        return ""
+    try:
+        return str(make_header(decode_header(raw))).strip()
+    except Exception:  # noqa: BLE001
+        return raw.strip()
 
 logger = logging.getLogger(__name__)
 
@@ -99,7 +116,10 @@ def parse_rfc822(raw: bytes, *, loop_marker_header: str = "X-Domarc-Forwarded-By
     primary_to = to_addresses[0] if to_addresses else None
     primary_to_local, primary_to_domain = _split_address_local_domain(primary_to or "")
 
-    subject = str(msg.get("Subject", "") or "").strip()
+    # Decodifica RFC 2047 una sola volta (Unicode pulito):
+    # evita doppio-encoding quando il subject viene poi concatenato in template
+    # auto-reply (es. "AUTH-XXX – {{ subject }}" → vecchio bug =?UTF-8?B?...?=).
+    subject = _decode_mime_header(msg.get("Subject", ""))
     message_id = (msg.get("Message-ID") or msg.get("Message-Id") or "").strip() or None
     in_reply_to = (msg.get("In-Reply-To") or "").strip() or None
     references_raw = msg.get("References", "") or ""

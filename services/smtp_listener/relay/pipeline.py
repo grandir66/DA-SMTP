@@ -128,9 +128,24 @@ def _event_dict(parsed: ParsedMessage, ctx: CustomerContext,
     # Usato dal rule engine per match_known_customer.
     known_customer = ctx.codcli is not None
 
+    # Recipient groups (Migration 027): per ogni destinatario noto, lookup
+    # group_ids cached. Permette al rule engine di valutare match_to_group_id.
+    recipient_groups: dict[str, list[int]] = {}
+    try:
+        all_recipients = list(parsed.to_addresses or [])
+        if parsed.primary_to and parsed.primary_to not in all_recipients:
+            all_recipients.append(parsed.primary_to)
+        for em in all_recipients:
+            ids = storage.get_recipient_group_ids_by_email(em)
+            if ids:
+                recipient_groups[em.lower()] = ids
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("Lookup recipient_groups fallito: %s", exc)
+
     return {
         "from_address": parsed.from_address,
         "to_address": parsed.primary_to,
+        "to_addresses": list(parsed.to_addresses or []),
         "to_domain": parsed.primary_to_domain,
         "subject": parsed.subject,
         "body_text": parsed.body_text,
@@ -141,6 +156,7 @@ def _event_dict(parsed: ParsedMessage, ctx: CustomerContext,
         "known_customer": known_customer,
         "has_exception_today": has_exception_today,
         "message_id": parsed.message_id,
+        "recipient_groups": recipient_groups,
         # tag opzionale (None se non valorizzato): per match_tag.
         # Origine: parsed metadata o future estensione (es. da X-Tag header).
         "tag": getattr(parsed, "tag", None),
@@ -406,7 +422,7 @@ def _dispatch_action(
     elif action_name == "forward":
         result = actions.do_forward(
             event_uuid=event_uuid, parsed=parsed, storage=storage, cfg=cfg,
-            action_map=action_map, route_row=route_row,
+            action_map=action_map, route_row=route_row, rule=rule,
         )
     elif action_name == "redirect":
         result = actions.do_redirect(
