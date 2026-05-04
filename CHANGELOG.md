@@ -6,6 +6,41 @@ Il formato è basato su [Keep a Changelog](https://keepachangelog.com/it/1.1.0/)
 
 ## [Unreleased] — 2026-05-04
 
+### Aggiunte — H24 feature COMPLETATA (Fasi A-F): autorizzazione interventi urgenti a pagamento via codice in oggetto mail
+
+Feature completa "intervento urgente a pagamento via codice mailto", testata
+end-to-end su pilota datia.it. Vedi commit per fase:
+
+- **Fase A** (commit `2192501`): schema DB, CRUD codici permanenti/monouso,
+  targets multi-brand. Smoke 10/10 PASS.
+- **Fase B** (commit `d920f2f`): `h24_code_extractor.py` + endpoint
+  `POST /auth-codes/validate` con cascade oneshot→permanente atomico. 19/19 PASS.
+- **Fase C** (commit `0c9934e`): listener action `do_create_authorized_ticket`,
+  threading via event_uuid, helper `_send_h24_template_reply` per ack/reject.
+  Variabili template `h24_inbound_alias` (cascade brand), `urgent_fee`, `ticket_id`.
+- **Fase D** (commit `bf13474`): UI admin `/h24-codes` (lista, modale crea,
+  storico usi, revoca), `/h24-targets` (CRUD multi-brand). 3 reply_template
+  seedati (`out_of_hours_with_paid_option`, `h24_ack`, `h24_reject`).
+- **Fase E** (commit `4d330ae`): sync `smtp_relay_h24_targets` listener cache
+  (multi-brand), endpoint `/maintenance/cleanup-oneshot-codes`, scheduler loop
+  `_h24_maintenance_loop` (24h cleanup) + `_h24_usage_flush_loop` (5min stub
+  per rendicontazione manager — TODO endpoint manager).
+- **Fase F** (questo commit): test e2e PASS:
+  - F.1 codice permanente DOMARC-FASEF-PERM → ticket reale tk_key creato su
+    manager-dev (codice_cliente=73053 forzato dal codice).
+  - F.2-bis subject senza codice → reject auto_reply via template `h24_reject`.
+  - F.3 oneshot completo: source mail → auto_reply con `auth_code=D4NJ3M` →
+    rientro AUTH-D4NJ3M → cascade validate → kind=oneshot → ticket queued +
+    ack template + codice consumato atomicamente.
+
+Funzionalità complete:
+- Multi-brand (mailto target = h24@<brand>.it parametrico per dominio mittente).
+- Privacy bypass + kill switch hanno precedenza (gestiti dalla pipeline).
+- Auto-loop protection (Auto-Submitted, parsed.is_auto_or_bulk).
+- Atomic consume oneshot race-safe.
+- Audit trail completo permanenti (customer_h24_codes_usage).
+- Predisposizione rendicontazione (reported_to_manager_at + endpoint stub).
+
 ### Aggiunte — H24 Fase A: schema + CRUD codici (permanenti + monouso) + targets multi-brand
 
 Fondamenta della feature "intervento urgente a pagamento via codice in oggetto mail" (apertura ticket H24 a pagamento via codice nel subject mail di rientro).
