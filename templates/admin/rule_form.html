@@ -78,26 +78,72 @@
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 <div class="rf-grid">
 
+    <style>
+        /* Balloon/tooltip per ogni label del form rule */
+        .rf-tip { position: relative; display: inline-block; margin-left: 0.4rem;
+                  color: #2563eb; cursor: help; font-size: 0.8rem; }
+        .rf-tip:hover .rf-tip-balloon { visibility: visible; opacity: 1; }
+        .rf-tip-balloon {
+            visibility: hidden; opacity: 0; transition: opacity 0.15s;
+            position: absolute; bottom: 130%; left: 50%; transform: translateX(-50%);
+            background: #0b2a4a; color: #fff; font-size: 0.78rem; line-height: 1.4;
+            padding: 8px 12px; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            white-space: normal; width: 320px; max-width: 90vw; z-index: 1000;
+            font-weight: 400; text-align: left;
+        }
+        .rf-tip-balloon::after {
+            content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
+            border: 6px solid transparent; border-top-color: #0b2a4a;
+        }
+        .rf-tip-balloon code { background: rgba(255,255,255,0.15); padding: 1px 4px; border-radius: 2px; }
+    </style>
+
     <div class="rf-card">
         <h3><i class="fas fa-tag"></i> Identificazione</h3>
         <div class="rf-body">
             <div class="rf-row">
-                <label>Nome *</label>
+                <label>Nome *<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
+                    Etichetta breve della regola (max 200 char). Visibile in elenco
+                    e nei log. Esempio: <code>Auto-reply H24 (preso in carico)</code>.
+                </span></span></label>
                 <input type="text" name="name" required maxlength="200" value="{{ record.name or '' }}">
             </div>
             <div class="rf-row">
-                <label>Priorità</label>
+                <label>Descrizione<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
+                    Note interne sull'uso e la funzione della regola. Spiega
+                    <strong>perché</strong> esiste, <strong>quando</strong> matcha
+                    e <strong>cosa</strong> fa. Visibile come tooltip nella lista
+                    regole.
+                </span></span></label>
+                <textarea name="description" rows="3" style="width:100%; font-family:inherit;"
+                          placeholder="Spiega scopo, condizioni di match e comportamento atteso. Es: 'Intercetta mail dirette alla mailbox di rientro H24 con codice nel subject. Apre ticket urgente a pagamento.'">{{ record.description or '' }}</textarea>
+            </div>
+            <div class="rf-row">
+                <label>Priorità<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
+                    Ordine di valutazione: numero <strong>più basso = valutata prima</strong>.
+                    Le regole con stessa priorità vengono valutate per ID. Il rule
+                    engine si ferma al primo match (a meno di "Cascata" attiva).
+                    Suggerito: 5-50 H24/critiche, 100-500 contratti, 999 catch-all.
+                </span></span></label>
                 <div>
                     <input type="number" name="priority" min="1" max="999" value="{{ record.priority or 100 }}" style="width:120px;">
                     <div class="help">Numero più basso = valutata prima nello stesso scope.</div>
                 </div>
             </div>
             <div class="rf-row">
-                <label>Stato</label>
+                <label>Stato<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
+                    Se disattivata la regola NON viene valutata. Utile per
+                    parking temporaneo senza perdere la configurazione.
+                </span></span></label>
                 <div><label style="font-weight:400;"><input type="checkbox" name="enabled" {% if record.enabled or is_new %}checked{% endif %}> Attiva</label></div>
             </div>
             <div class="rf-row">
-                <label>Cascata</label>
+                <label>Cascata<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
+                    Se attivo, dopo il match continua a valutare le regole
+                    successive (può triggerare azioni multiple). Se spento (default),
+                    al primo match la pipeline si ferma. Tipico: spento per
+                    auto_reply/create_ticket, acceso per flag_only diagnostici.
+                </span></span></label>
                 <div><label style="font-weight:400;"><input type="checkbox" name="continue_after_match" {% if record.continue_after_match %}checked{% endif %}> Continua a valutare regole successive dopo il match</label></div>
             </div>
         </div>
@@ -107,7 +153,12 @@
         <h3><i class="fas fa-bullseye"></i> Scope</h3>
         <div class="rf-body">
             <div class="rf-row">
-                <label>Tipo</label>
+                <label>Tipo<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
+                    Ambito di applicazione:<br>
+                    <strong>Globale</strong>: applicata a tutte le mail<br>
+                    <strong>Mailbox specifica</strong>: solo se scope_ref matcha id mailbox<br>
+                    <strong>Settore</strong>: solo per pack settore (sector_pack)
+                </span></span></label>
                 <select name="scope_type">
                     <option value="global"      {% if record.scope_type == 'global' or not record.scope_type %}selected{% endif %}>Globale</option>
                     <option value="mailbox"     {% if record.scope_type == 'mailbox' %}selected{% endif %}>Mailbox specifica</option>
@@ -115,7 +166,11 @@
                 </select>
             </div>
             <div class="rf-row">
-                <label>Riferimento</label>
+                <label>Riferimento<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
+                    Identificatore concreto dell'ambito. Vuoto se Tipo=Globale.
+                    Per Tipo=Mailbox: id numerico della mailbox. Per Tipo=Settore:
+                    nome del pack.
+                </span></span></label>
                 <div>
                     <input type="text" name="scope_ref" value="{{ record.scope_ref or '' }}" placeholder="es. id mailbox o nome settore">
                     <div class="help">Vuoto se scope = global.</div>
@@ -128,7 +183,14 @@
         <h3><i class="fas fa-magnifying-glass"></i> Match (AND tra i campi compilati)</h3>
         <div class="rf-body">
             <div class="rf-row">
-                <label>Subject regex</label>
+                <label>Subject regex<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
+                    Regex Python applicata al <strong>subject</strong> della mail.
+                    Senza match → la regola non scatta. Esempi:
+                    <code>(?i)urgente</code>,
+                    <code>AUTH-|H24-</code>,
+                    <code>\\[OptiWize\\]</code>.
+                    Usa <code>(?i)</code> per case-insensitive.
+                </span></span></label>
                 <div>
                     <div class="inline-test">
                         <input type="text" id="match_subject_regex" name="match_subject_regex" value="{{ record.match_subject_regex or '' }}" placeholder="(?i)urgente|critico">
@@ -138,7 +200,12 @@
                 </div>
             </div>
             <div class="rf-row">
-                <label>From dominio</label>
+                <label>From dominio<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
+                    Confronto esatto sul <strong>dominio del mittente</strong>
+                    (case-insensitive). Es: <code>cloudtik.it</code>. Più veloce
+                    di "From regex" perché evita parsing regex. Da preferire quando
+                    matcha solo un dominio specifico.
+                </span></span></label>
                 <div>
                     <input type="text" name="match_from_domain" id="match_from_domain"
                            list="known_domains_list"
@@ -160,7 +227,12 @@
                 </div>
             </div>
             <div class="rf-row">
-                <label>From regex</label>
+                <label>From regex<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
+                    Regex sul <strong>From</strong> completo (es.
+                    <code>r.grandi@datia.it</code>). Usa <code>(?i)</code> per
+                    ignorare maiuscole. Per match su dominio preferisci "From dominio"
+                    (più veloce, senza regex).
+                </span></span></label>
                 <div>
                     <div class="inline-test">
                         <input type="text" id="match_from_regex" name="match_from_regex" value="{{ record.match_from_regex or '' }}" placeholder="(?i)^noreply@cliente\.com$">
@@ -171,7 +243,12 @@
                 </div>
             </div>
             <div class="rf-row">
-                <label>To regex</label>
+                <label>To regex<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
+                    Regex sul <strong>destinatario primario</strong>. Esempi:
+                    <code>^h24@(datia|domarc)\\.it$</code> per la mailbox di
+                    rientro H24, <code>(?i)^supporto@</code> per la cassetta
+                    assistenza.
+                </span></span></label>
                 <div>
                     <div class="inline-test">
                         <input type="text" id="match_to_regex" name="match_to_regex" value="{{ record.match_to_regex or '' }}" placeholder="(?i)^supporto@">
@@ -181,7 +258,12 @@
                 </div>
             </div>
             <div class="rf-row">
-                <label>Body regex</label>
+                <label>Body regex<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
+                    Regex sul <strong>body text</strong> della mail (HTML
+                    convertito a testo). Costoso su body lunghi: usare
+                    sparingly. Esempi: <code>(?i)\\bdown\\b</code>,
+                    <code>(?i)server\\s+(?:offline|giù)</code>.
+                </span></span></label>
                 <div>
                     <div class="inline-test">
                         <input type="text" id="match_body_regex" name="match_body_regex" value="{{ record.match_body_regex or '' }}" placeholder="opzionale, body troncato a 16 KB">
@@ -191,7 +273,11 @@
                 </div>
             </div>
             <div class="rf-row">
-                <label>To domain</label>
+                <label>To domain<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
+                    Confronto esatto sul dominio del <strong>destinatario primario</strong>.
+                    Es: <code>datia.it</code>. Da preferire a "To regex" se basta
+                    il dominio.
+                </span></span></label>
                 <input type="text" name="match_to_domain" value="{{ record.match_to_domain or '' }}" placeholder="es. domarc.it">
             </div>
             <div style="grid-column: 1 / -1; margin-top:0.5rem; padding:0.7rem 0.9rem; background:#f0fdf4; border-left:3px solid #10b981; border-radius:0 6px 6px 0;">
@@ -206,7 +292,15 @@
                 </p>
             </div>
             <div class="rf-row">
-                <label>Stato servizio</label>
+                <label>Stato servizio<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
+                    <strong>Indifferente</strong> (default): la regola scatta
+                    sia in che fuori orario.<br>
+                    <strong>In servizio</strong>: matcha solo se il cliente è
+                    nelle sue ore contrattuali.<br>
+                    <strong>Fuori servizio</strong>: matcha solo fuori orario
+                    contrattuale.<br>
+                    Tipicamente "fuori servizio" per regole H24 / urgenti a pagamento.
+                </span></span></label>
                 <div>
                     <select name="match_in_service">
                         <option value="">Indifferente — applica sempre</option>
@@ -233,7 +327,13 @@
                 </div>
             </div>
             <div class="rf-row">
-                <label>Cliente noto</label>
+                <label>Cliente noto<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
+                    <strong>Indifferente</strong>: ignora.<br>
+                    <strong>Sì</strong>: matcha solo se il mittente è collegato
+                    a un cliente in archivio (codcli risolto).<br>
+                    <strong>No</strong>: matcha solo se mittente <em>sconosciuto</em>
+                    (utile per regole "non riconosciuto, manda commerciale").
+                </span></span></label>
                 <div>
                     <select name="match_known_customer">
                         <option value="">Indifferente</option>
@@ -248,7 +348,13 @@
                 </div>
             </div>
             <div class="rf-row">
-                <label>Contratto cliente</label>
+                <label>Contratto cliente<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
+                    Stato del contratto del cliente:<br>
+                    <strong>Indifferente</strong>: ignora.<br>
+                    <strong>Attivo</strong>: matcha solo se contratto attivo.<br>
+                    <strong>Non attivo</strong>: matcha solo clienti senza
+                    contratto attivo (utile per "manda al commerciale").
+                </span></span></label>
                 <div>
                     <select name="match_contract_active">
                         <option value="">Indifferente</option>
@@ -262,7 +368,12 @@
                 </div>
             </div>
             <div class="rf-row">
-                <label>Eccezione oggi</label>
+                <label>Eccezione oggi<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
+                    Cliente con un'eccezione di calendario oggi (festività
+                    locale, chiusura aziendale, ecc.). Tipico: regole "fuori
+                    orario" devono scattare anche di mercoledì se il cliente
+                    ha festività locale.
+                </span></span></label>
                 <div>
                     <select name="match_has_exception_today">
                         <option value="">Indifferente</option>
@@ -278,7 +389,12 @@
                 </div>
             </div>
             <div class="rf-row">
-                <label>Gruppi clienti</label>
+                <label>Gruppi clienti<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
+                    Selezione multipla. La regola scatta se il cliente del
+                    messaggio appartiene ad <strong>almeno uno</strong> dei
+                    gruppi selezionati (logica OR). Gestisci i gruppi nella
+                    voce "Gruppi clienti" del menu.
+                </span></span></label>
                 <div>
                     {% set selected_groups = (record.match_customer_groups or '').split(',') | map('trim') | list %}
                     <select name="match_customer_groups" multiple
@@ -302,7 +418,11 @@
                 </div>
             </div>
             <div class="rf-row">
-                <label>Match tag</label>
+                <label>Match tag<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
+                    Tag esplicito sulla mail (header X-Tag o assegnato dal
+                    parser). Permette di marcare regole per scenari specifici
+                    senza dover fare match su contenuti.
+                </span></span></label>
                 <input type="text" name="match_tag" value="{{ record.match_tag or '' }}" placeholder="es. priority/spam">
             </div>
         </div>

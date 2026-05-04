@@ -55,7 +55,11 @@
                     <span class="label">
                         <span class="rule-badge-group"><i class="fas fa-folder-open"></i> gruppo</span>
                         <span class="rule-id" title="ID regola">#{{ g.id }}</span>
-                        <strong>{{ g.group_label or g.name }}</strong>
+                        <strong {% if g.description %}title="{{ g.description }}"{% endif %}>{{ g.group_label or g.name }}</strong>
+                        {% if g.description %}
+                        <span class="rule-desc-pill" title="{{ g.description }}"
+                              style="display:inline-block; cursor:help; color:#2563eb; margin-left:0.3rem; font-size:0.78rem;">ⓘ</span>
+                        {% endif %}
                         <span class="rule-badge-children">{{ item.children|length }} figli</span>
                         {% if g.exclusive_match %}<span class="rule-inherit-badge" title="exclusive_match: blocca i top-level successivi al primo match"><i class="fas fa-lock"></i> esclusivo</span>{% endif %}
                         <span class="match-summary">
@@ -93,7 +97,12 @@
                         <span class="priority">{{ c.priority }}</span>
                         <span class="label">
                             <span class="rule-id" title="ID regola">#{{ c.id }}</span>
-                            <a href="{{ url_for('rules.child_form_view', group_id=g.id, child_id=c.id) }}"><strong>{{ c.name }}</strong></a>
+                            <a href="{{ url_for('rules.child_form_view', group_id=g.id, child_id=c.id) }}"
+                               {% if c.description %}title="{{ c.description }}"{% endif %}><strong>{{ c.name }}</strong></a>
+                            {% if c.description %}
+                            <span class="rule-desc-pill" title="{{ c.description }}"
+                                  style="display:inline-block; cursor:help; color:#2563eb; margin-left:0.3rem; font-size:0.78rem;">ⓘ</span>
+                            {% endif %}
                             <span class="dr-action-pill {{ c.action }}{% if c.action in ('ai_classify', 'ai_critical_check') %} ai-action{% endif %}">
                                 {%- if c.action == 'create_ticket' %}<i class="fas fa-ticket"></i>
                                 {%- elif c.action == 'auto_reply' %}<i class="fas fa-reply"></i>
@@ -146,7 +155,12 @@
                 <span class="label">
                     <span class="rule-badge-orphan">orfana</span>
                     <span class="rule-id" title="ID regola">#{{ r.id }}</span>
-                    <a href="{{ url_for('rules.form_view', rule_id=r.id) }}"><strong>{{ r.name }}</strong></a>
+                    <a href="{{ url_for('rules.form_view', rule_id=r.id) }}"
+                       {% if r.description %}title="{{ r.description }}"{% endif %}><strong>{{ r.name }}</strong></a>
+                    {% if r.description %}
+                    <span class="rule-desc-pill" title="{{ r.description }}"
+                          style="display:inline-block; cursor:help; color:#2563eb; margin-left:0.3rem; font-size:0.78rem;">ⓘ</span>
+                    {% endif %}
                     <span class="dr-action-pill {{ r.action }}{% if r.action in ('ai_classify', 'ai_critical_check') %} ai-action{% endif %}">
                         {%- if r.action == 'create_ticket' %}<i class="fas fa-ticket"></i>
                         {%- elif r.action == 'auto_reply' %}<i class="fas fa-reply"></i>

@@ -693,8 +693,24 @@ def do_create_authorized_ticket(
 
     # Codice valido → costruisci payload ticket
     code_info = val.code_info or {}
-    # Per permanenti: forza codice_cliente da customer_h24_codes
-    final_codcli = code_info.get("codice_cliente") or codcli
+    # === Identificazione cliente (cascade) ===
+    # 1. Per codici permanenti: codice_cliente è SEMPRE valorizzato
+    #    (il codice è anagraficamente legato al cliente).
+    # 2. Per codici monouso: code_info.codice_cliente può essere valorizzato
+    #    se al momento dell'emissione il mittente era stato identificato.
+    # 3. Fallback: codcli del mittente del rientro (ctx.codcli)
+    code_codcli = code_info.get("codice_cliente")
+    final_codcli = code_codcli or codcli  # priorità al codice anagrafico
+    # Origine identificazione (per audit chiaro nelle note ticket)
+    if val.kind == "permanent":
+        codcli_source = "codice permanente (anagrafica forzata)"
+    elif code_codcli:
+        codcli_source = "codice monouso (cliente identificato all'emissione)"
+    elif codcli:
+        codcli_source = "mittente del rientro (lookup customer source)"
+    else:
+        codcli_source = "non identificato (mittente sconosciuto in archivio)"
+
     # Recupera urgent_fee dalla setting (action_map override)
     urgent_fee = action_map.get("urgent_fee")
     if not urgent_fee:
@@ -706,18 +722,23 @@ def do_create_authorized_ticket(
     urgenza = (action_map.get("urgenza") or "URGENTE").strip() or "URGENTE"
 
     note_lines = [
-        f"Apertura ticket autorizzata via codice H24 ({val.kind}).",
-        f"Codice: {val.code}",
-        f"Importo intervento urgente: {urgent_fee} EUR + IVA",
+        f"=== APERTURA TICKET URGENTE H24 (a pagamento) ===",
+        f"",
+        f"Aperto per conto di: {parsed.from_address}",
+        f"Cliente: {final_codcli or 'NON IDENTIFICATO'} ({codcli_source})",
+        f"Codice autorizzazione: {val.code}",
+        f"Tipo codice: {val.kind} ({'riusabile' if val.kind == 'permanent' else 'monouso'})",
+        f"Importo addebitato: {urgent_fee} EUR + IVA",
         f"Mailbox di rientro: {inbound_alias or '(non determinato)'}",
-        f"Mittente: {parsed.from_address}",
     ]
     if val.kind == "oneshot" and code_info.get("event_uuid"):
-        note_lines.append(f"Evento originario: {code_info['event_uuid']}")
+        note_lines.append(f"Evento originario (auto-reply che ha emesso il codice): {code_info['event_uuid']}")
     if val.kind == "permanent" and code_info.get("label"):
-        note_lines.append(f"Etichetta codice: {code_info['label']}")
+        note_lines.append(f"Etichetta codice permanente: {code_info['label']}")
+    if val.kind == "permanent" and val.usage_id:
+        note_lines.append(f"Usage record (audit fatturazione): id {val.usage_id}")
 
-    body_prefix = "\n".join(note_lines) + "\n\n--- Body originale ---\n\n"
+    body_prefix = "\n".join(note_lines) + "\n\n=== Body originale del rientro ===\n\n"
     original_body = (parsed.body_text or parsed.body_html or "")[:7000]
 
     payload: dict[str, Any] = {
@@ -738,6 +759,8 @@ def do_create_authorized_ticket(
             "h24_urgent_fee_eur": urgent_fee,
             "h24_inbound_alias": inbound_alias,
             "h24_event_uuid_origin": code_info.get("event_uuid"),
+            "h24_codcli_source": codcli_source,
+            "h24_from_address": parsed.from_address,  # mittente reale
             "received_count": parsed.received_count,
             "attachments": [{"filename": a.filename, "content_type": a.content_type,
                               "size": a.size_bytes} for a in parsed.attachments],

@@ -571,6 +571,7 @@ def _parse_form(form) -> dict:
 
     return {
         "name": form.get("name"),
+        "description": form.get("description") or None,
         "scope_type": form.get("scope_type") or "global",
         "scope_ref": form.get("scope_ref") or None,
         "priority": form.get("priority") or 100,

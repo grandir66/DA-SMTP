@@ -398,7 +398,8 @@ class SqliteStorage(Storage):
             if rid:
                 conn.execute(
                     """UPDATE rules SET
-                          name = ?, scope_type = ?, scope_ref = ?, priority = ?, enabled = ?,
+                          name = ?, description = ?, scope_type = ?, scope_ref = ?,
+                          priority = ?, enabled = ?,
                           match_from_regex = ?, match_to_regex = ?, match_subject_regex = ?,
                           match_body_regex = ?, match_to_domain = ?, match_from_domain = ?,
                           match_at_hours = ?, match_in_service = ?, match_contract_active = ?,
@@ -412,6 +413,7 @@ class SqliteStorage(Storage):
                        WHERE id = ?""",
                     (
                         (data.get("name") or "").strip(),
+                        (data.get("description") or "").strip() or None,
                         data.get("scope_type") or "global",
                         data.get("scope_ref") or None,
                         int(data.get("priority", 100)),
@@ -445,7 +447,7 @@ class SqliteStorage(Storage):
                 return int(rid)
             cur = conn.execute(
                 """INSERT INTO rules
-                       (tenant_id, name, scope_type, scope_ref, priority, enabled,
+                       (tenant_id, name, description, scope_type, scope_ref, priority, enabled,
                         match_from_regex, match_to_regex, match_subject_regex, match_body_regex,
                         match_to_domain, match_from_domain, match_at_hours, match_in_service,
                         match_contract_active, match_known_customer, match_has_exception_today,
@@ -453,11 +455,12 @@ class SqliteStorage(Storage):
                         continue_after_match, created_by,
                         parent_id, is_group, group_label,
                         exclusive_match, continue_in_group, exit_group_continue)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                            ?, ?, ?, ?, ?, ?)""",
                 (
                     int(tenant_id),
                     (data.get("name") or "").strip(),
+                    (data.get("description") or "").strip() or None,
                     data.get("scope_type") or "global",
                     data.get("scope_ref") or None,
                     int(data.get("priority", 100)),
