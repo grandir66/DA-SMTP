@@ -10,6 +10,12 @@ from datetime import datetime, timezone
 from flask import Blueprint, Response, abort, current_app, flash, g, jsonify, redirect, render_template, request, session, url_for
 
 from ..auth import login_required
+from ..rules.wizard_presets import (
+    CATEGORIES as RULE_WIZARD_CATEGORIES,
+    PRESETS as RULE_WIZARD_PRESETS,
+    get_preset,
+    presets_by_category,
+)
 
 rules_bp = Blueprint("rules", __name__)
 
@@ -48,6 +54,148 @@ def list_view():
         rule_sets=sets,
         rule_set_counts=counts,
         active_set_id=rule_set_id,
+    )
+
+
+@rules_bp.route("/rules/wizard", methods=["GET", "POST"])
+@login_required(role="operator")
+def wizard_view():
+    """Wizard guidato per creare regole comuni in 3 step.
+
+    GET: mostra catalogo preset + form personalizzazione + preview.
+    POST: applica preset + override utente, crea regola, redirect al form
+          completo per rifinitura.
+    """
+    storage = _storage()
+
+    if request.method == "POST":
+        preset_id = (request.form.get("preset_id") or "").strip()
+        preset = get_preset(preset_id)
+        if not preset:
+            flash("Preset non valido.", "error")
+            return redirect(url_for("rules.wizard_view"))
+
+        # Costruisci la regola: defaults del preset + override dal form
+        defaults = dict(preset.get("defaults") or {})
+        action_map = dict(defaults.get("action_map") or {})
+
+        # Risoluzione rule_set_id da code (preset o override)
+        rule_set_code = (request.form.get("rule_set_code")
+                         or defaults.get("rule_set_code") or "globali").strip()
+        rs = storage.get_rule_set_by_code(rule_set_code, tenant_id=_tid())
+        if not rs:
+            rs = storage.get_rule_set_by_code("globali", tenant_id=_tid())
+        rule_set_id = rs["id"] if rs else None
+
+        # Override testuali dal form (vuoti -> non sovrascrivono il preset)
+        def _take(key: str) -> str | None:
+            v = (request.form.get(key) or "").strip()
+            return v if v else None
+
+        match_from_regex = _take("match_from_regex") or defaults.get("match_from_regex")
+        match_to_regex = _take("match_to_regex") or defaults.get("match_to_regex")
+        match_subject_regex = _take("match_subject_regex") or defaults.get("match_subject_regex")
+        match_from_domain = _take("match_from_domain") or defaults.get("match_from_domain")
+        match_to_domain = _take("match_to_domain") or defaults.get("match_to_domain")
+
+        # Recipient group e forward
+        match_to_group_id = request.form.get("match_to_group_id")
+        match_to_group_id = int(match_to_group_id) if match_to_group_id and match_to_group_id.isdigit() else None
+        forward_to_emails = _take("forward_to_emails")
+        forward_to_group_id = request.form.get("forward_to_group_id")
+        forward_to_group_id = int(forward_to_group_id) if forward_to_group_id and forward_to_group_id.isdigit() else None
+
+        # action_map fields dal form
+        for k in ("settore", "urgenza", "reason", "ack_template_id",
+                  "reject_template_id"):
+            v = _take(f"am_{k}")
+            if v is not None:
+                if k.endswith("_id"):
+                    try:
+                        action_map[k] = int(v)
+                    except ValueError:
+                        pass
+                else:
+                    action_map[k] = v
+        if request.form.get("am_keep_original_delivery") in ("on", "true", "1"):
+            action_map["keep_original_delivery"] = True
+        # Template per auto_reply
+        tpl_id = _take("am_template_id")
+        if tpl_id:
+            try:
+                action_map["template_id"] = int(tpl_id)
+            except ValueError:
+                pass
+
+        # match_in_service tristate (preset o override)
+        mis_form = request.form.get("match_in_service")
+        if mis_form in ("true", "false"):
+            match_in_service = (mis_form == "true")
+        elif mis_form == "":
+            match_in_service = None
+        else:
+            match_in_service = defaults.get("match_in_service")
+
+        # Action eventualmente customizzabile (solo per il preset specifico_contratto)
+        action = (request.form.get("action") or defaults.get("action") or "ignore").strip()
+
+        # Nome auto-generato + descrizione che ricorda il preset di origine
+        name = (request.form.get("name") or "").strip() or f"{preset['title']}"
+        description = (request.form.get("description") or "").strip() or (
+            f"Creata da wizard ({preset['id']}). {preset['description']}"
+        )
+
+        # Priority: prendi suggerita dal preset, ma cerca un valore libero nel set/scope
+        priority = int(request.form.get("priority")
+                       or defaults.get("priority_hint") or 200)
+
+        rule_data = {
+            "name": name,
+            "description": description,
+            "rule_set_id": rule_set_id,
+            "scope_type": "global",
+            "priority": priority,
+            "enabled": True,
+            "match_from_regex": match_from_regex,
+            "match_to_regex": match_to_regex,
+            "match_subject_regex": match_subject_regex,
+            "match_from_domain": match_from_domain,
+            "match_to_domain": match_to_domain,
+            "match_to_group_id": match_to_group_id,
+            "match_in_service": match_in_service,
+            "forward_to_emails": forward_to_emails,
+            "forward_to_group_id": forward_to_group_id,
+            "action": action,
+            "action_map": action_map if action_map else None,
+        }
+
+        try:
+            new_id = storage.upsert_rule(
+                rule_data, tenant_id=_tid(),
+                created_by=session.get("username") or "wizard",
+            )
+            flash(f"Regola creata dal wizard (id={new_id}). "
+                  f"Personalizzala se necessario.", "success")
+            return redirect(url_for("rules.form_view", rule_id=new_id))
+        except ValueError as exc:
+            flash(f"Errore validazione: {exc}", "error")
+            return redirect(url_for("rules.wizard_view") + f"?preset={preset_id}")
+
+    # GET: mostra wizard
+    rule_sets = storage.list_rule_sets(tenant_id=_tid(), only_enabled=True)
+    templates = storage.list_templates(tenant_id=_tid(), only_enabled=True)
+    recipient_groups = storage.list_recipient_groups(tenant_id=_tid(), only_enabled=True)
+    initial_preset = (request.args.get("preset") or "").strip() or None
+
+    return render_template(
+        "admin/rules_wizard.html",
+        presets=RULE_WIZARD_PRESETS,
+        categories=RULE_WIZARD_CATEGORIES,
+        presets_grouped=presets_by_category(),
+        rule_sets=rule_sets,
+        templates=templates,
+        recipient_groups=recipient_groups,
+        initial_preset=initial_preset,
     )
 
 

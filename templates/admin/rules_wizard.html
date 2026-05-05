@@ -1,0 +1,566 @@
+{% extends "admin/_base.html" %}
+{% block title %}Wizard regola{% endblock %}
+{% block content %}
+<style>
+.wz-stepper { display:flex; gap:0; margin:1rem 0 1.5rem; align-items:center; }
+.wz-step { flex:1; padding:0.7rem 1rem; background:#f1f5f9; color:#94a3b8;
+           font-weight:600; font-size:0.88rem; position:relative;
+           border-top:3px solid #cbd5e1; text-align:center; }
+.wz-step.active { background:#fff; color:#1e293b; border-top-color:#3b82f6; }
+.wz-step.done { color:#15803d; border-top-color:#22c55e; }
+.wz-step .num { display:inline-block; width:24px; height:24px; line-height:24px;
+                background:#cbd5e1; color:#fff; border-radius:50%; font-size:0.78rem;
+                margin-right:0.5rem; text-align:center; }
+.wz-step.active .num { background:#3b82f6; }
+.wz-step.done .num { background:#22c55e; }
+.wz-step + .wz-step::before { content:''; position:absolute; left:0; top:0;
+                              border-left:1px solid #e2e8f0; height:100%; }
+
+.wz-pane { background:#fff; border:1px solid #e2e8f0; border-radius:8px;
+           padding:1.2rem 1.4rem; min-height:400px; box-shadow:0 1px 3px rgba(0,0,0,0.04); }
+.wz-pane.hidden { display:none; }
+
+.wz-preset-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
+                  gap:0.8rem; margin-top:0.8rem; }
+.wz-preset { background:#fff; border:2px solid #e2e8f0; border-radius:8px;
+             padding:1rem; cursor:pointer; transition:all 0.15s; position:relative;
+             min-height:170px; }
+.wz-preset:hover { border-color:#3b82f6; box-shadow:0 4px 12px rgba(59,130,246,0.15);
+                   transform:translateY(-2px); }
+.wz-preset.selected { border-color:#15803d; background:#f0fdf4; }
+.wz-preset.selected::after { content:'✓'; position:absolute; top:0.5rem; right:0.7rem;
+                             background:#15803d; color:#fff; border-radius:50%;
+                             width:24px; height:24px; line-height:24px; text-align:center;
+                             font-weight:700; }
+.wz-preset .icon-circle { width:42px; height:42px; border-radius:50%; display:flex;
+                          align-items:center; justify-content:center; color:#fff;
+                          margin-bottom:0.6rem; font-size:1.1rem; }
+.wz-preset h4 { margin:0 0 0.4rem; font-size:0.95rem; color:#0f172a; }
+.wz-preset p { margin:0; font-size:0.8rem; color:#64748b; line-height:1.4; }
+
+.wz-form-row { display:grid; grid-template-columns:200px 1fr; gap:0.8rem;
+               align-items:start; margin-bottom:0.9rem; padding-bottom:0.7rem;
+               border-bottom:1px dashed #f1f5f9; }
+.wz-form-row label { font-weight:600; color:#334155; padding-top:0.4rem; }
+.wz-form-row input[type=text], .wz-form-row input[type=number],
+.wz-form-row select, .wz-form-row textarea {
+    width:100%; padding:0.5rem; border:1px solid #cbd5e1; border-radius:6px;
+    font-family:inherit; font-size:0.9rem;
+}
+.wz-form-row .help { font-size:0.78rem; color:#64748b; margin-top:0.25rem; }
+.wz-form-row.optional label::after { content:' (opzionale)'; color:#94a3b8;
+                                      font-weight:normal; font-size:0.78rem; }
+
+.wz-buttons { display:flex; gap:0.6rem; margin-top:1.2rem; padding-top:1rem;
+              border-top:1px solid #e2e8f0; }
+.wz-buttons .spacer { flex:1; }
+
+.wz-preview { background:#f8fafc; border:1px solid #cbd5e1; border-radius:6px;
+              padding:0.9rem 1.1rem; margin-top:0.5rem; font-size:0.85rem; }
+.wz-preview h4 { margin:0 0 0.5rem; color:#0f172a; font-size:0.95rem; }
+.wz-preview dl { display:grid; grid-template-columns:200px 1fr; gap:0.3rem 0.8rem;
+                 margin:0; }
+.wz-preview dt { font-weight:600; color:#475569; }
+.wz-preview dd { margin:0; color:#0f172a; font-family:ui-monospace,Menlo,monospace;
+                 font-size:0.82rem; }
+.wz-preview .pill { background:#dbeafe; color:#1e40af; padding:0.05rem 0.5rem;
+                    border-radius:9px; font-size:0.78rem; }
+</style>
+
+<section class="dr-section">
+    <div style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap;">
+        <h2 style="margin:0;"><i class="fas fa-wand-magic-sparkles"></i> Wizard regola</h2>
+        <a href="{{ url_for('rules.form_view') }}" class="dr-btn" style="width:auto;">
+            <i class="fas fa-pen"></i> oppure usa il form completo (avanzato)
+        </a>
+        <a href="{{ url_for('rules.list_view') }}" class="dr-btn" style="width:auto; margin-left:auto;">
+            <i class="fas fa-times"></i> Annulla
+        </a>
+    </div>
+    <p class="dr-hint" style="margin-top:0.4rem;">
+        Crea una regola in 3 step partendo da un caso d'uso tipico. Dopo la creazione
+        potrai personalizzarla nel form completo.
+    </p>
+</section>
+
+<div class="wz-stepper">
+    <div class="wz-step active" id="stepHdr-1"><span class="num">1</span> Scegli un caso d'uso</div>
+    <div class="wz-step" id="stepHdr-2"><span class="num">2</span> Personalizza</div>
+    <div class="wz-step" id="stepHdr-3"><span class="num">3</span> Conferma e crea</div>
+</div>
+
+<form method="post" id="wizardForm" action="{{ url_for('rules.wizard_view') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="preset_id" id="preset_id" value="">
+
+    <!-- ========================== STEP 1 ========================== -->
+    <div class="wz-pane" id="step-1">
+        <h3 style="margin:0 0 0.4rem; color:#0f172a;">Quale caso d'uso meglio descrive la tua regola?</h3>
+        <p style="color:#64748b; font-size:0.88rem; margin:0 0 1rem;">
+            I preset sono organizzati per categoria, dall'alto verso il basso nella priorità di valutazione.
+            Clicca un riquadro per iniziare; potrai personalizzare i dettagli al prossimo step.
+        </p>
+
+        <!-- Banner "sopra il rule engine" -->
+        <div style="background:#fffbeb; border:1px solid #f59e0b; border-radius:6px;
+                    padding:0.7rem 1rem; margin-bottom:1.2rem; font-size:0.85rem; color:#78350f;">
+            <strong><i class="fas fa-layer-group"></i> Sopra a tutto il rule engine</strong>
+            (non sono regole standard, ma li elenchiamo per chiarezza):
+            <a href="{{ url_for('privacy_bypass.index') }}">Privacy bypass</a>
+            (drop pre-tutto) ·
+            <strong>Kill switch</strong>
+            (passthrough emergenza, dal toggle in dashboard) ·
+            <a href="{{ url_for('codes_h24.index') }}">Codici H24 permanenti</a>
+            (per cliente, sempre validi).
+        </div>
+
+        {% for cat in categories %}
+            {% set cat_presets = presets_grouped.get(cat.id, []) %}
+            {% if cat_presets %}
+            <div style="display:flex; align-items:center; gap:0.8rem; margin:1.2rem 0 0.6rem;
+                        padding-bottom:0.4rem; border-bottom:2px solid {{ cat.color }};">
+                <div style="width:36px; height:36px; border-radius:50%; background:{{ cat.color }};
+                            color:#fff; display:flex; align-items:center; justify-content:center; flex:none;">
+                    <i class="fas {{ cat.icon }}"></i>
+                </div>
+                <div style="flex:1;">
+                    <h4 style="margin:0; color:#0f172a; font-size:1.05rem;">{{ cat.title }}</h4>
+                    <p style="margin:0.15rem 0 0; font-size:0.82rem; color:#64748b;">{{ cat.description }}</p>
+                </div>
+            </div>
+            <div class="wz-preset-grid">
+                {% for p in cat_presets %}
+                <div class="wz-preset" data-preset="{{ p.id }}"
+                     onclick="selectPreset('{{ p.id }}')">
+                    <div class="icon-circle" style="background:{{ p.color }};">
+                        <i class="fas {{ p.icon }}"></i>
+                    </div>
+                    <h4>{{ p.title }}</h4>
+                    <p>{{ p.description }}</p>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        {% endfor %}
+
+        <div class="wz-buttons">
+            <span class="spacer"></span>
+            <button type="button" class="dr-btn dr-btn-primary" id="btnNext1"
+                    onclick="goStep(2)" disabled style="width:auto;">
+                Avanti <i class="fas fa-arrow-right"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- ========================== STEP 2 ========================== -->
+    <div class="wz-pane hidden" id="step-2">
+        <h3 style="margin:0 0 0.4rem; color:#0f172a;" id="step2-title">Personalizza la regola</h3>
+        <p style="color:#64748b; font-size:0.88rem;" id="step2-desc"></p>
+
+        <!-- Campi sempre visibili -->
+        <div class="wz-form-row">
+            <label>Nome regola *</label>
+            <div>
+                <input type="text" name="name" id="wz-name" required maxlength="200"
+                       placeholder="Auto-completato dal preset, modificabilo se vuoi">
+                <div class="help">Etichetta breve, visibile in elenco e nei log.</div>
+            </div>
+        </div>
+
+        <div class="wz-form-row">
+            <label>Set di regole *</label>
+            <div>
+                <select name="rule_set_code" id="wz-rule-set">
+                    {% for rs in rule_sets %}
+                        <option value="{{ rs.code }}">{% if rs.is_always_active %}🌐 {% endif %}{{ rs.name }}{% if rs.profile_code %} ({{ rs.profile_code }}){% endif %}</option>
+                    {% endfor %}
+                </select>
+                <div class="help">Pre-selezionato dal preset. Cambialo solo se sai cosa stai facendo.</div>
+            </div>
+        </div>
+
+        <div class="wz-form-row">
+            <label>Priorità</label>
+            <div>
+                <input type="number" name="priority" id="wz-priority" min="1" max="999"
+                       style="max-width:140px;">
+                <div class="help">Numero più basso = valutata prima. Default suggerito dal preset.</div>
+            </div>
+        </div>
+
+        <hr style="margin:1.2rem 0; border:none; border-top:1px dashed #cbd5e1;">
+        <h4 style="margin:0 0 0.6rem; color:#1e293b;">Quando deve scattare</h4>
+
+        <!-- Need: from_regex / from_regex_optional -->
+        <div class="wz-form-row" id="row-from_regex" style="display:none;">
+            <label>Mittente (regex)</label>
+            <div>
+                <input type="text" name="match_from_regex" id="wz-from-regex"
+                       placeholder="(?i)^no-?reply@cloudtik\.it$">
+                <div class="help">Regex Python per il match sul mittente. Ammette flag <code>(?i)</code> per case-insensitive.</div>
+            </div>
+        </div>
+
+        <!-- Need: to_regex_optional -->
+        <div class="wz-form-row optional" id="row-to_regex" style="display:none;">
+            <label>Destinatario (regex)</label>
+            <div>
+                <input type="text" name="match_to_regex" id="wz-to-regex"
+                       placeholder="(?i)^assistenza@.*$">
+                <div class="help">Mutex con Gruppo destinatari: usa l'una o l'altro.</div>
+            </div>
+        </div>
+
+        <!-- Need: recipient_group -->
+        <div class="wz-form-row" id="row-recipient_group" style="display:none;">
+            <label>Gruppo destinatari *</label>
+            <div>
+                <select name="match_to_group_id" id="wz-rg">
+                    <option value="">— scegli —</option>
+                    {% for rg in recipient_groups %}
+                        <option value="{{ rg.id }}">{{ rg.name }}</option>
+                    {% endfor %}
+                </select>
+                <div class="help">
+                    La regola scatta solo se uno dei destinatari della mail è membro del gruppo.
+                    <a href="{{ url_for('recipient_groups.list_view') }}" target="_blank">Crea/modifica gruppi</a>.
+                </div>
+            </div>
+        </div>
+
+        <!-- Need: subject_regex_optional -->
+        <div class="wz-form-row optional" id="row-subject_regex" style="display:none;">
+            <label>Oggetto (regex)</label>
+            <div>
+                <input type="text" name="match_subject_regex" id="wz-subj"
+                       placeholder="(?i)\| *Problem:|alert|critical">
+                <div class="help">Regex sul subject. Vuoto = qualsiasi.</div>
+            </div>
+        </div>
+
+        <!-- match_in_service (sempre se preset lo ha) -->
+        <div class="wz-form-row" id="row-in_service" style="display:none;">
+            <label>Stato servizio cliente</label>
+            <div>
+                <select name="match_in_service" id="wz-mis">
+                    <option value="">indifferente</option>
+                    <option value="true">in orario operativo</option>
+                    <option value="false">fuori orario operativo</option>
+                </select>
+                <div class="help">
+                    Calcolato dal profilo del singolo cliente: STD/EXT/H24/NO.
+                    "in orario" rispetta automaticamente la gerarchia STD ⊂ EXT ⊂ H24.
+                </div>
+            </div>
+        </div>
+
+        <hr style="margin:1.2rem 0; border:none; border-top:1px dashed #cbd5e1;" id="wz-action-sep">
+        <h4 style="margin:0 0 0.6rem; color:#1e293b;" id="wz-action-h">Cosa fare</h4>
+
+        <!-- Action customizzabile (solo specifico_contratto) -->
+        <div class="wz-form-row" id="row-action_choice" style="display:none;">
+            <label>Azione *</label>
+            <div>
+                <select name="action" id="wz-action">
+                    <option value="auto_reply">auto_reply (rispondi al mittente)</option>
+                    <option value="forward">forward (inoltra)</option>
+                    <option value="redirect">redirect (riscrivi destinatario)</option>
+                    <option value="create_ticket">create_ticket (apri ticket)</option>
+                    <option value="quarantine">quarantine (sospendi)</option>
+                    <option value="ignore">ignore (scarta)</option>
+                    <option value="ai_classify">ai_classify (decide l'AI)</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Need: template -->
+        <div class="wz-form-row" id="row-template" style="display:none;">
+            <label>Template risposta *</label>
+            <div>
+                <select name="am_template_id" id="wz-tpl">
+                    <option value="">— scegli —</option>
+                    {% for t in templates %}
+                        <option value="{{ t.id }}">#{{ t.id }} — {{ t.name }}</option>
+                    {% endfor %}
+                </select>
+                <div class="help">
+                    Risposta generata da template Jinja con variabili.
+                    <a href="{{ url_for('templates.list_view') }}" target="_blank">Crea template</a>.
+                </div>
+            </div>
+        </div>
+
+        <!-- Need: template_optional (per fuori_orario_sostituto) -->
+        <div class="wz-form-row optional" id="row-template_optional" style="display:none;">
+            <label>Template per auto-reply</label>
+            <div>
+                <select name="am_template_id_alt" id="wz-tpl-alt">
+                    <option value="">— nessuna risposta al mittente —</option>
+                    {% for t in templates %}
+                        <option value="{{ t.id }}">#{{ t.id }} — {{ t.name }}</option>
+                    {% endfor %}
+                </select>
+                <div class="help">Se selezionato, viene inviata anche una risposta al mittente con questo template.</div>
+            </div>
+        </div>
+
+        <!-- Need: forward_target -->
+        <div class="wz-form-row" id="row-forward_target" style="display:none;">
+            <label>Destinatario sostitutivo *</label>
+            <div>
+                <input type="text" name="forward_to_emails" id="wz-fwd-emails"
+                       placeholder="reperibile@studio.it; sostituto@studio.it">
+                <div class="help">Lista email separate da <code>;</code> o <code>,</code>. Mutex con "Gruppo forward".</div>
+            </div>
+        </div>
+
+        <div class="wz-form-row optional" id="row-forward_target_group" style="display:none;">
+            <label>Gruppo forward (alternativa)</label>
+            <div>
+                <select name="forward_to_group_id" id="wz-fwd-rg">
+                    <option value="">— nessun gruppo —</option>
+                    {% for rg in recipient_groups %}
+                        <option value="{{ rg.id }}">{{ rg.name }}</option>
+                    {% endfor %}
+                </select>
+                <div class="help">In alternativa alla lista email, espande i membri di questo gruppo come destinatari.</div>
+            </div>
+        </div>
+
+        <!-- Need: keep_original -->
+        <div class="wz-form-row" id="row-keep_original" style="display:none;">
+            <label>CC al destinatario originale</label>
+            <div>
+                <label style="font-weight:normal;">
+                    <input type="checkbox" name="am_keep_original_delivery" checked>
+                    Mantieni la mail visibile anche al destinatario originale
+                </label>
+                <div class="help">Default ON per il pattern "fuori orario": il destinatario originale vede comunque la mail al rientro.</div>
+            </div>
+        </div>
+
+        <!-- Need: settore -->
+        <div class="wz-form-row" id="row-settore" style="display:none;">
+            <label>Settore ticket</label>
+            <div>
+                <input type="text" name="am_settore" id="wz-settore" placeholder="assistenza">
+                <div class="help">Codice settore del gestionale (es. assistenza, T per tecnico, S per sistemi).</div>
+            </div>
+        </div>
+
+        <!-- Need: urgenza -->
+        <div class="wz-form-row" id="row-urgenza" style="display:none;">
+            <label>Urgenza ticket</label>
+            <div>
+                <select name="am_urgenza" id="wz-urgenza">
+                    <option value="BASSA">BASSA</option>
+                    <option value="NORMALE" selected>NORMALE</option>
+                    <option value="ALTA">ALTA</option>
+                    <option value="URGENTE">URGENTE</option>
+                    <option value="CRITICA">CRITICA</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Need: ack_template + reject_template (per H24) -->
+        <div class="wz-form-row" id="row-ack_template" style="display:none;">
+            <label>Template ACK (codice valido)</label>
+            <div>
+                <select name="am_ack_template_id">
+                    <option value="">— scegli —</option>
+                    {% for t in templates %}
+                        <option value="{{ t.id }}">#{{ t.id }} — {{ t.name }}</option>
+                    {% endfor %}
+                </select>
+                <div class="help">Inviato al mittente quando il codice è validato e il ticket aperto.</div>
+            </div>
+        </div>
+
+        <div class="wz-form-row" id="row-reject_template" style="display:none;">
+            <label>Template reject (codice non valido)</label>
+            <div>
+                <select name="am_reject_template_id">
+                    <option value="">— scegli —</option>
+                    {% for t in templates %}
+                        <option value="{{ t.id }}">#{{ t.id }} — {{ t.name }}</option>
+                    {% endfor %}
+                </select>
+                <div class="help">Inviato quando il codice è scaduto, già usato o sconosciuto.</div>
+            </div>
+        </div>
+
+        <!-- Need: reason (per quarantine) -->
+        <div class="wz-form-row" id="row-reason" style="display:none;">
+            <label>Motivo</label>
+            <div>
+                <input type="text" name="am_reason"
+                       placeholder="es. mittente sospetto, allegato pesante">
+            </div>
+        </div>
+
+        <div class="wz-buttons">
+            <button type="button" class="dr-btn" onclick="goStep(1)" style="width:auto;">
+                <i class="fas fa-arrow-left"></i> Indietro
+            </button>
+            <span class="spacer"></span>
+            <button type="button" class="dr-btn dr-btn-primary" onclick="goStep(3)" style="width:auto;">
+                Anteprima <i class="fas fa-arrow-right"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- ========================== STEP 3 ========================== -->
+    <div class="wz-pane hidden" id="step-3">
+        <h3 style="margin:0 0 0.4rem; color:#0f172a;">Conferma la regola</h3>
+        <p style="color:#64748b; font-size:0.88rem;">
+            Verifica i valori. Cliccando "Crea" la regola viene salvata e ti porto al
+            form completo per eventuali rifiniture.
+        </p>
+        <div class="wz-preview" id="wz-preview"></div>
+
+        <div class="wz-buttons">
+            <button type="button" class="dr-btn" onclick="goStep(2)" style="width:auto;">
+                <i class="fas fa-arrow-left"></i> Modifica
+            </button>
+            <span class="spacer"></span>
+            <button type="submit" class="dr-btn dr-btn-primary" style="width:auto;">
+                <i class="fas fa-check"></i> Crea regola
+            </button>
+        </div>
+    </div>
+</form>
+
+<script>
+const PRESETS = {{ presets|tojson }};
+let selectedPreset = null;
+
+function selectPreset(id) {
+    selectedPreset = PRESETS.find(p => p.id === id);
+    document.getElementById('preset_id').value = id;
+    document.querySelectorAll('.wz-preset').forEach(c => c.classList.remove('selected'));
+    document.querySelector(`[data-preset="${id}"]`).classList.add('selected');
+    document.getElementById('btnNext1').disabled = false;
+}
+
+function goStep(n) {
+    if (n === 2 && !selectedPreset) return;
+    if (n === 2) populateStep2();
+    if (n === 3) populatePreview();
+    [1, 2, 3].forEach(i => {
+        document.getElementById('step-' + i).classList.toggle('hidden', i !== n);
+        const hdr = document.getElementById('stepHdr-' + i);
+        hdr.classList.toggle('active', i === n);
+        hdr.classList.toggle('done', i < n);
+    });
+    window.scrollTo({top: 0, behavior:'smooth'});
+}
+
+function populateStep2() {
+    document.getElementById('step2-title').textContent = selectedPreset.title;
+    document.getElementById('step2-desc').textContent = selectedPreset.description;
+    document.getElementById('wz-name').value = selectedPreset.title;
+
+    const def = selectedPreset.defaults || {};
+    document.getElementById('wz-rule-set').value = def.rule_set_code || 'globali';
+    document.getElementById('wz-priority').value = def.priority_hint || 200;
+
+    // Mostra/nascondi righe in base a needs
+    const needs = selectedPreset.needs || [];
+    const rowMap = {
+        'from_regex': 'row-from_regex',
+        'from_regex_optional': 'row-from_regex',
+        'to_regex_optional': 'row-to_regex',
+        'subject_regex_optional': 'row-subject_regex',
+        'recipient_group': 'row-recipient_group',
+        'forward_target': ['row-forward_target', 'row-forward_target_group'],
+        'keep_original': 'row-keep_original',
+        'template': 'row-template',
+        'template_optional': 'row-template_optional',
+        'ack_template': 'row-ack_template',
+        'reject_template': 'row-reject_template',
+        'settore': 'row-settore',
+        'urgenza': 'row-urgenza',
+        'reason': 'row-reason',
+        'rule_set_choice': null,  // gia' visibile
+        'action_choice': 'row-action_choice',
+        'from_domain_optional': null,
+    };
+    // Reset all rows except always-visible
+    Object.values(rowMap).flat().filter(Boolean).forEach(rid => {
+        const el = document.getElementById(rid);
+        if (el) el.style.display = 'none';
+    });
+    // match_in_service visibile sempre se preset ha defaults
+    const misRow = document.getElementById('row-in_service');
+    if (def.match_in_service !== undefined) {
+        misRow.style.display = '';
+        document.getElementById('wz-mis').value = def.match_in_service === true ? 'true'
+            : def.match_in_service === false ? 'false' : '';
+    } else {
+        misRow.style.display = '';
+        document.getElementById('wz-mis').value = '';
+    }
+
+    needs.forEach(n => {
+        const rid = rowMap[n];
+        if (Array.isArray(rid)) rid.forEach(r => { const e = document.getElementById(r); if (e) e.style.display = ''; });
+        else if (rid) { const e = document.getElementById(rid); if (e) e.style.display = ''; }
+    });
+
+    // Pre-fill defaults da preset
+    if (def.match_from_regex) document.getElementById('wz-from-regex').value = def.match_from_regex;
+    if (def.match_subject_regex) document.getElementById('wz-subj').value = def.match_subject_regex;
+    if (def.action) {
+        const act = document.getElementById('wz-action');
+        if (act) act.value = def.action;
+    }
+    const am = def.action_map || {};
+    if (am.settore && document.getElementById('wz-settore')) document.getElementById('wz-settore').value = am.settore;
+    if (am.urgenza && document.getElementById('wz-urgenza')) document.getElementById('wz-urgenza').value = am.urgenza;
+}
+
+function populatePreview() {
+    const fd = new FormData(document.getElementById('wizardForm'));
+    const data = {};
+    for (const [k, v] of fd.entries()) {
+        if (v && v !== '') data[k] = v;
+    }
+    const setName = document.getElementById('wz-rule-set').selectedOptions[0]?.textContent.trim() || data.rule_set_code;
+    const fields = [
+        ['Caso d\'uso', selectedPreset.title],
+        ['Nome regola', data.name],
+        ['Set di regole', setName],
+        ['Priorità', data.priority],
+        ['Mittente regex', data.match_from_regex || '—'],
+        ['Destinatario regex', data.match_to_regex || '—'],
+        ['Gruppo destinatari', document.getElementById('wz-rg')?.selectedOptions[0]?.textContent || '—'],
+        ['Subject regex', data.match_subject_regex || '—'],
+        ['Stato servizio', data.match_in_service === 'true' ? 'in orario' : data.match_in_service === 'false' ? 'fuori orario' : 'indifferente'],
+        ['Azione', data.action || selectedPreset.defaults.action],
+        ['Forward a (emails)', data.forward_to_emails || '—'],
+        ['Forward a (gruppo)', document.getElementById('wz-fwd-rg')?.selectedOptions[0]?.textContent || '—'],
+        ['Template', document.getElementById('wz-tpl')?.selectedOptions[0]?.textContent || document.getElementById('wz-tpl-alt')?.selectedOptions[0]?.textContent || '—'],
+        ['Settore', data.am_settore || '—'],
+        ['Urgenza', data.am_urgenza || '—'],
+        ['CC originale', data.am_keep_original_delivery ? 'sì' : 'no'],
+    ];
+    let html = '<h4>Riepilogo della regola che stai per creare</h4><dl>';
+    for (const [k, v] of fields) {
+        html += `<dt>${k}</dt><dd>${escapeHtml(String(v||'—'))}</dd>`;
+    }
+    html += '</dl>';
+    html += '<p style="margin:0.7rem 0 0; font-size:0.82rem; color:#64748b; font-style:italic;">' +
+            'Dopo la creazione potrai modificare ogni dettaglio nel form completo.</p>';
+    document.getElementById('wz-preview').innerHTML = html;
+}
+
+function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// Init: pre-seleziona se preset arriva da query string
+{% if initial_preset %}
+window.addEventListener('DOMContentLoaded', () => selectPreset('{{ initial_preset }}'));
+{% endif %}
+</script>
+{% endblock %}
