@@ -97,21 +97,56 @@
     {% if is_new and not from_event_id %}
     <details style="margin-top:0.7rem; background:#f0fdf4; border-left:3px solid #10b981; padding:0.7rem 0.9rem; border-radius:0 5px 5px 0; font-size:0.85rem;">
         <summary style="cursor:pointer; font-weight:600; color:#065f46;">
-            <i class="fas fa-lightbulb"></i> Scenari tipici (combinazioni di match consigliate)
+            <i class="fas fa-lightbulb"></i> Ricetta rapida — combinazioni cliente × orario (M035)
         </summary>
-        <ul style="margin:0.5rem 0 0 1.2rem; padding:0; color:#065f46;">
-            <li><strong>Fuori orario / festività clienti con contratto</strong> →
-                Cliente noto = sì, Contratto = con contratto, Stato servizio = fuori servizio;
-                action <code>auto_reply</code> + template "fuori_orario" + <code>create_ticket</code>.</li>
-            <li><strong>Cliente censito senza contratto</strong> →
-                Cliente noto = sì, Contratto = senza contratto;
-                action <code>auto_reply</code> + template "no_contract".</li>
-            <li><strong>Mittente sconosciuto / catch-all</strong> →
-                Cliente noto = non censito; action <code>auto_reply</code> + template "unknown" o <code>quarantine</code>.</li>
-            <li><strong>Notifiche da monitoring</strong> →
-                From dominio + Subject regex <code>(?i)problem:</code> →
-                <code>create_ticket</code> NORMALE.</li>
-        </ul>
+        <table style="margin:0.6rem 0 0; width:100%; font-size:0.85rem; border-collapse:collapse;">
+            <thead>
+                <tr style="background:#fff; color:#065f46;">
+                    <th style="text-align:left; padding:0.4rem 0.6rem; border-bottom:2px solid #15803d;">Caso d'uso</th>
+                    <th style="text-align:left; padding:0.4rem 0.6rem; border-bottom:2px solid #15803d;">Set</th>
+                    <th style="text-align:left; padding:0.4rem 0.6rem; border-bottom:2px solid #15803d;">Gruppo cliente</th>
+                    <th style="text-align:left; padding:0.4rem 0.6rem; border-bottom:2px solid #15803d;">Stato servizio</th>
+                </tr>
+            </thead>
+            <tbody style="color:#065f46;">
+                <tr><td style="padding:0.3rem 0.6rem;">Cliente <strong>STD in orario</strong></td>
+                    <td style="padding:0.3rem 0.6rem;"><code>globali</code></td>
+                    <td style="padding:0.3rem 0.6rem;"><code>contract_standard</code></td>
+                    <td style="padding:0.3rem 0.6rem;"><code>Solo in servizio</code></td></tr>
+                <tr style="background:#fff;"><td style="padding:0.3rem 0.6rem;">Cliente <strong>STD fuori orario</strong></td>
+                    <td style="padding:0.3rem 0.6rem;"><code>globali</code></td>
+                    <td style="padding:0.3rem 0.6rem;"><code>contract_standard</code></td>
+                    <td style="padding:0.3rem 0.6rem;"><code>Solo fuori servizio</code></td></tr>
+                <tr><td style="padding:0.3rem 0.6rem;">Cliente <strong>EXT fuori orario</strong></td>
+                    <td style="padding:0.3rem 0.6rem;"><code>globali</code></td>
+                    <td style="padding:0.3rem 0.6rem;"><code>contract_extended</code></td>
+                    <td style="padding:0.3rem 0.6rem;"><code>Solo fuori servizio</code></td></tr>
+                <tr style="background:#fff;"><td style="padding:0.3rem 0.6rem;">Cliente <strong>H24 sempre</strong></td>
+                    <td style="padding:0.3rem 0.6rem;"><code>globali</code></td>
+                    <td style="padding:0.3rem 0.6rem;"><code>contract_h24</code></td>
+                    <td style="padding:0.3rem 0.6rem;"><code>indifferente</code></td></tr>
+                <tr><td style="padding:0.3rem 0.6rem;">Cliente <strong>VIP</strong> (override)</td>
+                    <td style="padding:0.3rem 0.6rem;"><code>globali</code></td>
+                    <td style="padding:0.3rem 0.6rem;"><code>vip</code></td>
+                    <td style="padding:0.3rem 0.6rem;"><code>indifferente</code></td></tr>
+                <tr style="background:#fff;"><td style="padding:0.3rem 0.6rem;">Senza contratto</td>
+                    <td style="padding:0.3rem 0.6rem;"><code>globali</code></td>
+                    <td style="padding:0.3rem 0.6rem;"><code>contract_inactive</code></td>
+                    <td style="padding:0.3rem 0.6rem;"><code>indifferente</code></td></tr>
+                <tr><td style="padding:0.3rem 0.6rem;">Allarmi automatici (es. CloudTIK)</td>
+                    <td style="padding:0.3rem 0.6rem;"><code>globali</code></td>
+                    <td style="padding:0.3rem 0.6rem;"><em>nessuno</em></td>
+                    <td style="padding:0.3rem 0.6rem;"><code>indifferente</code></td></tr>
+            </tbody>
+        </table>
+        <p style="margin:0.6rem 0 0; color:#065f46; font-size:0.82rem;">
+            <strong>Dove trovi i campi nel form:</strong>
+            "Set" → card <em>Identificazione</em> · "Gruppo cliente" → card
+            <em>Criteri di match → Origine mittente → Gruppi clienti</em> ·
+            "Stato servizio" → card <em>Criteri di match → Orario e calendario</em>
+            (clicca <a href="#orario-section" onclick="document.querySelector('#orario-section').scrollIntoView({behavior:'smooth',block:'center'}); return false;">qui</a>
+            per saltare alla sezione orario).
+        </p>
     </details>
     {% endif %}
 </section>
@@ -223,11 +258,11 @@
                     box.style.background = '#fef2f2';
                     box.style.borderLeftColor = '#dc2626';
                     box.style.color = '#7f1d1d';
-                    hint.innerHTML = '⚠️ <strong>Set DEPRECATO</strong>: filtra ancora per ' +
-                                     '<code>tipologia_servizio = ' + profile + '</code> ma e\\' meglio ' +
-                                     'usare <strong>"Sempre attive"</strong> + Gruppi clienti ' +
-                                     '(<code>contract_' + profile.toLowerCase() + '</code>) qui sotto. ' +
-                                     'Pattern uniforme + override manuale gratuito.';
+                    hint.innerHTML = "⚠️ <strong>Set DEPRECATO</strong>: filtra ancora per " +
+                                     "<code>tipologia_servizio = " + profile + "</code> ma è meglio " +
+                                     "usare <strong>'Sempre attive'</strong> + Gruppi clienti " +
+                                     "(<code>contract_" + profile.toLowerCase() + "</code>) qui sotto. " +
+                                     "Pattern uniforme + override manuale gratuito.";
                 } else if (always) {
                     box.style.background = '#ecfdf5';
                     box.style.borderLeftColor = '#15803d';
@@ -581,10 +616,13 @@
             </div>
 
             {# 3.4 ORARIO E CALENDARIO === #}
-            <div class="rf-subcard">
-                <div class="rf-subcard-header">
-                    <span class="rf-subcard-icon" style="background:#dbeafe; color:#1e40af;"><i class="fas fa-clock"></i></span>
-                    Orario e calendario
+            <div class="rf-subcard" id="orario-section" style="border:2px solid #3b82f6;">
+                <div class="rf-subcard-header" style="background:linear-gradient(90deg,#dbeafe,#eff6ff);">
+                    <span class="rf-subcard-icon" style="background:#3b82f6; color:#fff;"><i class="fas fa-clock"></i></span>
+                    <strong>Orario e calendario</strong> &nbsp;
+                    <span style="color:#1e40af; font-weight:600; font-size:0.82rem;">
+                        ← qui scegli "in orario" / "fuori orario"
+                    </span>
                     <span class="rf-subcard-stats">
                         Filtra per <em>quando arriva</em> la mail
                     </span>
@@ -593,18 +631,31 @@
                     <p style="margin: 0 0 0.7rem; font-size:0.82rem; color:#64748b;">
                         Il rule engine confronta l'orario corrente con il <strong>profilo orario del cliente del mittente</strong>
                         (STD/EXT/H24/NO o profilo custom). Le festività del profilo sono trattate come "fuori servizio".
+                        <br>Combinandolo con "Gruppi clienti" (sub-card Origine mittente) ottieni le 4 categorie classiche:
+                        STD/EXT/H24 × in/fuori orario.
                     </p>
                     <div class="rf-row">
-                        <label>Stato servizio<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
-                            <strong>In servizio</strong>: ore contrattuali del cliente.
-                            <strong>Fuori servizio</strong>: notte/weekend/festività o profilo NO.
+                        <label>Finestra oraria del cliente<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
+                            La finestra varia per ogni cliente in base al suo profilo:
+                            <br>• <strong>STD</strong>: lun-ven 08:30-13:00 + 14:30-17:30
+                            <br>• <strong>EXT</strong>: lun-ven 06:30-19:30 + sab 06:30-13:00
+                            <br>• <strong>H24</strong>: sempre attiva (24/7)
+                            <br>• <strong>NO</strong>: mai attiva
+                            <br><br>"Dentro" = orario operativo del singolo cliente;
+                            "Fuori" = notte/weekend/festivita' del cliente.
+                            Se vuoi una fascia FISSA indipendente dal cliente, usa
+                            "Override slot orario" qui sotto.
                         </span></span></label>
                         <div>
                             <select name="match_in_service">
-                                <option value="">Indifferente — applica sempre</option>
-                                <option value="true"  {% if record.match_in_service == 1 or record.match_in_service is sameas true %}selected{% endif %}>Solo in servizio</option>
-                                <option value="false" {% if record.match_in_service == 0 or record.match_in_service is sameas false %}selected{% endif %}>Solo fuori servizio</option>
+                                <option value="">Indifferente — qualsiasi orario</option>
+                                <option value="true"  {% if record.match_in_service == 1 or record.match_in_service is sameas true %}selected{% endif %}>Solo DENTRO orario operativo del cliente</option>
+                                <option value="false" {% if record.match_in_service == 0 or record.match_in_service is sameas false %}selected{% endif %}>Solo FUORI orario operativo del cliente</option>
                             </select>
+                            <div class="help">
+                                Calcolato dinamicamente in base al profilo del cliente (STD/EXT/H24/NO).
+                                <a href="{{ url_for('profiles.list_view') }}" target="_blank">Vedi profili orari</a>.
+                            </div>
                         </div>
                     </div>
                     <div class="rf-row">

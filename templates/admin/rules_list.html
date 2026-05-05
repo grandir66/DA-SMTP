@@ -161,10 +161,19 @@
                         {% if g.exclusive_match %}<span class="rule-inherit-badge" title="exclusive_match: blocca i top-level successivi al primo match"><i class="fas fa-lock"></i> esclusivo</span>{% endif %}
                         <span class="match-summary">
                             {%- if g.match_to_domain %}to_dom={{ g.match_to_domain }} {% endif -%}
-                            {%- if g.match_in_service is not none %}in_svc={{ 'sì' if g.match_in_service else 'no' }} {% endif -%}
                             {%- if g.match_contract_active is not none %}contr={{ 'sì' if g.match_contract_active else 'no' }} {% endif -%}
                             {%- if g.match_known_customer is not none %}noto={{ 'sì' if g.match_known_customer else 'no' }} {% endif -%}
                         </span>
+                        {%- if g.match_at_hours -%}
+                        <span style="background:#ddd6fe; color:#5b21b6; padding:0.1rem 0.45rem; border-radius:9px; font-size:0.72rem; font-weight:600;">🕐 {{ g.match_at_hours|truncate(30) }}</span>
+                        {%- elif g.match_in_service == 1 or g.match_in_service is sameas true -%}
+                        <span style="background:#dcfce7; color:#15803d; padding:0.1rem 0.45rem; border-radius:9px; font-size:0.72rem; font-weight:600;" title="Solo dentro orario operativo del cliente">🕘 in orario cliente</span>
+                        {%- elif g.match_in_service == 0 or g.match_in_service is sameas false -%}
+                        <span style="background:#fee2e2; color:#b91c1c; padding:0.1rem 0.45rem; border-radius:9px; font-size:0.72rem; font-weight:600;" title="Solo fuori orario operativo del cliente">🌙 fuori orario cliente</span>
+                        {%- endif -%}
+                        {% if g.match_customer_groups %}
+                        <span style="background:#fef9c3; color:#713f12; padding:0.1rem 0.45rem; border-radius:9px; font-size:0.72rem; font-weight:600;" title="Gruppi cliente: {{ g.match_customer_groups }}">👥 {{ g.match_customer_groups|truncate(25) }}</span>
+                        {% endif %}
                     </span>
                     <span class="rule-status {{ 'on' if g.enabled else 'off' }}">{{ 'attivo' if g.enabled else 'spento' }}</span>
                     <span></span>
@@ -231,6 +240,20 @@
                                 {%- if c.match_subject_regex %}subj={{ c.match_subject_regex|truncate(30) }} {% endif -%}
                                 {%- if c.match_from_regex %}from={{ c.match_from_regex|truncate(25) }} {% endif -%}
                             </span>
+                            {%- if c.match_at_hours -%}
+                            <span style="background:#ddd6fe; color:#5b21b6; padding:0.05rem 0.4rem; border-radius:9px; font-size:0.7rem; font-weight:600;"
+                                  title="Override slot orario">🕐 {{ c.match_at_hours|truncate(30) }}</span>
+                            {%- elif c.match_in_service == 1 or c.match_in_service is sameas true -%}
+                            <span style="background:#dcfce7; color:#15803d; padding:0.05rem 0.4rem; border-radius:9px; font-size:0.7rem; font-weight:600;"
+                                  title="Solo dentro orario operativo del cliente">🕘 in orario</span>
+                            {%- elif c.match_in_service == 0 or c.match_in_service is sameas false -%}
+                            <span style="background:#fee2e2; color:#b91c1c; padding:0.05rem 0.4rem; border-radius:9px; font-size:0.7rem; font-weight:600;"
+                                  title="Solo fuori orario operativo del cliente">🌙 fuori orario</span>
+                            {%- endif -%}
+                            {% if c.match_customer_groups %}
+                            <span style="background:#fef9c3; color:#713f12; padding:0.05rem 0.4rem; border-radius:9px; font-size:0.7rem; font-weight:600;"
+                                  title="Gruppi cliente: {{ c.match_customer_groups }}">👥 {{ c.match_customer_groups|truncate(20) }}</span>
+                            {% endif %}
                         </span>
                         <span class="rule-status {{ 'on' if c.enabled else 'off' }}">{{ 'on' if c.enabled else 'off' }}</span>
                         <span></span>
@@ -296,8 +319,30 @@
                     <span class="match-summary">
                         {%- if r.match_to_domain %}to_dom={{ r.match_to_domain }} {% endif -%}
                         {%- if r.match_subject_regex %}subj={{ r.match_subject_regex|truncate(30) }} {% endif -%}
-                        {%- if r.match_in_service is not none %}in_svc={{ 'sì' if r.match_in_service else 'no' }} {% endif -%}
                     </span>
+                    {# Badge orario: priorita' visivamente alta #}
+                    {%- if r.match_at_hours -%}
+                    <span style="background:#ddd6fe; color:#5b21b6; padding:0.1rem 0.45rem; border-radius:9px; font-size:0.72rem; font-weight:600;"
+                          title="Override slot orario (ignora profilo cliente)">
+                        🕐 {{ r.match_at_hours|truncate(35) }}
+                    </span>
+                    {%- elif r.match_in_service == 1 or r.match_in_service is sameas true -%}
+                    <span style="background:#dcfce7; color:#15803d; padding:0.1rem 0.45rem; border-radius:9px; font-size:0.72rem; font-weight:600;"
+                          title="Solo dentro orario operativo del cliente (varia per profilo STD/EXT/H24)">
+                        🕘 in orario cliente
+                    </span>
+                    {%- elif r.match_in_service == 0 or r.match_in_service is sameas false -%}
+                    <span style="background:#fee2e2; color:#b91c1c; padding:0.1rem 0.45rem; border-radius:9px; font-size:0.72rem; font-weight:600;"
+                          title="Solo fuori orario operativo del cliente (notte/weekend/festivita')">
+                        🌙 fuori orario cliente
+                    </span>
+                    {%- endif -%}
+                    {% if r.match_customer_groups %}
+                    <span style="background:#fef9c3; color:#713f12; padding:0.1rem 0.45rem; border-radius:9px; font-size:0.72rem; font-weight:600;"
+                          title="Gruppi cliente richiesti: {{ r.match_customer_groups }}">
+                        👥 {{ r.match_customer_groups|truncate(25) }}
+                    </span>
+                    {% endif %}
                 </span>
                 <span class="rule-status {{ 'on' if r.enabled else 'off' }}">{{ 'attiva' if r.enabled else 'spenta' }}</span>
                 <span></span>
