@@ -210,40 +210,76 @@ def test_customer_source():
 
     results = {"stormshield": None, "solution": None}
 
-    # Test stormshield DB
+    # Test stormshield DB: contiene client_domains e (opzionale)
+    # smtp_relay_service_hours / customer_service_hours.
+    # NOTA: customer_settings/customer_aliases vivono in `solution`, NON in
+    # `stormshield` (solo schema scheletro vuoto). Il test originale cercava
+    # customer_settings qui per via di un setup PG legacy non piu' valido.
     try:
         t0 = time.monotonic()
         conn = psycopg2.connect(host=host, port=port, database=stormshield_db,
                                   user=user, password=password,
                                   sslmode=sslmode, connect_timeout=5)
         cur = conn.cursor()
+        # Discovery defensive: smtp_relay_service_hours esiste su 4.41,
+        # potrebbe non esistere su altri setup; fallback a customer_service_hours.
+        cur.execute("SELECT to_regclass('public.smtp_relay_service_hours'),"
+                     " to_regclass('public.customer_service_hours')")
+        sh_table, csh_table = cur.fetchone()
+        if sh_table:
+            cur.execute("SELECT COUNT(*) FROM smtp_relay_service_hours WHERE enabled=TRUE")
+            n_service_hours = cur.fetchone()[0]
+            sh_source = "smtp_relay_service_hours"
+        elif csh_table:
+            cur.execute("SELECT COUNT(*) FROM customer_service_hours")
+            n_service_hours = cur.fetchone()[0]
+            sh_source = "customer_service_hours"
+        else:
+            n_service_hours = 0
+            sh_source = None
         cur.execute("SELECT current_database(), current_user, "
-                     "(SELECT COUNT(*) FROM customer_settings) AS n_settings, "
-                     "(SELECT COUNT(*) FROM client_domains WHERE COALESCE(excluded,FALSE)=FALSE) AS n_domains")
-        db, u, n_settings, n_domains = cur.fetchone()
+                     "(SELECT COUNT(*) FROM client_domains "
+                     " WHERE COALESCE(excluded,FALSE)=FALSE) AS n_domains")
+        db, u, n_domains = cur.fetchone()
         conn.close()
         results["stormshield"] = {
             "ok": True, "duration_ms": int((time.monotonic() - t0) * 1000),
-            "db": db, "user": u, "n_customer_settings": n_settings,
+            "db": db, "user": u,
             "n_client_domains": n_domains,
+            "n_service_hours": n_service_hours,
+            "service_hours_table": sh_source,
         }
     except Exception as exc:  # noqa: BLE001
         results["stormshield"] = {"ok": False, "error": str(exc)[:300]}
 
-    # Test solution DB
+    # Test solution DB: contiene clienti, customer_settings, customer_aliases,
+    # customer_availability_types, customer_contract_types. customer_aliases e
+    # customer_settings sono opzionali (introdotti in fasi successive).
     try:
         t0 = time.monotonic()
         conn = psycopg2.connect(host=host, port=port, database=solution_db,
                                   user=solution_user, password=solution_password,
                                   sslmode=sslmode, connect_timeout=5)
         cur = conn.cursor()
-        cur.execute("SELECT current_database(), current_user, "
-                     "(SELECT COUNT(*) FROM clienti WHERE COALESCE(aescluso,FALSE)=FALSE)")
-        db, u, n_clienti = cur.fetchone()
+        cur.execute(
+            "SELECT current_database(), current_user, "
+            "(SELECT COUNT(*) FROM clienti WHERE COALESCE(aescluso,FALSE)=FALSE) "
+            "  AS n_clienti, "
+            "COALESCE("
+            "  (SELECT COUNT(*) FROM customer_settings WHERE is_active=TRUE), 0"
+            ") AS n_settings_active, "
+            "COALESCE("
+            "  (SELECT COUNT(*) FROM customer_aliases), 0"
+            ") AS n_aliases"
+        )
+        db, u, n_clienti, n_settings_active, n_aliases = cur.fetchone()
         conn.close()
         results["solution"] = {
             "ok": True, "duration_ms": int((time.monotonic() - t0) * 1000),
-            "db": db, "user": u, "n_clienti_attivi": n_clienti,
+            "db": db, "user": u,
+            "n_clienti_attivi": n_clienti,
+            "n_customer_settings_active": n_settings_active,
+            "n_customer_aliases": n_aliases,
         }
     except Exception as exc:  # noqa: BLE001
         results["solution"] = {"ok": False, "error": str(exc)[:300]}
