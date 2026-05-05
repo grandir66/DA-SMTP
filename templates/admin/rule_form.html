@@ -144,6 +144,32 @@
     <div class="rf-card">
         <h3><i class="fas fa-tag"></i> Identificazione</h3>
         <div class="rf-body">
+            {% if rule_sets %}
+            <div class="rf-row">
+                <label>Set di regole *<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
+                    Determina quando la regola viene valutata.
+                    <strong>Globali</strong>: sempre attiva (CloudTIK, AI, sistemi automatici).
+                    <strong>Standard/Esteso/H24/Nessuno</strong>: solo per clienti con quel
+                    profilo orario. Set custom: solo per condizioni specifiche.
+                </span></span></label>
+                <div>
+                    <select name="rule_set_id" required style="font-weight:600;">
+                        {% for rs in rule_sets %}
+                            <option value="{{ rs.id }}"
+                                {% if record.rule_set_id == rs.id %}selected
+                                {% elif (not record.rule_set_id) and prefill_set_id == rs.id %}selected
+                                {% elif (not record.rule_set_id) and (not prefill_set_id) and rs.code=='globali' %}selected
+                                {% endif %}>
+                                {% if rs.is_always_active %}🌐 {% endif %}{{ rs.name }}{% if rs.profile_code %} ({{ rs.profile_code }}){% endif %}
+                            </option>
+                        {% endfor %}
+                    </select>
+                    <div class="help">
+                        <a href="{{ url_for('rule_sets.list_view') }}" target="_blank">Gestisci i set</a>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
             <div class="rf-row">
                 <label>Nome *<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
                     Etichetta breve della regola (max 200 char). Visibile in elenco

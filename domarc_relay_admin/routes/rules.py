@@ -27,11 +27,27 @@ def _tid() -> int:
 def list_view():
     state = (request.args.get("state") or "all").lower()
     only_enabled = True if state == "enabled" else (False if state == "disabled" else None)
-    items = _storage().list_rules_grouped(tenant_id=_tid(), only_enabled=only_enabled)
+    storage = _storage()
+    # M029: filtro per rule_set tramite tab/query string
+    set_param = request.args.get("set")
+    rule_set_id: int | None = None
+    if set_param and set_param != "all":
+        try:
+            rule_set_id = int(set_param)
+        except ValueError:
+            rule_set_id = None
+    items = storage.list_rules_grouped(
+        tenant_id=_tid(), only_enabled=only_enabled, rule_set_id=rule_set_id,
+    )
+    sets = storage.list_rule_sets(tenant_id=_tid())
+    counts = storage.count_rules_per_set(tenant_id=_tid())
     return render_template(
         "admin/rules_list.html",
         items=items,
         filter_state=state,
+        rule_sets=sets,
+        rule_set_counts=counts,
+        active_set_id=rule_set_id,
     )
 
 
@@ -127,6 +143,17 @@ def form_view(rule_id: int | None = None):
     except Exception:  # noqa: BLE001
         profiles = []
 
+    # M029: lista rule_sets disponibili + prefill da query string
+    rule_sets = _storage().list_rule_sets(tenant_id=_tid(), only_enabled=True)
+    prefill_set_id: int | None = None
+    if is_new:
+        try:
+            sp = request.args.get("set")
+            if sp:
+                prefill_set_id = int(sp)
+        except (TypeError, ValueError):
+            prefill_set_id = None
+
     return render_template(
         "admin/rule_form.html",
         is_new=is_new,
@@ -141,6 +168,8 @@ def form_view(rule_id: int | None = None):
         ai_providers=ai_providers_map,
         ai_global_status=ai_global_status,
         ai_recent_decisions=ai_recent_decisions,
+        rule_sets=rule_sets,
+        prefill_set_id=prefill_set_id,
     )
 
 
@@ -203,19 +232,106 @@ def toggle_view(rule_id: int):
     return redirect(request.referrer or url_for("rules.list_view"))
 
 
+@rules_bp.route("/rules/bulk", methods=["POST"])
+@login_required(role="operator")
+def bulk_action_view():
+    """Bulk: 'duplicate_to_set' | 'move_to_set' | 'enable' | 'disable' | 'delete'.
+
+    Form fields: action, target_set_id (per duplicate/move), rule_ids[] (lista id).
+    """
+    storage = _storage()
+    action = (request.form.get("action") or "").strip()
+    rule_ids = [int(x) for x in request.form.getlist("rule_ids") if x.isdigit()]
+    if not rule_ids:
+        flash("Nessuna regola selezionata.", "error")
+        return redirect(request.referrer or url_for("rules.list_view"))
+
+    target_set_id_raw = request.form.get("target_set_id")
+    target_set_id: int | None = None
+    if target_set_id_raw:
+        try:
+            target_set_id = int(target_set_id_raw)
+        except ValueError:
+            target_set_id = None
+
+    actor = session.get("username") or "ui"
+
+    try:
+        if action == "duplicate_to_set":
+            if target_set_id is None:
+                flash("Set di destinazione obbligatorio per la duplicazione.", "error")
+                return redirect(request.referrer or url_for("rules.list_view"))
+            n = 0
+            for rid in rule_ids:
+                try:
+                    storage.duplicate_rule(rid, target_set_id=target_set_id, actor=actor)
+                    n += 1
+                except Exception:  # noqa: BLE001
+                    pass
+            target_set = storage.get_rule_set(target_set_id)
+            tname = target_set.get("name") if target_set else f"#{target_set_id}"
+            flash(f"Duplicate {n} regole nel set '{tname}'.", "success")
+        elif action == "move_to_set":
+            if target_set_id is None:
+                flash("Set di destinazione obbligatorio per lo spostamento.", "error")
+                return redirect(request.referrer or url_for("rules.list_view"))
+            n = storage.move_rules_to_set(rule_ids, target_set_id)
+            target_set = storage.get_rule_set(target_set_id)
+            tname = target_set.get("name") if target_set else f"#{target_set_id}"
+            flash(f"Spostate {n} regole nel set '{tname}'.", "success")
+        elif action == "enable":
+            for rid in rule_ids:
+                try:
+                    r = storage.get_rule(rid)
+                    if r and not r.get("enabled"):
+                        storage.toggle_rule(rid)
+                except Exception:  # noqa: BLE001
+                    pass
+            flash(f"Abilitate {len(rule_ids)} regole.", "success")
+        elif action == "disable":
+            for rid in rule_ids:
+                try:
+                    r = storage.get_rule(rid)
+                    if r and r.get("enabled"):
+                        storage.toggle_rule(rid)
+                except Exception:  # noqa: BLE001
+                    pass
+            flash(f"Disabilitate {len(rule_ids)} regole.", "success")
+        else:
+            flash(f"Azione bulk non supportata: {action}", "error")
+    except Exception as exc:  # noqa: BLE001
+        flash(f"Errore bulk: {exc}", "error")
+    return redirect(request.referrer or url_for("rules.list_view"))
+
+
 @rules_bp.route("/rules/<int:rule_id>/duplicate", methods=["POST"])
 @login_required(role="operator")
 def duplicate_view(rule_id: int):
+    """Duplica una regola. Param ``target_set_id`` opzionale per copia
+    cross-set (M029)."""
     src = _storage().get_rule(rule_id)
     if not src:
         flash("Regola non trovata", "error")
         return redirect(url_for("rules.list_view"))
-    data = {k: v for k, v in src.items() if k not in ("id", "created_at", "created_by")}
-    data["name"] = (src.get("name") or "rule") + " (copia)"
+    target_set_id_raw = request.form.get("target_set_id")
+    target_set_id: int | None = None
+    if target_set_id_raw:
+        try:
+            target_set_id = int(target_set_id_raw)
+        except ValueError:
+            target_set_id = None
     try:
-        new_id = _storage().upsert_rule(data, tenant_id=src.get("tenant_id") or _tid(),
-                                         created_by=session.get("username") or "ui")
-        flash(f"Regola duplicata (id={new_id}).", "success")
+        new_id = _storage().duplicate_rule(
+            rule_id,
+            target_set_id=target_set_id,
+            actor=session.get("username") or "ui",
+        )
+        if target_set_id:
+            target_set = _storage().get_rule_set(target_set_id)
+            target_name = target_set.get("name") if target_set else f"#{target_set_id}"
+            flash(f"Regola duplicata nel set '{target_name}' (id={new_id}).", "success")
+        else:
+            flash(f"Regola duplicata (id={new_id}).", "success")
         return redirect(url_for("rules.form_view", rule_id=new_id))
     except ValueError as exc:
         flash(str(exc), "error")
@@ -595,6 +711,8 @@ def _parse_form(form) -> dict:
     return {
         "name": form.get("name"),
         "description": form.get("description") or None,
+        # M029: rule_set_id (FK -> rule_sets.id, default 'globali' se assente)
+        "rule_set_id": _to_int(form.get("rule_set_id")),
         "scope_type": form.get("scope_type") or "global",
         "scope_ref": form.get("scope_ref") or None,
         "priority": form.get("priority") or 100,

@@ -35,6 +35,13 @@ class RulesPayload:
 
 
 @dataclass
+class RuleSetsPayload:
+    """M029: payload sync rule_sets dal manager."""
+    synced_at: str
+    rule_sets: list[dict[str, Any]] = field(default_factory=list)
+
+
+@dataclass
 class RoutesPayload:
     synced_at: str
     routes: list[dict[str, Any]] = field(default_factory=list)
@@ -280,6 +287,14 @@ class StormshieldManagerBackend(ManagerBackend):
         return RulesPayload(
             synced_at=data.get("synced_at", ""),
             rules=list(data.get("rules", [])),
+        )
+
+    def fetch_active_rule_sets(self) -> RuleSetsPayload:
+        """M029: pull rule_sets dal manager admin."""
+        data = self._get_json("/api/v1/relay/rule-sets/active")
+        return RuleSetsPayload(
+            synced_at=data.get("synced_at", ""),
+            rule_sets=list(data.get("rule_sets", [])),
         )
 
     def fetch_active_routes(self) -> RoutesPayload:

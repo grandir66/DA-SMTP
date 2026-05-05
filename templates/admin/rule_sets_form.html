@@ -1,0 +1,161 @@
+{% extends "admin/_base.html" %}
+{% block title %}{{ 'Modifica' if rs else 'Nuovo' }} set di regole{% endblock %}
+{% block content %}
+<style>
+.rs-form { max-width:900px; }
+.rs-form .form-row { display:grid; grid-template-columns: 220px 1fr; gap:1rem;
+                     align-items:start; margin-bottom:1rem; }
+.rs-form label { font-weight:600; color:#334155; padding-top:0.4rem; }
+.rs-form input[type=text], .rs-form input[type=number], .rs-form select,
+.rs-form textarea { width:100%; padding:0.5rem; border:1px solid #cbd5e1;
+                    border-radius:6px; font-size:0.9rem; }
+.rs-form .hint { font-size:0.8rem; color:#64748b; margin-top:0.2rem; }
+.rs-section { background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px;
+              padding:1rem 1.2rem; margin-bottom:1rem; }
+.rs-builtin-warn { background:#fef3c7; border-left:3px solid #f59e0b;
+                   padding:0.6rem 0.9rem; border-radius:0 6px 6px 0;
+                   color:#78350f; font-size:0.88rem; margin-bottom:1rem; }
+</style>
+
+<section class="dr-section">
+    <h2><i class="fas fa-layer-group"></i>
+        {% if rs %}{{ rs.name }}{% else %}Nuovo set di regole{% endif %}
+    </h2>
+    <p class="dr-hint">
+        <a href="{{ url_for('rule_sets.list_view') }}">← Tutti i set</a>
+    </p>
+</section>
+
+{% if rs and rs.is_builtin %}
+<div class="rs-builtin-warn">
+    <strong><i class="fas fa-lock"></i> Set built-in</strong>:
+    il codice e l'associazione al profilo non sono modificabili. Puoi cambiare
+    nome, descrizione, ordine di valutazione, colore e abilitazione.
+</div>
+{% endif %}
+
+<form method="post" class="rs-form"
+      action="{{ url_for('rule_sets.edit_view', set_id=rs.id) if rs else url_for('rule_sets.new_view') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="rs-section">
+        <div class="form-row">
+            <label for="name">Nome *</label>
+            <div>
+                <input type="text" id="name" name="name" required
+                       value="{{ rs.name if rs else '' }}"
+                       placeholder="es. Orario weekend">
+            </div>
+        </div>
+
+        <div class="form-row">
+            <label for="code">Codice *</label>
+            <div>
+                <input type="text" id="code" name="code"
+                       value="{{ rs.code if rs else '' }}"
+                       placeholder="es. weekend"
+                       {% if rs and rs.is_builtin %}readonly{% endif %}>
+                <div class="hint">Identificativo univoco lowercase. Built-in non modificabile.</div>
+            </div>
+        </div>
+
+        <div class="form-row">
+            <label for="description">Descrizione</label>
+            <div>
+                <textarea id="description" name="description" rows="2"
+                          placeholder="Note operative">{{ rs.description if rs else '' }}</textarea>
+            </div>
+        </div>
+
+        <div class="form-row">
+            <label for="is_always_active">Sempre attivo</label>
+            <div>
+                <select id="is_always_active" name="is_always_active"
+                        {% if rs and rs.is_builtin %}disabled{% endif %}>
+                    <option value="0" {% if rs and not rs.is_always_active %}selected{% endif %}>No (legato al profilo)</option>
+                    <option value="1" {% if rs and rs.is_always_active %}selected{% endif %}>Si (valutato per ogni mail)</option>
+                </select>
+                <div class="hint">
+                    "Sempre attivo": le regole del set sono valutate per ogni mail,
+                    indipendentemente dal profilo del cliente. Tipico per regole
+                    catch-all, sistemi automatici, AI learning.
+                </div>
+            </div>
+        </div>
+
+        <div class="form-row">
+            <label for="profile_code">Profilo cliente</label>
+            <div>
+                <select id="profile_code" name="profile_code"
+                        {% if rs and rs.is_builtin %}disabled{% endif %}>
+                    <option value="">— nessuno (set non legato a profilo) —</option>
+                    {% for code in profile_codes %}
+                        <option value="{{ code }}"
+                                {% if rs and rs.profile_code==code %}selected{% endif %}>{{ code }}</option>
+                    {% endfor %}
+                </select>
+                <div class="hint">
+                    Se valorizzato, il set si attiva solo per clienti con
+                    <code>tipologia_servizio</code> uguale a questo codice
+                    (case-insensitive). Lascia vuoto per set generici manuali.
+                </div>
+            </div>
+        </div>
+
+        <div class="form-row">
+            <label for="evaluation_order">Ordine valutazione</label>
+            <div>
+                <input type="number" id="evaluation_order" name="evaluation_order"
+                       min="1" max="9999"
+                       value="{{ rs.evaluation_order if rs else 100 }}">
+                <div class="hint">
+                    Usato per ordinare i set nella UI. Valori bassi = prima.
+                    Convenzione: globali ~10, set per profilo ~100.
+                </div>
+            </div>
+        </div>
+
+        <div class="form-row">
+            <label for="color">Colore</label>
+            <div>
+                <input type="text" id="color" name="color"
+                       value="{{ rs.color if rs else '#3b82f6' }}"
+                       placeholder="#3b82f6"
+                       pattern="^#[0-9a-fA-F]{6}$">
+                <div class="hint">Esadecimale per badge UI (es. #15803d verde).</div>
+            </div>
+        </div>
+
+        <div class="form-row">
+            <label for="enabled">Abilitato</label>
+            <div>
+                <select id="enabled" name="enabled">
+                    <option value="1" {% if rs is none or rs.enabled %}selected{% endif %}>Si</option>
+                    <option value="0" {% if rs and not rs.enabled %}selected{% endif %}>No</option>
+                </select>
+                <div class="hint">Se No, il set viene saltato dal rule engine (anche se has rules).</div>
+            </div>
+        </div>
+    </div>
+
+    <div style="display:flex; gap:0.6rem; align-items:center; margin-top:1.2rem;">
+        <button type="submit" class="dr-btn dr-btn-primary" style="width:auto;">
+            <i class="fas fa-save"></i> {% if rs %}Aggiorna{% else %}Crea{% endif %}
+        </button>
+        <a href="{{ url_for('rule_sets.list_view') }}" class="dr-btn" style="width:auto;">
+            <i class="fas fa-times"></i> Annulla
+        </a>
+        {% if rs and not rs.is_builtin %}
+        <span style="margin-left:auto;"></span>
+        <form action="{{ url_for('rule_sets.delete_view', set_id=rs.id) }}"
+              method="post" style="display:inline;"
+              onsubmit="return confirm('Eliminare il set {{ rs.name }}? Le regole saranno spostate nel set globali.');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="dr-btn" style="width:auto; color:#b91c1c;">
+                <i class="fas fa-trash"></i> Elimina set
+            </button>
+        </form>
+        {% endif %}
+    </div>
+</form>
+{% endblock %}

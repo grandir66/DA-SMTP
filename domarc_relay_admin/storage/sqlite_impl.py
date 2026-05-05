@@ -322,7 +322,9 @@ class SqliteStorage(Storage):
     def list_rules(self, *, tenant_id: int | None = None,
                    only_enabled: bool | None = None,
                    action: str | None = None,
-                   search: str | None = None) -> list[dict[str, Any]]:
+                   search: str | None = None,
+                   rule_set_id: int | None = None,
+                   rule_set_ids: list[int] | None = None) -> list[dict[str, Any]]:
         where: list[str] = []
         params: list[Any] = []
         if tenant_id is not None:
@@ -337,6 +339,12 @@ class SqliteStorage(Storage):
             like = f"%{search.lower()}%"
             where.append("(LOWER(name) LIKE ? OR LOWER(COALESCE(match_subject_regex,'')) LIKE ?)")
             params.extend([like, like])
+        if rule_set_id is not None:
+            where.append("rule_set_id = ?"); params.append(int(rule_set_id))
+        elif rule_set_ids:
+            placeholders = ",".join("?" * len(rule_set_ids))
+            where.append(f"rule_set_id IN ({placeholders})")
+            params.extend(int(x) for x in rule_set_ids)
         where_sql = "WHERE " + " AND ".join(where) if where else ""
         with self._connect() as conn:
             # Ordine = ordine reale di valutazione del rule engine: priority ASC,
@@ -412,6 +420,7 @@ class SqliteStorage(Storage):
                           continue_after_match = ?,
                           parent_id = ?, is_group = ?, group_label = ?,
                           exclusive_match = ?, continue_in_group = ?, exit_group_continue = ?,
+                          rule_set_id = ?,
                           updated_at = datetime('now')
                        WHERE id = ?""",
                     (
@@ -447,6 +456,7 @@ class SqliteStorage(Storage):
                         1 if data.get("exclusive_match", True) else 0,
                         1 if data.get("continue_in_group") else 0,
                         1 if data.get("exit_group_continue") else 0,
+                        int(data["rule_set_id"]) if data.get("rule_set_id") else None,
                         int(rid),
                     ),
                 )
@@ -462,12 +472,14 @@ class SqliteStorage(Storage):
                         action, action_map, severity,
                         continue_after_match, created_by,
                         parent_id, is_group, group_label,
-                        exclusive_match, continue_in_group, exit_group_continue)
+                        exclusive_match, continue_in_group, exit_group_continue,
+                        rule_set_id)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                            ?, ?, ?,
                            ?, ?, ?,
                            ?, ?,
-                           ?, ?, ?, ?, ?, ?)""",
+                           ?, ?, ?, ?, ?, ?,
+                           ?)""",
                 (
                     int(tenant_id),
                     (data.get("name") or "").strip(),
@@ -503,9 +515,24 @@ class SqliteStorage(Storage):
                     1 if data.get("exclusive_match", True) else 0,
                     1 if data.get("continue_in_group") else 0,
                     1 if data.get("exit_group_continue") else 0,
+                    # M029: rule_set_id (default = set 'globali' se non valorizzato)
+                    int(data["rule_set_id"]) if data.get("rule_set_id")
+                    else self._default_rule_set_id(tenant_id),
                 ),
             )
             return int(cur.lastrowid or 0)
+
+    def _default_rule_set_id(self, tenant_id: int) -> int | None:
+        """Ritorna l'id del set 'globali' per il tenant (cache implicita)."""
+        try:
+            with self._connect() as conn:
+                r = conn.execute(
+                    "SELECT id FROM rule_sets WHERE tenant_id=? AND code='globali'",
+                    (tenant_id,),
+                ).fetchone()
+                return int(r["id"]) if r else None
+        except Exception:  # noqa: BLE001
+            return None
 
     def delete_rule(self, rule_id: int) -> None:
         with self.transaction() as conn:
@@ -523,7 +550,10 @@ class SqliteStorage(Storage):
     # ============================================ RULES — gerarchia v2 ===
 
     def list_top_level_items(self, *, tenant_id: int | None = None,
-                             only_enabled: bool | None = None) -> list[dict[str, Any]]:
+                             only_enabled: bool | None = None,
+                             rule_set_id: int | None = None,
+                             rule_set_ids: list[int] | None = None
+                             ) -> list[dict[str, Any]]:
         """Orfane + gruppi (parent_id IS NULL). Ordinati per priority globale ASC."""
         where: list[str] = ["parent_id IS NULL"]
         params: list[Any] = []
@@ -533,6 +563,12 @@ class SqliteStorage(Storage):
             where.append("enabled = 1")
         elif only_enabled is False:
             where.append("enabled = 0")
+        if rule_set_id is not None:
+            where.append("rule_set_id = ?"); params.append(int(rule_set_id))
+        elif rule_set_ids:
+            placeholders = ",".join("?" * len(rule_set_ids))
+            where.append(f"rule_set_id IN ({placeholders})")
+            params.extend(int(x) for x in rule_set_ids)
         where_sql = "WHERE " + " AND ".join(where)
         with self._connect() as conn:
             rows = conn.execute(
@@ -558,14 +594,19 @@ class SqliteStorage(Storage):
             return [_decode_rule(r) for r in rows]
 
     def list_rules_grouped(self, *, tenant_id: int | None = None,
-                            only_enabled: bool | None = None) -> list[dict[str, Any]]:
+                            only_enabled: bool | None = None,
+                            rule_set_id: int | None = None
+                            ) -> list[dict[str, Any]]:
         """Struttura adatta a UI tree-view.
 
         Restituisce una lista ordinata per priority ASC dove ciascun elemento è:
         ``{"type": "orphan", "rule": {...}}`` oppure
         ``{"type": "group", "group": {...}, "children": [...]}``.
+
+        Se ``rule_set_id`` valorizzato, filtra solo regole/gruppi del set.
         """
-        top = self.list_top_level_items(tenant_id=tenant_id, only_enabled=only_enabled)
+        top = self.list_top_level_items(tenant_id=tenant_id, only_enabled=only_enabled,
+                                         rule_set_id=rule_set_id)
         grouped: list[dict[str, Any]] = []
         for item in top:
             if item.get("is_group"):
@@ -3279,6 +3320,221 @@ class SqliteStorage(Storage):
             return int(cur.lastrowid)
 
     # ============================================================
+    # M029 — Rule sets
+    # ============================================================
+
+    def list_rule_sets(self, *, tenant_id: int = 1,
+                       only_enabled: bool | None = None
+                       ) -> list[dict[str, Any]]:
+        sql = "SELECT * FROM rule_sets WHERE tenant_id = ?"
+        params: list[Any] = [tenant_id]
+        if only_enabled is True:
+            sql += " AND enabled = 1"
+        sql += " ORDER BY evaluation_order, id"
+        with self._connect() as conn:
+            return [_decode_rule_set(r) for r in conn.execute(sql, params).fetchall()]
+
+    def get_rule_set(self, set_id: int) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            r = conn.execute("SELECT * FROM rule_sets WHERE id = ?",
+                             (int(set_id),)).fetchone()
+            return _decode_rule_set(r) if r else None
+
+    def get_rule_set_by_code(self, code: str, *,
+                             tenant_id: int = 1) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            r = conn.execute(
+                "SELECT * FROM rule_sets WHERE tenant_id = ? AND code = ?",
+                (tenant_id, code),
+            ).fetchone()
+            return _decode_rule_set(r) if r else None
+
+    def get_rule_set_by_profile_code(self, profile_code: str, *,
+                                      tenant_id: int = 1
+                                      ) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            r = conn.execute(
+                "SELECT * FROM rule_sets "
+                "WHERE tenant_id = ? AND enabled = 1 "
+                "  AND UPPER(profile_code) = UPPER(?)",
+                (tenant_id, profile_code),
+            ).fetchone()
+            return _decode_rule_set(r) if r else None
+
+    def list_active_rule_set_ids(self, *, profile_code: str | None,
+                                  tenant_id: int = 1) -> list[int]:
+        """Pool di rule_set_id attivi per una mail in arrivo:
+            - tutti i set con is_always_active=1 (es. 'globali')
+            - + il set associato a `profile_code` (se valorizzato e abilitato)
+
+        Ritorna lista ordinata per evaluation_order.
+        """
+        ids: list[int] = []
+        with self._connect() as conn:
+            for r in conn.execute(
+                "SELECT id FROM rule_sets "
+                "WHERE tenant_id = ? AND enabled = 1 AND is_always_active = 1 "
+                "ORDER BY evaluation_order, id",
+                (tenant_id,),
+            ).fetchall():
+                ids.append(int(r["id"]))
+            if profile_code:
+                r = conn.execute(
+                    "SELECT id FROM rule_sets "
+                    "WHERE tenant_id = ? AND enabled = 1 "
+                    "  AND is_always_active = 0 "
+                    "  AND UPPER(profile_code) = UPPER(?)",
+                    (tenant_id, profile_code),
+                ).fetchone()
+                if r and int(r["id"]) not in ids:
+                    ids.append(int(r["id"]))
+        return ids
+
+    def upsert_rule_set(self, data: dict[str, Any], *,
+                        tenant_id: int = 1) -> int:
+        sid = data.get("id")
+        with self.transaction() as conn:
+            if sid:
+                # Built-in: code immutabile, modificabili solo name/description/enabled/color
+                existing = conn.execute(
+                    "SELECT is_builtin FROM rule_sets WHERE id = ?", (int(sid),)
+                ).fetchone()
+                if existing and existing["is_builtin"]:
+                    conn.execute(
+                        """UPDATE rule_sets SET
+                                name = ?, description = ?, color = ?,
+                                enabled = ?, evaluation_order = ?,
+                                updated_at = datetime('now')
+                            WHERE id = ? AND tenant_id = ?""",
+                        (data.get("name"), data.get("description"),
+                         data.get("color"),
+                         1 if data.get("enabled", True) else 0,
+                         int(data.get("evaluation_order", 100)),
+                         int(sid), tenant_id),
+                    )
+                else:
+                    conn.execute(
+                        """UPDATE rule_sets SET
+                                code = ?, name = ?, description = ?,
+                                is_always_active = ?, profile_code = ?,
+                                evaluation_order = ?, color = ?, enabled = ?,
+                                updated_at = datetime('now')
+                            WHERE id = ? AND tenant_id = ?""",
+                        (data.get("code"), data.get("name"),
+                         data.get("description"),
+                         1 if data.get("is_always_active", False) else 0,
+                         data.get("profile_code") or None,
+                         int(data.get("evaluation_order", 100)),
+                         data.get("color"),
+                         1 if data.get("enabled", True) else 0,
+                         int(sid), tenant_id),
+                    )
+                return int(sid)
+            cur = conn.execute(
+                """INSERT INTO rule_sets
+                       (tenant_id, code, name, description,
+                        is_always_active, profile_code, evaluation_order,
+                        color, enabled, is_builtin)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)""",
+                (tenant_id, data["code"], data["name"],
+                 data.get("description"),
+                 1 if data.get("is_always_active", False) else 0,
+                 data.get("profile_code") or None,
+                 int(data.get("evaluation_order", 100)),
+                 data.get("color"),
+                 1 if data.get("enabled", True) else 0),
+            )
+            return int(cur.lastrowid)
+
+    def delete_rule_set(self, set_id: int) -> None:
+        """Elimina set custom. I built-in non sono eliminabili.
+        Le regole appartenenti al set vengono spostate nel set 'globali'."""
+        with self.transaction() as conn:
+            r = conn.execute(
+                "SELECT is_builtin, tenant_id FROM rule_sets WHERE id = ?",
+                (int(set_id),)
+            ).fetchone()
+            if not r:
+                return
+            if r["is_builtin"]:
+                raise ValueError("I set built-in non possono essere eliminati")
+            globali = conn.execute(
+                "SELECT id FROM rule_sets WHERE tenant_id = ? AND code = 'globali'",
+                (r["tenant_id"],),
+            ).fetchone()
+            if globali:
+                conn.execute(
+                    "UPDATE rules SET rule_set_id = ? WHERE rule_set_id = ?",
+                    (int(globali["id"]), int(set_id)),
+                )
+            conn.execute("DELETE FROM rule_sets WHERE id = ?", (int(set_id),))
+
+    def count_rules_per_set(self, *, tenant_id: int = 1) -> dict[int, int]:
+        """Per ogni rule_set_id ritorna il count delle sue regole."""
+        out: dict[int, int] = {}
+        with self._connect() as conn:
+            for r in conn.execute(
+                "SELECT rule_set_id, COUNT(*) AS n FROM rules "
+                "WHERE tenant_id = ? AND rule_set_id IS NOT NULL "
+                "GROUP BY rule_set_id",
+                (tenant_id,),
+            ).fetchall():
+                out[int(r["rule_set_id"])] = int(r["n"])
+        return out
+
+    def move_rules_to_set(self, rule_ids: list[int], target_set_id: int) -> int:
+        """Sposta N regole nel set indicato (operazione bulk). Ritorna n affette."""
+        if not rule_ids:
+            return 0
+        placeholders = ",".join("?" * len(rule_ids))
+        with self.transaction() as conn:
+            cur = conn.execute(
+                f"UPDATE rules SET rule_set_id = ? "
+                f"WHERE id IN ({placeholders})",
+                [int(target_set_id), *(int(x) for x in rule_ids)],
+            )
+            return cur.rowcount or 0
+
+    def duplicate_rule(self, rule_id: int, *,
+                       target_set_id: int | None = None,
+                       new_name: str | None = None,
+                       actor: str | None = None) -> int:
+        """Duplica una regola, opzionalmente in un altro rule_set."""
+        with self.transaction() as conn:
+            r = conn.execute(
+                "SELECT * FROM rules WHERE id = ?", (int(rule_id),)
+            ).fetchone()
+            if not r:
+                raise ValueError(f"Regola {rule_id} non trovata")
+            d = dict(r)
+            d.pop("id", None)
+            d.pop("created_at", None)
+            d.pop("updated_at", None)
+            d["created_by"] = actor or d.get("created_by")
+            d["name"] = new_name or f"{d.get('name','')} (copia)"
+            if target_set_id is not None:
+                d["rule_set_id"] = int(target_set_id)
+            # Trova priority libera nel set/scope di destinazione
+            scope_type = d.get("scope_type") or "global"
+            scope_ref = d.get("scope_ref")
+            target_set = d.get("rule_set_id")
+            tenant = d.get("tenant_id") or 1
+            row = conn.execute(
+                "SELECT COALESCE(MAX(priority), 0) + 10 AS np FROM rules "
+                "WHERE tenant_id = ? AND rule_set_id IS ? "
+                "  AND scope_type = ? AND scope_ref IS ?",
+                (tenant, target_set, scope_type, scope_ref),
+            ).fetchone()
+            d["priority"] = int(row["np"]) if row else 100
+            cols = [k for k in d.keys() if k != "id"]
+            placeholders = ",".join("?" * len(cols))
+            cur = conn.execute(
+                f"INSERT INTO rules ({', '.join(cols)}) VALUES ({placeholders})",
+                [d[k] for k in cols],
+            )
+            return int(cur.lastrowid)
+
+    # ============================================================
     # M028 — Customer sync sources / runs / locks
     # ============================================================
 
@@ -3742,6 +3998,16 @@ def _decode_profile(row) -> dict[str, Any]:
     # Boolean coercion sui flag (SQLite restituisce int)
     for k in ("holidays_auto", "is_builtin", "enabled", "exclude_holidays",
               "requires_authorization_always", "authorize_outside_hours"):
+        if k in d and d[k] is not None:
+            d[k] = bool(d[k])
+    return d
+
+
+def _decode_rule_set(row) -> dict[str, Any]:
+    if row is None:
+        return {}
+    d = dict(row)
+    for k in ("is_always_active", "enabled", "is_builtin"):
         if k in d and d[k] is not None:
             d[k] = bool(d[k])
     return d

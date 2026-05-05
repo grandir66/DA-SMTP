@@ -34,6 +34,19 @@ def sync_customers_and_rules(backend: ManagerBackend, storage: Storage) -> dict[
         logger.warning("Sync clienti fallito: %s", exc)
         result["errors"].append(f"customers: {exc}")
 
+    # M029: rule_sets PRIMA delle rules cosi' la cache e' coerente quando
+    # il rule engine valuta (rule.rule_set_id deve essere risolvibile).
+    try:
+        if hasattr(backend, "fetch_active_rule_sets"):
+            rs_payload = backend.fetch_active_rule_sets()
+            n = storage.replace_rule_sets(rs_payload.rule_sets)
+            result["rule_sets"] = {"synced_at": rs_payload.synced_at, "count": n}
+            if n:
+                logger.info("Sync rule_sets OK: %d set aggiornati", n)
+    except (ManagerError, AttributeError) as exc:
+        logger.debug("Sync rule_sets skip/fallito: %s", exc)
+        result["errors"].append(f"rule_sets: {exc}")
+
     try:
         rules_payload = backend.fetch_active_rules()
         n = storage.replace_rules(rules_payload.rules)

@@ -32,6 +32,7 @@ class CustomerContext:
     in_service: bool | None
     sector: str | None
     service_hours: dict[str, Any] | None
+    tipologia_servizio: str | None = None  # M029: code profilo (STD/EXT/H24/NO/...)
 
 
 @dataclass
@@ -74,14 +75,45 @@ def _resolve_customer(parsed: ParsedMessage, storage: Storage) -> tuple[Customer
     if schedule:
         in_srv = is_in_service(schedule)
 
+    # M029: estrai tipologia_servizio (code profilo orari) per attivazione rule_set
+    tipologia: str | None = None
+    if cust_row is not None:
+        try:
+            tipologia = cust_row["tipologia_servizio"]
+        except (KeyError, IndexError):
+            tipologia = None
+
     ctx = CustomerContext(
         codcli=codcli,
         contract_active=contract_active,
         in_service=in_srv,
         sector=None,
         service_hours=schedule,
+        tipologia_servizio=tipologia,
     )
     return ctx, route_row
+
+
+def _resolve_active_rule_sets(storage: "Storage",
+                                profile_code: str | None) -> set[int] | None:
+    """M029: ritorna l'insieme di rule_set_id attivi per la mail corrente.
+
+    Sempre inclusi: tutti i set con is_always_active=1 (es. "globali").
+    In piu', se profile_code valorizzato e c'e' un set con stesso profile_code
+    e enabled=1, viene aggiunto.
+
+    Ritorna None per backward-compat se rule_sets_cache non esiste o e' vuota
+    (significa: pre-M029, no filter, comportamento legacy).
+    """
+    try:
+        if not hasattr(storage, "fetch_active_rule_set_ids"):
+            return None
+        ids = storage.fetch_active_rule_set_ids(profile_code=profile_code)
+        if not ids:
+            return None
+        return set(int(x) for x in ids)
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def _event_dict(parsed: ParsedMessage, ctx: CustomerContext,
@@ -291,7 +323,13 @@ def process(
     else:
         rules_rows = storage.fetch_active_rules()
         engine = RuleEngine(rules=[dict(r) for r in rules_rows])
-        outcome: RuleOutcome = engine.evaluate(_event_dict(parsed, ctx, storage), {"in_service": ctx.in_service, "sector": ctx.sector})
+        # M029: calcola i rule_set attivi (sempre attivi + quello del profilo cliente)
+        active_set_ids = _resolve_active_rule_sets(storage, ctx.tipologia_servizio)
+        outcome: RuleOutcome = engine.evaluate(
+            _event_dict(parsed, ctx, storage),
+            {"in_service": ctx.in_service, "sector": ctx.sector},
+            active_rule_set_ids=active_set_ids,
+        )
         chain_dump = [
             {"scope": s.scope, "rule_id": s.rule_id, "rule_name": s.rule_name,
              "priority": s.priority, "matched": s.matched, "reasons": s.reasons}
@@ -335,6 +373,7 @@ def process(
                     _event_dict(parsed, ctx, storage),
                     {"in_service": ctx.in_service, "sector": ctx.sector},
                     exclude_rule_ids={rule_id},
+                    active_rule_set_ids=active_set_ids,
                 )
                 # Estendi la chain con la nuova evaluation per audit
                 for s in outcome2.chain:

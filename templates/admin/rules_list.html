@@ -40,6 +40,93 @@
     </p>
 </section>
 
+{% if rule_sets %}
+<style>
+.rs-tabs { display:flex; gap:0; border-bottom:2px solid #cbd5e1;
+           margin:0.8rem 0 1.1rem; flex-wrap:wrap; }
+.rs-tab { padding:0.55rem 1rem; cursor:pointer; font-weight:600;
+          color:#64748b; border-bottom:3px solid transparent;
+          margin-bottom:-2px; text-decoration:none; user-select:none;
+          display:inline-flex; gap:0.5rem; align-items:center; }
+.rs-tab:hover { color:#1e293b; background:#f8fafc; }
+.rs-tab.active { color:#1e293b; border-bottom-color:#3b82f6; background:#fff; }
+.rs-tab .count { background:#e2e8f0; color:#475569; padding:0.05rem 0.5rem;
+                 border-radius:9px; font-size:0.72rem; }
+.rs-tab.active .count { background:#dbeafe; color:#1e40af; }
+.rs-tab.disabled { opacity:0.5; }
+.rs-color-dot { width:9px; height:9px; border-radius:50%; display:inline-block; }
+</style>
+<div class="rs-tabs">
+    <a class="rs-tab {% if not active_set_id %}active{% endif %}"
+       href="{{ url_for('rules.list_view', state=filter_state) }}">
+        <i class="fas fa-asterisk"></i> Tutti i set
+        <span class="count">{{ rule_set_counts.values()|sum if rule_set_counts else 0 }}</span>
+    </a>
+    {% for rs in rule_sets %}
+    <a class="rs-tab {% if active_set_id == rs.id %}active{% endif %} {% if not rs.enabled %}disabled{% endif %}"
+       href="{{ url_for('rules.list_view', state=filter_state, set=rs.id) }}"
+       title="{{ rs.description or rs.name }}">
+        <span class="rs-color-dot" style="background:{{ rs.color or '#cbd5e1' }};"></span>
+        {% if rs.is_always_active %}<i class="fas fa-globe" style="font-size:0.75rem;"></i>{% endif %}
+        {{ rs.name }}
+        <span class="count">{{ rule_set_counts.get(rs.id, 0) }}</span>
+    </a>
+    {% endfor %}
+    <a class="rs-tab" style="margin-left:auto; color:#1e40af;"
+       href="{{ url_for('rule_sets.list_view') }}"
+       title="Gestisci i set di regole">
+        <i class="fas fa-gear"></i> Gestisci set
+    </a>
+</div>
+
+{% if active_set_id %}
+{% set active_rs = rule_sets|selectattr('id','equalto',active_set_id)|list|first %}
+{% if active_rs and active_rs.description %}
+<div style="background:#eff6ff; border-left:3px solid #3b82f6;
+            padding:0.6rem 0.9rem; border-radius:0 6px 6px 0;
+            margin-bottom:1rem; font-size:0.88rem;">
+    <strong><i class="fas fa-info-circle"></i> {{ active_rs.name }}:</strong>
+    {{ active_rs.description }}
+</div>
+{% endif %}
+{% endif %}
+{% endif %}
+
+<style>
+.rule-bulk-toolbar { background:#0f172a; color:#e2e8f0;
+                     padding:0.6rem 1rem; border-radius:6px; margin-bottom:0.8rem;
+                     display:none; align-items:center; gap:0.7rem; flex-wrap:wrap; }
+.rule-bulk-toolbar.show { display:flex; }
+.rule-bulk-toolbar .count { font-weight:700; color:#fbbf24; }
+.rule-bulk-toolbar select { padding:0.3rem 0.5rem; border-radius:4px;
+                            border:1px solid #475569; background:#1e293b; color:#e2e8f0;
+                            font-size:0.85rem; }
+.rule-bulk-toolbar button { padding:0.35rem 0.8rem; }
+.rule-checkbox { margin-right:0.6rem; cursor:pointer; }
+.rule-row.bulk-selected { background:#fef3c7 !important; }
+</style>
+
+<form method="post" id="bulk-form" action="{{ url_for('rules.bulk_action_view') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="rule-bulk-toolbar" id="bulk-toolbar">
+        <strong><i class="fas fa-check-square"></i> <span class="count" id="bulk-count">0</span> regole selezionate</strong>
+        <select name="action" id="bulk-action" required>
+            <option value="">— azione bulk —</option>
+            <option value="duplicate_to_set">Duplica nel set...</option>
+            <option value="move_to_set">Sposta nel set...</option>
+            <option value="enable">Abilita tutte</option>
+            <option value="disable">Disabilita tutte</option>
+        </select>
+        <select name="target_set_id" id="bulk-target-set" disabled>
+            <option value="">— set destinazione —</option>
+            {% for rs in rule_sets or [] %}
+                <option value="{{ rs.id }}">{{ rs.name }}{% if rs.profile_code %} ({{ rs.profile_code }}){% endif %}</option>
+            {% endfor %}
+        </select>
+        <button type="submit" class="dr-btn dr-btn-primary">Applica</button>
+        <button type="button" class="dr-btn" onclick="bulkClear()">Annulla selezione</button>
+    </div>
+
 <div class="rule-tree">
     {% if not items %}
     <div class="dr-empty">Nessuna regola. <a href="{{ url_for('rules.form_view') }}">Crea la prima</a> o
@@ -92,7 +179,9 @@
                     </div>
                     {% endif %}
                     {% for c in item.children %}
-                    <div class="rule-row rule-child" {% if not c.enabled %}style="opacity:0.55;"{% endif %}>
+                    <div class="rule-row rule-child" data-rule-id="{{ c.id }}" {% if not c.enabled %}style="opacity:0.55;"{% endif %}>
+                        <input type="checkbox" class="rule-checkbox" name="rule_ids" value="{{ c.id }}"
+                               form="bulk-form" onclick="bulkUpdate(event)">
                         <span class="toggle placeholder">└</span>
                         <span class="priority">{{ c.priority }}</span>
                         <span class="label">
@@ -149,7 +238,9 @@
             </div>
         {% else %}
             {% set r = item.rule %}
-            <div class="rule-row rule-orphan" {% if not r.enabled %}style="opacity:0.55;"{% endif %}>
+            <div class="rule-row rule-orphan" data-rule-id="{{ r.id }}" {% if not r.enabled %}style="opacity:0.55;"{% endif %}>
+                <input type="checkbox" class="rule-checkbox" name="rule_ids" value="{{ r.id }}"
+                       form="bulk-form" onclick="bulkUpdate(event)">
                 <span class="toggle placeholder">•</span>
                 <span class="priority">{{ r.priority }}</span>
                 <span class="label">
@@ -210,6 +301,7 @@
         {% endif %}
     {% endfor %}
 </div>
+</form>
 
 <script>
 function toggleGroup(gid) {
@@ -229,5 +321,26 @@ function promptPromote(evt, ruleId) {
     form.appendChild(inp);
     return true;
 }
+
+// ===== Bulk selection (M029) =====
+function bulkUpdate(ev) {
+    if (ev) ev.stopPropagation();
+    const checked = document.querySelectorAll('.rule-checkbox:checked');
+    document.getElementById('bulk-count').textContent = checked.length;
+    const toolbar = document.getElementById('bulk-toolbar');
+    toolbar.classList.toggle('show', checked.length > 0);
+    document.querySelectorAll('.rule-row').forEach(r => r.classList.remove('bulk-selected'));
+    checked.forEach(cb => cb.closest('.rule-row').classList.add('bulk-selected'));
+}
+function bulkClear() {
+    document.querySelectorAll('.rule-checkbox:checked').forEach(cb => { cb.checked = false; });
+    bulkUpdate();
+}
+document.getElementById('bulk-action').addEventListener('change', function() {
+    const target = document.getElementById('bulk-target-set');
+    const needsSet = (this.value === 'duplicate_to_set' || this.value === 'move_to_set');
+    target.disabled = !needsSet;
+    target.required = needsSet;
+});
 </script>
 {% endblock %}

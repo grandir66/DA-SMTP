@@ -32,6 +32,20 @@ CREATE TABLE IF NOT EXISTS customers_cache (
 
 CREATE INDEX IF NOT EXISTS idx_customers_synced ON customers_cache(synced_at);
 
+-- M029: rule_sets cache per filtraggio runtime delle regole.
+CREATE TABLE IF NOT EXISTS rule_sets_cache (
+    id                INTEGER PRIMARY KEY,
+    code              TEXT NOT NULL,
+    name              TEXT,
+    is_always_active  INTEGER NOT NULL DEFAULT 0,
+    profile_code      TEXT,
+    enabled           INTEGER NOT NULL DEFAULT 1,
+    evaluation_order  INTEGER NOT NULL DEFAULT 100,
+    synced_at         TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_rule_sets_profile_code
+    ON rule_sets_cache(profile_code) WHERE profile_code IS NOT NULL;
+
 CREATE TABLE IF NOT EXISTS rules_cache (
     id                       INTEGER PRIMARY KEY,
     name                     TEXT,
@@ -354,6 +368,9 @@ class Storage:
                 ("aggregations_cache", "delay_minutes", "ALTER TABLE aggregations_cache ADD COLUMN delay_minutes INTEGER"),
                 ("error_occurrences_local", "pending_ticket_until", "ALTER TABLE error_occurrences_local ADD COLUMN pending_ticket_until TEXT"),
                 ("h24_targets_cache", "source_email", "ALTER TABLE h24_targets_cache ADD COLUMN source_email TEXT"),
+                # M029: rule sets organizzati per profilo orario
+                ("rules_cache", "rule_set_id", "ALTER TABLE rules_cache ADD COLUMN rule_set_id INTEGER"),
+                ("customers_cache", "tipologia_servizio", "ALTER TABLE customers_cache ADD COLUMN tipologia_servizio TEXT"),
             ):
                 try:
                     conn.execute(ddl)
@@ -549,8 +566,9 @@ class Storage:
                 conn.execute(
                     """INSERT INTO customers_cache
                            (codcli, ragione_sociale, domains_json, aliases_json,
-                            contract_active, service_hours_json, synced_at)
-                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                            contract_active, service_hours_json, synced_at,
+                            tipologia_servizio)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
                     (
                         c["codcli"],
                         c.get("ragione_sociale"),
@@ -559,6 +577,7 @@ class Storage:
                         1 if c.get("contract_active") else 0,
                         json.dumps(c.get("service_hours"), ensure_ascii=False) if c.get("service_hours") else None,
                         synced,
+                        c.get("tipologia_servizio"),
                     ),
                 )
             self._set_sync_meta(conn, "customers", synced)
@@ -635,6 +654,13 @@ class Storage:
                         synced,
                     ),
                 )
+                # M029: rule_set_id (NULL se backend non lo invia, comportamento legacy)
+                rsid = r.get("rule_set_id")
+                if rsid is not None:
+                    conn.execute(
+                        "UPDATE rules_cache SET rule_set_id = ? WHERE id = ?",
+                        (int(rsid), int(r["id"])),
+                    )
             self._set_sync_meta(conn, "rules", synced)
         return len(rules)
 
@@ -645,6 +671,59 @@ class Storage:
                     WHERE enabled = 1 AND applies_to IN ('smtp','any')
                     ORDER BY priority ASC, id ASC"""
             ).fetchall()
+
+    # ------------------------------------------------------------------ rule_sets_cache (M029)
+
+    def replace_rule_sets(self, rule_sets: list[dict[str, Any]]) -> int:
+        synced = _now_iso()
+        with self.transaction() as conn:
+            conn.execute("DELETE FROM rule_sets_cache;")
+            for rs in rule_sets:
+                conn.execute(
+                    """INSERT INTO rule_sets_cache
+                           (id, code, name, is_always_active, profile_code,
+                            enabled, evaluation_order, synced_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        int(rs["id"]),
+                        rs.get("code"),
+                        rs.get("name"),
+                        1 if rs.get("is_always_active") else 0,
+                        rs.get("profile_code"),
+                        1 if rs.get("enabled", True) else 0,
+                        int(rs.get("evaluation_order", 100)),
+                        synced,
+                    ),
+                )
+            self._set_sync_meta(conn, "rule_sets", synced)
+        return len(rule_sets)
+
+    def fetch_active_rule_set_ids(self, *, profile_code: str | None) -> list[int]:
+        """M029: rule_set_id attivi per la mail corrente.
+        - sempre: tutti i set con is_always_active=1 (es. 'globali')
+        - + il set associato a profile_code (UPPERCASE match) se esiste
+        Backward-compat: se la cache e' vuota, ritorna lista vuota e il chiamante
+        considera "no filter" (legacy).
+        """
+        out: list[int] = []
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT id FROM rule_sets_cache "
+                "WHERE enabled = 1 AND is_always_active = 1 "
+                "ORDER BY evaluation_order, id"
+            ).fetchall()
+            for r in rows:
+                out.append(int(r["id"]))
+            if profile_code:
+                row = conn.execute(
+                    "SELECT id FROM rule_sets_cache "
+                    "WHERE enabled = 1 AND is_always_active = 0 "
+                    "  AND UPPER(profile_code) = UPPER(?)",
+                    (profile_code,),
+                ).fetchone()
+                if row and int(row["id"]) not in out:
+                    out.append(int(row["id"]))
+        return out
 
     # ------------------------------------------------------------------ customer_groups_cache
 

@@ -201,6 +201,8 @@ def rules_active():
             "action": r["action"],
             "action_map": am,
             "continue_after_match": bool(r.get("continue_after_match")),
+            # M029: rule_set_id per filtraggio runtime nel listener
+            "rule_set_id": r.get("rule_set_id"),
         }
         # Metadata opzionali per audit (ignorati dal listener legacy).
         if r.get("_source_group_id"):
@@ -211,6 +213,40 @@ def rules_active():
     return jsonify({
         "synced_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "rules": out,
+    }), 200
+
+
+@api_bp.route("/rule-sets/active", methods=["GET"])
+@require_api_key
+def rule_sets_active():
+    """M029: rule_sets attivi per il listener.
+
+    Il listener usa il pool dei set is_always_active=1 + il set associato al
+    profile_code del cliente per filtrare le regole a runtime.
+    """
+    storage = _storage()
+    tid_raw = request.args.get("tenant_id")
+    tid = 1
+    if tid_raw:
+        try:
+            tid = int(tid_raw)
+        except ValueError:
+            return jsonify({"error": "tenant_id deve essere int"}), 400
+    sets = storage.list_rule_sets(tenant_id=tid, only_enabled=True)
+    out = []
+    for rs in sets:
+        out.append({
+            "id": int(rs["id"]),
+            "code": rs.get("code"),
+            "name": rs.get("name"),
+            "is_always_active": bool(rs.get("is_always_active")),
+            "profile_code": rs.get("profile_code"),
+            "enabled": bool(rs.get("enabled")),
+            "evaluation_order": int(rs.get("evaluation_order") or 100),
+        })
+    return jsonify({
+        "synced_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "rule_sets": out,
     }), 200
 
 

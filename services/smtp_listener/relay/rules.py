@@ -109,20 +109,34 @@ class RuleEngine:
         return d
 
     def evaluate(self, event: dict[str, Any], context: dict[str, Any],
-                   *, exclude_rule_ids: set[int] | None = None) -> RuleOutcome:
+                   *, exclude_rule_ids: set[int] | None = None,
+                   active_rule_set_ids: set[int] | None = None) -> RuleOutcome:
         """Valuta le regole.
 
         ``exclude_rule_ids`` (Fix B 2026-05-05): salta le regole con id presente
         nel set. Usato dal pipeline per re-evaluare dopo un falso positivo H24
         (codice estratto via regex larga ma non trovato in DB).
+
+        ``active_rule_set_ids`` (M029): se valorizzato, considera solo le regole
+        appartenenti a uno di questi rule_set. Tipicamente: il set "globali"
+        (sempre attivo) + il set associato al profilo orario del cliente
+        (standard/esteso/h24/nessuno). Se None: nessun filtro (compat
+        pre-M029).
         """
         chain: list[ChainStep] = []
         winning: dict[str, Any] | None = None
         winning_scope: str | None = None
         exclude = set(exclude_rule_ids or ())
+        active_sets = set(active_rule_set_ids) if active_rule_set_ids is not None else None
 
         grouped: dict[str, list[dict[str, Any]]] = {s: [] for s in SCOPE_ORDER}
         for rule in self._rules:
+            # M029: filtra per rule_set attivo. Le regole con rule_set_id=NULL
+            # (legacy o non ancora migrate) sono sempre incluse per safety.
+            if active_sets is not None:
+                rsid = rule.get("rule_set_id")
+                if rsid is not None and int(rsid) not in active_sets:
+                    continue
             stype = rule.get("scope_type", "global")
             if stype in grouped:
                 grouped[stype].append(rule)
