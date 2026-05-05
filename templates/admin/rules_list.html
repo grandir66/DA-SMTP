@@ -102,7 +102,13 @@
                             border:1px solid #475569; background:#1e293b; color:#e2e8f0;
                             font-size:0.85rem; }
 .rule-bulk-toolbar button { padding:0.35rem 0.8rem; }
-.rule-checkbox { margin-right:0.6rem; cursor:pointer; }
+/* M029: aggiungo colonna 22px per il checkbox sulle rule-row (orfana/figlio).
+   Il group-header non ha checkbox quindi resta col grid originale. */
+.rule-tree .rule-row.rule-orphan,
+.rule-tree .rule-row.rule-child {
+    grid-template-columns: 22px 24px 70px 1fr auto auto auto;
+}
+.rule-checkbox { cursor:pointer; margin:0; align-self:center; justify-self:center; }
 .rule-row.bulk-selected { background:#fef3c7 !important; }
 </style>
 
