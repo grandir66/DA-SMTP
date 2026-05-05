@@ -255,27 +255,25 @@ def form_view(rule_id: int | None = None):
 
     if request.method == "POST":
         data = _parse_form(request.form)
-        # Validazione: match_to_regex e match_to_group_id sono mutuamente esclusivi
-        if data.get("match_to_regex") and data.get("match_to_group_id"):
-            flash("Impossibile usare match_to_regex e match_to_group_id contemporaneamente. "
-                  "Scegli una delle due modalità.", "error")
-            return render_template("admin/rule_form.html", is_new=is_new,
-                                     record={**(record or {}), **data},
-                                     templates=templates, from_event_id=from_event_id,
-                                     known_domains=known_domains,
-                                     customer_groups=[],
-                                     recipient_groups=_storage().list_recipient_groups(
-                                         tenant_id=_tid(), only_enabled=True))
-        try:
-            if not is_new:
-                data["id"] = rule_id
-            new_id = _storage().upsert_rule(data, tenant_id=_tid(),
-                                             created_by=session.get("username") or "ui")
-            flash(f"Regola {'creata' if is_new else 'aggiornata'}.", "success")
-            return redirect(url_for("rules.form_view", rule_id=new_id))
-        except ValueError as exc:
-            flash(str(exc), "error")
+        # Validazione full V001-V008/V_PRI_RANGE (regola orfana, no parent)
+        errs, warns = _run_full_validators(data, rule_id=rule_id)
+        for w in warns:
+            flash(w, "warning")
+        if errs:
+            for e in errs:
+                flash(e, "error")
             record = {**record, **data}
+        else:
+            try:
+                if not is_new:
+                    data["id"] = rule_id
+                new_id = _storage().upsert_rule(data, tenant_id=_tid(),
+                                                 created_by=session.get("username") or "ui")
+                flash(f"Regola {'creata' if is_new else 'aggiornata'}.", "success")
+                return redirect(url_for("rules.form_view", rule_id=new_id))
+            except ValueError as exc:
+                flash(str(exc), "error")
+                record = {**record, **data}
 
     # Context IA: popolato sempre, il template mostra il pannello solo se
     # action == 'ai_classify' / 'ai_critical_check'.
@@ -671,16 +669,25 @@ def group_form_view(group_id: int | None = None):
             "action_map": action_map or None,
             "exclusive_match": (request.form.get("exclusive_match") or "").lower() in ("on", "true", "1"),
         }
-        try:
-            if not is_new:
-                data["id"] = group_id
-            new_id = _storage().upsert_rule(data, tenant_id=_tid(),
-                                             created_by=session.get("username") or "ui")
-            flash(f"Gruppo {'creato' if is_new else 'aggiornato'}.", "success")
-            return redirect(url_for("rules.group_form_view", group_id=new_id))
-        except ValueError as exc:
-            flash(str(exc), "error")
+        # Validazione full V001-V008/V_PRI_RANGE per gruppo
+        errs, warns = _run_full_validators(data, rule_id=group_id)
+        for w in warns:
+            flash(w, "warning")
+        if errs:
+            for e in errs:
+                flash(e, "error")
             record = {**record, **data}
+        else:
+            try:
+                if not is_new:
+                    data["id"] = group_id
+                new_id = _storage().upsert_rule(data, tenant_id=_tid(),
+                                                 created_by=session.get("username") or "ui")
+                flash(f"Gruppo {'creato' if is_new else 'aggiornato'}.", "success")
+                return redirect(url_for("rules.group_form_view", group_id=new_id))
+            except ValueError as exc:
+                flash(str(exc), "error")
+                record = {**record, **data}
 
     children = _storage().list_group_children(group_id) if not is_new else []
     # M035: customer_groups disponibili per il selettore multi-select
@@ -725,16 +732,29 @@ def child_form_view(group_id: int, child_id: int | None = None):
         data["is_group"] = 0
         data["continue_in_group"] = (request.form.get("continue_in_group") or "").lower() in ("on", "true", "1")
         data["exit_group_continue"] = (request.form.get("exit_group_continue") or "").lower() in ("on", "true", "1")
-        try:
-            if not is_new:
-                data["id"] = child_id
-            new_id = _storage().upsert_rule(data, tenant_id=_tid(),
-                                             created_by=session.get("username") or "ui")
-            flash(f"Figlio {'creato' if is_new else 'aggiornato'}.", "success")
-            return redirect(url_for("rules.child_form_view", group_id=group_id, child_id=new_id))
-        except ValueError as exc:
-            flash(str(exc), "error")
+        # Validazione full V001-V008/V_PRI_RANGE/W004/W_PRI_GAP per figlio:
+        # parent + siblings caricati per check di compatibilità e priorità.
+        siblings_for_validation = _storage().list_group_children(group_id) or []
+        errs, warns = _run_full_validators(
+            data, parent=parent, siblings=siblings_for_validation, rule_id=child_id,
+        )
+        for w in warns:
+            flash(w, "warning")
+        if errs:
+            for e in errs:
+                flash(e, "error")
             record = {**record, **data}
+        else:
+            try:
+                if not is_new:
+                    data["id"] = child_id
+                new_id = _storage().upsert_rule(data, tenant_id=_tid(),
+                                                 created_by=session.get("username") or "ui")
+                flash(f"Figlio {'creato' if is_new else 'aggiornato'}.", "success")
+                return redirect(url_for("rules.child_form_view", group_id=group_id, child_id=new_id))
+            except ValueError as exc:
+                flash(str(exc), "error")
+                record = {**record, **data}
 
     templates = _storage().list_templates(tenant_id=_tid(), only_enabled=True)
     # Anteprima action_map effettiva
@@ -942,6 +962,29 @@ def _to_int(v):
         return int(v) if v not in (None, "", "0") else None
     except (ValueError, TypeError):
         return None
+
+
+def _run_full_validators(
+    data: dict,
+    *,
+    parent: dict | None = None,
+    siblings: list[dict] | None = None,
+    rule_id: int | None = None,
+) -> tuple[list[str], list[str]]:
+    """Esegue validate_rule() (V001-V008/V_PRI_RANGE + W*) e ritorna
+    (errors_str, warnings_str). I warnings sono solo informativi.
+
+    Caller flush errori con flash(..., 'error') e ritorna False per bloccare,
+    flusha warnings con flash(..., 'warning') ma procede.
+    """
+    from ..rules.validators import validate_rule
+    payload = dict(data)
+    if rule_id is not None:
+        payload["id"] = rule_id
+    errors, warnings = validate_rule(
+        payload, parent=parent, siblings=siblings, next_top_level_priority=None,
+    )
+    return [str(e) for e in errors], list(warnings)
 
 
 def _normalize_emails_list(raw):

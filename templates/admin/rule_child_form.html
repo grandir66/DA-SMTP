@@ -103,6 +103,11 @@
                 <input type="text" name="name" value="{{ record.name or '' }}" required placeholder="es. Auto-reply out_of_hours">
             </div>
             <div class="rc-row">
+                <label>Descrizione</label>
+                <textarea name="description" rows="2" placeholder="Note operative su questo figlio (perché esiste, da quando, chi lo gestisce). Visibile in lista e flatten preview."
+                          style="width:100%;">{{ record.description or '' }}</textarea>
+            </div>
+            <div class="rc-row">
                 <label>Priority globale</label>
                 <div>
                     <input type="number" name="priority" min="1" max="999999"

@@ -165,3 +165,73 @@ def test_validation_error_has_code():
     e = ValidationError("V001", "test")
     assert e.code == "V001"
     assert "V001" in str(e)
+
+
+# ============================== M027/M035/M036 ============================
+# Verifica che i campi nuovi vengano riconosciuti come "match presenti" e
+# che le validazioni V004/V006 li gestiscano correttamente.
+
+
+def test_m035_orphan_with_only_customer_groups_valid():
+    """Una regola orfana con SOLO match_customer_groups deve essere valida.
+    Era un bug pre-fix: rifiutata con 'almeno un match_*'."""
+    rule = {
+        "is_group": 0, "parent_id": None, "priority": 100,
+        "action": "create_ticket",
+        "match_customer_groups": "h24_customers,std_customers",
+    }
+    errors, _ = validate_rule(rule)
+    assert errors == []
+
+
+def test_m027_group_with_only_to_group_id_valid():
+    """Un gruppo padre con SOLO match_to_group_id deve passare V004."""
+    rule = {
+        "is_group": 1, "parent_id": None, "priority": 100,
+        "match_to_group_id": 5,
+    }
+    errors, _ = validate_rule(rule)
+    assert "V004" not in [e.code for e in errors]
+
+
+def test_m036_group_with_only_thread_continuation_valid():
+    """Un gruppo con SOLO match_is_thread_continuation deve passare V004."""
+    rule = {
+        "is_group": 1, "parent_id": None, "priority": 100,
+        "match_is_thread_continuation": 1,
+    }
+    errors, _ = validate_rule(rule)
+    assert "V004" not in [e.code for e in errors]
+
+
+def test_m027_v006_incompatible_to_group_id():
+    """Padre filtra su recipient_group=5, figlio su 7 → V006."""
+    parent = _group(id=1, match_to_group_id=5)
+    child = _child(parent, id=2, match_to_group_id=7)
+    errors, _ = validate_rule(child, parent=parent)
+    assert "V006" in [e.code for e in errors]
+
+
+def test_m035_v006_disjoint_customer_groups():
+    """Padre filtra su h24_customers, figlio su std_customers → V006
+    (intersezione vuota = il figlio non potrebbe mai matchare)."""
+    parent = _group(id=1, match_customer_groups="h24_customers")
+    child = _child(parent, id=2, match_customer_groups="std_customers")
+    errors, _ = validate_rule(child, parent=parent)
+    assert "V006" in [e.code for e in errors]
+
+
+def test_m035_v006_overlapping_customer_groups_ok():
+    """Padre 'h24,ext', figlio 'h24,std' → intersezione {h24} non vuota → ok."""
+    parent = _group(id=1, match_customer_groups="h24_customers,ext_customers")
+    child = _child(parent, id=2, match_customer_groups="h24_customers,std_customers")
+    errors, _ = validate_rule(child, parent=parent)
+    assert "V006" not in [e.code for e in errors]
+
+
+def test_m036_v006_incompatible_thread_continuation():
+    """Padre richiede thread=True, figlio richiede thread=False → V006."""
+    parent = _group(id=1, match_is_thread_continuation=1)
+    child = _child(parent, id=2, match_is_thread_continuation=0)
+    errors, _ = validate_rule(child, parent=parent)
+    assert "V006" in [e.code for e in errors]

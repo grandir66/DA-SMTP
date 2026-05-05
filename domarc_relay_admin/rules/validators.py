@@ -26,6 +26,11 @@ MATCH_FIELDS_TEXT: tuple[str, ...] = (
     "match_from_domain",
     "match_at_hours",
     "match_tag",
+    "match_customer_groups",  # M035 (CSV "h24_customers,std_customers")
+)
+
+MATCH_FIELDS_INT: tuple[str, ...] = (
+    "match_to_group_id",      # M027 FK recipient_groups
 )
 
 MATCH_FIELDS_TRISTATE: tuple[str, ...] = (
@@ -33,9 +38,10 @@ MATCH_FIELDS_TRISTATE: tuple[str, ...] = (
     "match_contract_active",
     "match_known_customer",
     "match_has_exception_today",
+    "match_is_thread_continuation",  # M036
 )
 
-MATCH_FIELDS_ALL: tuple[str, ...] = MATCH_FIELDS_TEXT + MATCH_FIELDS_TRISTATE
+MATCH_FIELDS_ALL: tuple[str, ...] = MATCH_FIELDS_TEXT + MATCH_FIELDS_INT + MATCH_FIELDS_TRISTATE
 
 PRIORITY_MIN = 1
 PRIORITY_MAX = 999_999
@@ -76,6 +82,16 @@ def _matches_compatible(
         return str(parent_value).lower() == str(child_value).lower()
     if field in MATCH_FIELDS_TRISTATE:
         return int(parent_value) == int(child_value)
+    if field == "match_to_group_id":
+        # Recipient group destinatario: se padre filtra su gruppo X,
+        # figlio non può filtrare su gruppo Y diverso.
+        return int(parent_value) == int(child_value)
+    if field == "match_customer_groups":
+        # CSV: l'intersezione padre/figlio deve essere non vuota
+        # altrimenti il figlio non potrebbe mai matchare.
+        pset = {x.strip() for x in str(parent_value).split(",") if x.strip()}
+        cset = {x.strip() for x in str(child_value).split(",") if x.strip()}
+        return bool(pset & cset)
     return True
 
 

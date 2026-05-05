@@ -375,13 +375,58 @@ class SqliteStorage(Storage):
         is_group = bool(data.get("is_group"))
         parent_id = data.get("parent_id") or None
 
-        match_present = any(data.get(k) for k in
-            ("match_from_regex", "match_to_regex", "match_subject_regex",
-             "match_body_regex", "match_to_domain", "match_from_domain"))
+        # Tutti i match_* riconosciuti come "filtro presente" — include i campi
+        # introdotti in M018/M027/M035/M036 oltre a quelli classici regex/domain.
+        _MATCH_KEYS_TEXT = (
+            "match_from_regex", "match_to_regex", "match_subject_regex",
+            "match_body_regex", "match_to_domain", "match_from_domain",
+            "match_at_hours", "match_tag", "match_customer_groups",
+        )
+        _MATCH_KEYS_INT = ("match_to_group_id",)
+        _MATCH_KEYS_TRISTATE = (
+            "match_in_service", "match_contract_active", "match_known_customer",
+            "match_has_exception_today", "match_is_thread_continuation",
+        )
+        match_present = (
+            any(data.get(k) for k in _MATCH_KEYS_TEXT)
+            or any(data.get(k) for k in _MATCH_KEYS_INT)
+            or any(data.get(k) is not None and data.get(k) != "" for k in _MATCH_KEYS_TRISTATE)
+        )
         if not match_present and not data.get("scope_ref") and not parent_id and not is_group:
-            raise ValueError("Almeno un match_*_regex / match_*_domain deve essere valorizzato")
+            raise ValueError("Almeno un match_* deve essere valorizzato (regex/domain, gruppi cliente, gruppo destinatari, fasce orarie, tag, in_service, contratto, thread, ecc.)")
         if is_group and not match_present:
-            raise ValueError("Un gruppo deve avere almeno un match_* condiviso (V004)")
+            raise ValueError("Un gruppo deve avere almeno un match_* condiviso (V004) — possono andar bene anche match_customer_groups, match_to_group_id, match_in_service, match_at_hours, ecc.")
+
+        # Validazione regex: re.compile() su tutti i match_*_regex. Se rotta,
+        # rifiutiamo subito il save (era un bug ricorrente: regex storte
+        # rompevano poi il listener a runtime).
+        import re as _re
+        for _rk in ("match_from_regex", "match_to_regex", "match_subject_regex", "match_body_regex"):
+            _rv = (data.get(_rk) or "").strip()
+            if not _rv:
+                continue
+            try:
+                _re.compile(_rv)
+            except _re.error as exc:
+                raise ValueError(f"Regex invalida in {_rk}: {exc}")
+
+        # Mutex match_to_regex / match_to_group_id (M027): un destinatario
+        # si specifica via regex OPPURE via gruppo, non entrambi.
+        if data.get("match_to_regex") and data.get("match_to_group_id"):
+            raise ValueError("match_to_regex e match_to_group_id sono mutuamente esclusivi: scegli una sola modalità.")
+
+        # Mutex forward_to_emails / forward_to_group_id (M027): destinazione
+        # forward via lista email OPPURE via gruppo, non entrambi.
+        if data.get("forward_to_emails") and data.get("forward_to_group_id"):
+            raise ValueError("forward_to_emails e forward_to_group_id sono mutuamente esclusivi: scegli una sola modalità.")
+
+        # Validazione priority range globale (V007): 1..999_999
+        try:
+            _pri = int(data.get("priority") or 0)
+        except (ValueError, TypeError):
+            _pri = 0
+        if not (1 <= _pri <= 999_999):
+            raise ValueError(f"Priority {_pri} fuori range globale 1..999999 (V007).")
 
         action_map = data.get("action_map")
         if action_map is not None and not isinstance(action_map, str):
