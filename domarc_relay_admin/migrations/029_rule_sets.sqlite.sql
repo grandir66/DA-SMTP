@@ -52,24 +52,29 @@ CREATE INDEX IF NOT EXISTS idx_rule_sets_profile_code
 -- 2. Seed 5 set built-in
 -- =========================================================================
 
+-- Descrizioni allineate alla "regola d'oro" (post-cleanup 2026-05-05):
+--   rule_set_id   = TIPO DI CONTRATTO del cliente
+--   match_in_service = FINESTRA TEMPORALE corrente (rispetta naturalmente
+--                      la gerarchia STD ⊂ EXT ⊂ H24 perche' calcolata dal
+--                      profilo del singolo cliente)
 INSERT OR IGNORE INTO rule_sets
     (tenant_id, code, name, description,
      is_always_active, profile_code, evaluation_order, color, is_builtin)
 VALUES
     (1, 'globali', 'Sempre attive (globali)',
-     'Regole valutate per ogni mail, indipendentemente dal profilo orario del cliente. Tipico uso: alert CloudTIK, sistemi automatici che aprono ticket, apprendimento AI, privacy bypass, regole catch-all.',
+     'Set sempre valutato per ogni mail, indipendentemente dal contratto del cliente. METTI QUI le regole "trasversali": sistemi automatici (CloudTIK alerts), AI learning, privacy bypass, catch-all default. PER REGOLE ORARIO-DIPENDENTI usa questo set + match_in_service=true/false (lo stato temporale rispetta naturalmente la gerarchia STD ⊂ EXT ⊂ H24, perche'' calcolato dal profilo del singolo cliente). In dubbio? Metti qui.',
      1, NULL, 10, '#1e40af', 1),
     (1, 'standard', 'Orario standard',
-     'Regole attive solo per clienti con profilo Standard (STD: lun-ven 08:30-13:00 + 14:30-17:30).',
+     'Set attivo SOLO per clienti con tipologia_servizio=STD (Standard, lun-ven 08:30-13:00 + 14:30-17:30). Da usare per regole che valgono SOLO per il livello di contratto Standard (es. tariffe specifiche, template dedicati, blocchi di sicurezza specifici). Per regole valide "in orario lavorativo" indipendentemente dal contratto, usa invece il set "globali" + match_in_service=true.',
      0, 'STD', 100, '#15803d', 1),
     (1, 'esteso', 'Orario esteso',
-     'Regole attive solo per clienti con profilo Esteso (EXT: lun-ven 06:30-19:30 + sab 06:30-13:00).',
+     'Set attivo SOLO per clienti con tipologia_servizio=EXT (Esteso, lun-ven 06:30-19:30 + sab 06:30-13:00). Da usare per regole che valgono SOLO per il livello di contratto Esteso. Le regole sull''orario lavorativo per qualsiasi contratto vanno in "globali" + match_in_service.',
      0, 'EXT', 100, '#a16207', 1),
     (1, 'h24', 'Servizio H24',
-     'Regole attive solo per clienti con profilo H24 (sempre in servizio).',
+     'Set attivo SOLO per clienti con tipologia_servizio=H24 (servizio 24/7). Da usare per regole specifiche del contratto H24 (es. escalation immediata, tariffe straordinario, integrazione con tecnico reperibile). Le regole "in orario lavorativo del cliente" valgono naturalmente anche per H24 se messe in "globali" + match_in_service=true (un cliente H24 e'' sempre in orario).',
      0, 'H24', 100, '#b91c1c', 1),
     (1, 'nessuno', 'Nessuna copertura',
-     'Regole attive solo per clienti con profilo NO (autorizzazione sempre richiesta).',
+     'Set attivo SOLO per clienti con tipologia_servizio=NO (nessuna copertura, autorizzazione sempre richiesta). Da usare per regole specifiche del contratto "Nessuna copertura": forzare codice di autorizzazione anche di giorno, blocchi specifici, template "fuori contratto".',
      0, 'NO', 100, '#64748b', 1);
 
 -- =========================================================================
