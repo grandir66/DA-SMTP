@@ -206,6 +206,8 @@ def rules_active():
             # M033: shadow mode per regola singola
             "shadow_mode": bool(r.get("shadow_mode")),
             "shadow_note": r.get("shadow_note"),
+            # M036: thread continuation matcher
+            "match_is_thread_continuation": r.get("match_is_thread_continuation"),
         }
         # Metadata opzionali per audit (ignorati dal listener legacy).
         if r.get("_source_group_id"):
@@ -524,6 +526,11 @@ def events_post():
                 "body_text": bt,
                 "body_html": bh,
                 "body_expires_at": body_expires_at,
+                # M036: thread tracking
+                "in_reply_to": evt.get("in_reply_to"),
+                "references_json": evt.get("references_json") or evt.get("references"),
+                "reply_to_event_uuid": evt.get("reply_to_event_uuid"),
+                "thread_root_uuid": evt.get("thread_root_uuid"),
             })
             if new_id:
                 accepted += 1

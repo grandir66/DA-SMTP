@@ -94,6 +94,22 @@ def _resolve_customer(parsed: ParsedMessage, storage: Storage) -> tuple[Customer
     return ctx, route_row
 
 
+def _check_thread_continuation(parsed: ParsedMessage,
+                                  storage: "Storage") -> dict[str, Any] | None:
+    """M036: ritorna info sull'evento padre se la mail in arrivo e' una
+    continuazione di thread tracciato (RFC 2822 In-Reply-To / References).
+
+    Dict ritornato:
+      {event_uuid, message_id, ticket_id, rule_id, action_taken, thread_root_uuid}
+    None se non e' una continuazione (mail nuova / inizio thread).
+    """
+    if not hasattr(storage, "find_thread_root"):
+        return None
+    if not parsed.in_reply_to and not parsed.references:
+        return None
+    return storage.find_thread_root(parsed.in_reply_to, parsed.references)
+
+
 def _check_shadow_recipient_group(parsed: ParsedMessage,
                                     storage: "Storage") -> dict[str, Any] | None:
     """M030: ritorna info sul gruppo shadow se uno dei destinatari della mail
@@ -275,6 +291,10 @@ def _event_dict(parsed: ParsedMessage, ctx: CustomerContext,
         # tag opzionale (None se non valorizzato): per match_tag.
         # Origine: parsed metadata o future estensione (es. da X-Tag header).
         "tag": getattr(parsed, "tag", None),
+        # M036: thread tracking — popolato dal pipeline dopo _check_thread_continuation
+        "is_thread_continuation": False,
+        "in_reply_to": parsed.in_reply_to,
+        "references": list(parsed.references or []),
     }
 
 
@@ -408,8 +428,23 @@ def process(
         engine = RuleEngine(rules=[dict(r) for r in rules_rows])
         # M029: calcola i rule_set attivi (sempre attivi + quello del profilo cliente)
         active_set_ids = _resolve_active_rule_sets(storage, ctx.tipologia_servizio)
+        # M036: thread tracking pre-evaluate
+        thread_info = _check_thread_continuation(parsed, storage)
+        if thread_info:
+            extra["is_thread_continuation"] = True
+            extra["reply_to_event_uuid"] = thread_info.get("event_uuid")
+            extra["thread_root_uuid"] = (thread_info.get("thread_root_uuid")
+                                          or thread_info.get("event_uuid"))
+            extra["thread_parent_ticket_id"] = thread_info.get("ticket_id")
+            extra["thread_parent_action"] = thread_info.get("action_taken")
+            logger.info(
+                "Thread continuation: parent_event=%s parent_ticket=%s",
+                thread_info.get("event_uuid"), thread_info.get("ticket_id"),
+            )
+        ev_dict = _event_dict(parsed, ctx, storage)
+        ev_dict["is_thread_continuation"] = bool(thread_info)
         outcome: RuleOutcome = engine.evaluate(
-            _event_dict(parsed, ctx, storage),
+            ev_dict,
             {"in_service": ctx.in_service, "sector": ctx.sector},
             active_rule_set_ids=active_set_ids,
         )
@@ -496,8 +531,10 @@ def process(
                     "H24 false positive su rule_id=%s: re-evaluate escludendo questa regola",
                     rule_id,
                 )
+                ev_dict2 = _event_dict(parsed, ctx, storage)
+                ev_dict2["is_thread_continuation"] = bool(thread_info)
                 outcome2 = engine.evaluate(
-                    _event_dict(parsed, ctx, storage),
+                    ev_dict2,
                     {"in_service": ctx.in_service, "sector": ctx.sector},
                     exclude_rule_ids={rule_id},
                     active_rule_set_ids=active_set_ids,
@@ -545,6 +582,9 @@ def process(
     if agg_summary:
         extra["aggregations"] = agg_summary
 
+    # M036: ricava ticket_id ereditato dal thread parent se la regola
+    # non ne ha aperto uno nuovo (default_delivery con shadow del ticket).
+    inherited_ticket_id = extra.get("thread_parent_ticket_id")
     event_uuid = storage.insert_event(
         from_address=parsed.from_address,
         to_address=parsed.primary_to,
@@ -553,9 +593,15 @@ def process(
         codcli=ctx.codcli,
         action_taken=action_taken,
         rule_id=rule_id,
+        ticket_id=extra.get("ticket_id") or inherited_ticket_id,
         event_uuid=pre_event_uuid,  # UUID pre-generato per correlazione con ai_decisions
         body_text=parsed.body_text,
         body_html=parsed.body_html,
+        # M036: thread tracking
+        in_reply_to=parsed.in_reply_to,
+        references=parsed.references,
+        reply_to_event_uuid=extra.get("reply_to_event_uuid"),
+        thread_root_uuid=extra.get("thread_root_uuid"),
         payload_metadata={
             "size_bytes": len(parsed.raw),
             "received_count": parsed.received_count,

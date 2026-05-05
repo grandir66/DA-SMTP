@@ -636,6 +636,7 @@ def group_form_view(group_id: int | None = None):
         data = {
             "name": request.form.get("name") or f"[GRUPPO] {request.form.get('group_label') or 'senza nome'}",
             "group_label": request.form.get("group_label") or None,
+            "description": request.form.get("description") or None,
             "is_group": 1,
             "action": "group",
             "scope_type": request.form.get("scope_type") or "global",
@@ -653,10 +654,20 @@ def group_form_view(group_id: int | None = None):
             "match_contract_active": _tristate(request.form.get("match_contract_active")),
             "match_known_customer": _tristate(request.form.get("match_known_customer")),
             "match_has_exception_today": _tristate(request.form.get("match_has_exception_today")),
+            "match_is_thread_continuation": _tristate(request.form.get("match_is_thread_continuation")),
+            "match_tag": request.form.get("match_tag") or None,
+            # M027: recipient group destinatari
+            "match_to_group_id": int(request.form["match_to_group_id"]) if request.form.get("match_to_group_id") else None,
             # M035: match_customer_groups (multi-select CSV)
             "match_customer_groups": ",".join(
                 sorted(set(g.strip() for g in request.form.getlist("match_customer_groups") if g.strip()))
             ) or None,
+            # M027: forward target ereditabile dai figli
+            "forward_to_emails": request.form.get("forward_to_emails") or None,
+            "forward_to_group_id": int(request.form["forward_to_group_id"]) if request.form.get("forward_to_group_id") else None,
+            # M033: shadow mode
+            "shadow_mode": (request.form.get("shadow_mode") or "").lower() in ("on", "true", "1"),
+            "shadow_note": request.form.get("shadow_note") or None,
             "action_map": action_map or None,
             "exclusive_match": (request.form.get("exclusive_match") or "").lower() in ("on", "true", "1"),
         }
@@ -677,6 +688,9 @@ def group_form_view(group_id: int | None = None):
     real_groups = _storage().list_customer_groups(tenant_id=_tid())
     db_path = current_app.extensions["domarc_config"].db_path
     customer_groups = merge_with_virtuals(real_groups, db_path, _tid())
+    # M027: recipient_groups per match_to_group_id e forward_to_group_id
+    recipient_groups = _storage().list_recipient_groups(tenant_id=_tid(),
+                                                          only_enabled=True)
 
     return render_template(
         "admin/rule_group_form.html",
@@ -684,6 +698,7 @@ def group_form_view(group_id: int | None = None):
         record=record,
         children=children,
         customer_groups=customer_groups,
+        recipient_groups=recipient_groups,
     )
 
 
@@ -901,6 +916,8 @@ def _parse_form(form) -> dict:
         "match_contract_active": _tristate(form.get("match_contract_active")),
         "match_known_customer": _tristate(form.get("match_known_customer")),
         "match_has_exception_today": _tristate(form.get("match_has_exception_today")),
+        # M036: thread continuation
+        "match_is_thread_continuation": _tristate(form.get("match_is_thread_continuation")),
         "match_customer_groups": ",".join(
             sorted(set(g.strip() for g in form.getlist("match_customer_groups") if g.strip()))
         ) or None,

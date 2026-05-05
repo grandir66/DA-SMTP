@@ -422,6 +422,7 @@ class SqliteStorage(Storage):
                           exclusive_match = ?, continue_in_group = ?, exit_group_continue = ?,
                           rule_set_id = ?,
                           shadow_mode = ?, shadow_note = ?,
+                          match_is_thread_continuation = ?,
                           updated_at = datetime('now')
                        WHERE id = ?""",
                     (
@@ -460,6 +461,7 @@ class SqliteStorage(Storage):
                         int(data["rule_set_id"]) if data.get("rule_set_id") else None,
                         1 if data.get("shadow_mode") else 0,
                         data.get("shadow_note") or None,
+                        _bint(data.get("match_is_thread_continuation")),
                         int(rid),
                     ),
                 )
@@ -476,13 +478,15 @@ class SqliteStorage(Storage):
                         continue_after_match, created_by,
                         parent_id, is_group, group_label,
                         exclusive_match, continue_in_group, exit_group_continue,
-                        rule_set_id, shadow_mode, shadow_note)
+                        rule_set_id, shadow_mode, shadow_note,
+                        match_is_thread_continuation)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                            ?, ?, ?,
                            ?, ?, ?,
                            ?, ?,
                            ?, ?, ?, ?, ?, ?,
-                           ?, ?, ?)""",
+                           ?, ?, ?,
+                           ?)""",
                 (
                     int(tenant_id),
                     (data.get("name") or "").strip(),
@@ -524,6 +528,8 @@ class SqliteStorage(Storage):
                     # M033: shadow_mode + shadow_note
                     1 if data.get("shadow_mode") else 0,
                     data.get("shadow_note") or None,
+                    # M036: thread continuation
+                    _bint(data.get("match_is_thread_continuation")),
                 ),
             )
             return int(cur.lastrowid or 0)
@@ -4291,6 +4297,12 @@ def _decode_event(row) -> dict[str, Any]:
             d["payload_metadata"] = json.loads(d["payload_metadata"])
         except (TypeError, ValueError):
             pass
+    # M036: parsa references_json -> list[str]
+    if d.get("references_json") and isinstance(d["references_json"], str):
+        try:
+            d["references"] = json.loads(d["references_json"])
+        except (TypeError, ValueError):
+            d["references"] = []
     return d
 
 

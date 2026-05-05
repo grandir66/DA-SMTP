@@ -380,6 +380,12 @@ class Storage:
                 # M033: shadow mode su rules (singola regola)
                 ("rules_cache", "shadow_mode", "ALTER TABLE rules_cache ADD COLUMN shadow_mode INTEGER NOT NULL DEFAULT 0"),
                 ("rules_cache", "shadow_note", "ALTER TABLE rules_cache ADD COLUMN shadow_note TEXT"),
+                # M036: thread tracking (RFC 2822 In-Reply-To/References)
+                ("events_log", "in_reply_to", "ALTER TABLE events_log ADD COLUMN in_reply_to TEXT"),
+                ("events_log", "references_json", "ALTER TABLE events_log ADD COLUMN references_json TEXT"),
+                ("events_log", "reply_to_event_uuid", "ALTER TABLE events_log ADD COLUMN reply_to_event_uuid TEXT"),
+                ("events_log", "thread_root_uuid", "ALTER TABLE events_log ADD COLUMN thread_root_uuid TEXT"),
+                ("rules_cache", "match_is_thread_continuation", "ALTER TABLE rules_cache ADD COLUMN match_is_thread_continuation INTEGER"),
             ):
                 try:
                     conn.execute(ddl)
@@ -432,19 +438,26 @@ class Storage:
         event_uuid: str | None = None,
         body_text: str | None = None,
         body_html: str | None = None,
+        in_reply_to: str | None = None,
+        references: list[str] | None = None,
+        reply_to_event_uuid: str | None = None,
+        thread_root_uuid: str | None = None,
     ) -> str:
         evt_uuid = event_uuid or str(uuid.uuid4())
         # Cap di sicurezza per non saturare il DB con MIME enormi.
         # 32 KB plain è ampio per ogni testo umano; HTML 64 KB.
         bt = (body_text or "")[:32_000] or None
         bh = (body_html or "")[:64_000] or None
+        refs_json = json.dumps(references) if references else None
         with self.transaction() as conn:
             conn.execute(
                 """INSERT INTO events_log
                        (event_uuid, received_at, from_address, to_address, subject, message_id,
                         codcli, action_taken, rule_id, ticket_id, payload_metadata,
-                        body_text, body_html)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        body_text, body_html,
+                        in_reply_to, references_json,
+                        reply_to_event_uuid, thread_root_uuid)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     evt_uuid,
                     _now_iso(),
@@ -459,9 +472,51 @@ class Storage:
                     json.dumps(payload_metadata or {}, ensure_ascii=False),
                     bt,
                     bh,
+                    in_reply_to,
+                    refs_json,
+                    reply_to_event_uuid,
+                    thread_root_uuid,
                 ),
             )
         return evt_uuid
+
+    def find_thread_root(self, in_reply_to: str | None,
+                          references: list[str] | None) -> dict[str, Any] | None:
+        """M036: ritorna info sull'evento padre (thread root) se la mail
+        in arrivo e' una continuazione di thread.
+
+        Strategia:
+          1. Se in_reply_to matcha message_id di un evento esistente -> trovato
+          2. Altrimenti scorri references (dall'ultimo al primo, RFC 2822):
+             il piu' recente che matcha message_id vince
+          3. Ritorna {event_uuid, ticket_id, rule_id, action_taken, thread_root_uuid}
+             None se nessuno dei due match -> mail e' inizio nuovo thread.
+        """
+        candidates: list[str] = []
+        if in_reply_to:
+            candidates.append(in_reply_to.strip())
+        if references:
+            # References ordered ascolta-cronologicamente: il piu' recente e' l'ultimo
+            for r in reversed(references):
+                r = (r or "").strip()
+                if r and r not in candidates:
+                    candidates.append(r)
+        if not candidates:
+            return None
+        with self._connect() as conn:
+            for mid in candidates:
+                row = conn.execute(
+                    """SELECT event_uuid, ticket_id, rule_id, action_taken,
+                              thread_root_uuid, message_id
+                         FROM events_log
+                        WHERE message_id = ?
+                        ORDER BY received_at DESC
+                        LIMIT 1""",
+                    (mid,),
+                ).fetchone()
+                if row:
+                    return dict(row)
+        return None
 
     def fetch_unsent_events(self, limit: int = 100) -> list[sqlite3.Row]:
         with self._connect() as conn:
@@ -677,6 +732,13 @@ class Storage:
                         "WHERE id = ?",
                         (1 if r.get("shadow_mode") else 0,
                          r.get("shadow_note"), int(r["id"])),
+                    )
+                # M036: match_is_thread_continuation
+                mitc = r.get("match_is_thread_continuation")
+                if mitc is not None:
+                    conn.execute(
+                        "UPDATE rules_cache SET match_is_thread_continuation = ? WHERE id = ?",
+                        (int(mitc) if mitc not in (None, "") else None, int(r["id"])),
                     )
             self._set_sync_meta(conn, "rules", synced)
         return len(rules)

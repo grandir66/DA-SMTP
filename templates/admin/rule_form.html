@@ -463,6 +463,27 @@
                         </div>
                     </div>
                     <div class="rf-row">
+                        <label>Risposta a thread<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
+                            <strong>M036</strong>: la mail e' una continuazione di thread gia'
+                            tracciato (RFC 2822 In-Reply-To/References matchano un evento esistente).
+                            <br><br>
+                            <strong>Solo continuazioni</strong>: utile per evitare ticket duplicati
+                            quando un cliente risponde nel thread di un ticket aperto.
+                            <strong>Solo prime mail</strong>: solo se NON e' una risposta.
+                            <br><br>
+                            E' gia' attiva una regola seed "Thread continuation -> default_delivery"
+                            a priority=5 nel set globali che intercetta tutte le risposte e fa solo
+                            consegna senza side-effect.
+                        </span></span></label>
+                        <div>
+                            <select name="match_is_thread_continuation">
+                                <option value="">Indifferente</option>
+                                <option value="true"  {% if record.match_is_thread_continuation == 1 or record.match_is_thread_continuation is sameas true %}selected{% endif %}>Solo CONTINUAZIONI di thread (risposte)</option>
+                                <option value="false" {% if record.match_is_thread_continuation == 0 or record.match_is_thread_continuation is sameas false %}selected{% endif %}>Solo PRIME mail (no risposte)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="rf-row">
                         <label>Gruppi clienti<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
                             Selezione multipla. La regola scatta se il <strong>cliente del mittente</strong>
                             appartiene ad almeno uno dei gruppi selezionati (logica OR).

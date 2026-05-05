@@ -134,6 +134,12 @@
                        🌒 SHADOW
                     </span>
                     {% endif %}
+                    {% if pm.get('is_thread_continuation') or e.reply_to_event_uuid %}
+                    <span style="display:inline-block; margin-left:0.3rem; background:#e0e7ff; color:#3730a3; padding:0.05rem 0.4rem; border-radius:9px; font-size:0.7rem; font-weight:600;"
+                          title="Risposta a thread tracked. Parent ticket: {{ pm.get('thread_parent_ticket_id') or '—' }}">
+                       🔗 thread
+                    </span>
+                    {% endif %}
                     {% if pm.get('ai_decision_id') %}
                     <a href="{{ url_for('ai.decision_detail', decision_id=pm['ai_decision_id']) }}"
                        onclick="event.stopPropagation();"

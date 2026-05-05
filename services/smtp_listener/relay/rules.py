@@ -261,11 +261,13 @@ class RuleEngine:
         if constraint is not None:
             reasons.append(f"match_in_service={bool(constraint)}: ok")
 
-        # Tristate matchers su contesto cliente
+        # Tristate matchers su contesto cliente / thread tracking
         for fld, ctx_key, label in (
             ("match_contract_active", "contract_active", "match_contract_active"),
             ("match_known_customer", "known_customer", "match_known_customer"),
             ("match_has_exception_today", "has_exception_today", "match_has_exception_today"),
+            # M036: thread continuation
+            ("match_is_thread_continuation", "is_thread_continuation", "match_is_thread_continuation"),
         ):
             want = rule.get(fld)
             if want is None:

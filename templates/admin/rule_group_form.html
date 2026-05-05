@@ -56,6 +56,11 @@
                        placeholder="auto: [GRUPPO] {etichetta}">
             </div>
             <div class="rg-row">
+                <label>Descrizione</label>
+                <textarea name="description" rows="2" style="width:100%; font-family:inherit;"
+                          placeholder="Note interne sul gruppo (perche', quando matcha, cosa fa)">{{ record.description or '' }}</textarea>
+            </div>
+            <div class="rg-row">
                 <label>Priority globale</label>
                 <div>
                     <input type="number" name="priority" min="1" max="999999" value="{{ record.priority or 100 }}" required>
@@ -112,11 +117,52 @@
             </div>
             <div class="rg-row">
                 <label>To regex</label>
-                <input type="text" name="match_to_regex" value="{{ record.match_to_regex or '' }}">
+                <input type="text" name="match_to_regex" value="{{ record.match_to_regex or '' }}"
+                       placeholder="(?i)^supporto@">
+                <div class="help">Mutex con "Gruppo destinatari" sotto.</div>
+            </div>
+            <div class="rg-row">
+                <label>Gruppo destinatari (M027)</label>
+                <div>
+                    <select name="match_to_group_id">
+                        <option value="">— nessuno (qualsiasi destinatario) —</option>
+                        {% for rg in (recipient_groups or []) %}
+                            <option value="{{ rg.id }}"
+                                    {% if record.match_to_group_id == rg.id %}selected{% endif %}>
+                                {{ rg.name }} ({{ rg.member_count or 0 }} membri)
+                            </option>
+                        {% endfor %}
+                    </select>
+                    <div class="help">
+                        Scatta solo se uno dei destinatari della mail e' membro del gruppo.
+                        <strong>Mutex con "To regex"</strong>.
+                        <a href="{{ url_for('recipient_groups.list_view') }}" target="_blank">Gestisci gruppi destinatari</a>.
+                    </div>
+                </div>
             </div>
             <div class="rg-row">
                 <label>Body regex</label>
-                <input type="text" name="match_body_regex" value="{{ record.match_body_regex or '' }}">
+                <input type="text" name="match_body_regex" value="{{ record.match_body_regex or '' }}"
+                       placeholder="(?i)\b(urgent|critical)\b">
+            </div>
+            <div class="rg-row">
+                <label>Tag custom</label>
+                <input type="text" name="match_tag" value="{{ record.match_tag or '' }}"
+                       placeholder="es. spam, priority">
+                <div class="help">Match su header X-Tag o equivalente. Vuoto = qualsiasi.</div>
+            </div>
+            <div class="rg-row">
+                <label>Override slot orario</label>
+                <div>
+                    <input type="text" name="match_at_hours" id="rg_match_at_hours"
+                           value="{{ record.match_at_hours or '' }}"
+                           placeholder="es. 22:00-06:00 oppure mon=00:00-08:00;sat=*">
+                    <div class="help">
+                        Override sul profilo cliente: se valorizzato, ignora il profilo
+                        e applica solo se l'orario corrente cade in questo slot.
+                        Vuoto = usa profilo del cliente (con "Stato servizio" sopra).
+                    </div>
+                </div>
             </div>
             <div class="rg-row">
                 <label>Stato servizio</label>
@@ -149,6 +195,15 @@
                     <option value="true" {% if record.match_has_exception_today==1 %}selected{% endif %}>solo se eccezione attiva</option>
                     <option value="false" {% if record.match_has_exception_today==0 %}selected{% endif %}>solo senza eccezione</option>
                 </select>
+            </div>
+            <div class="rg-row">
+                <label>Risposta a thread (M036)</label>
+                <select name="match_is_thread_continuation">
+                    <option value="" {% if record.match_is_thread_continuation is none %}selected{% endif %}>indifferente</option>
+                    <option value="true" {% if record.match_is_thread_continuation==1 %}selected{% endif %}>solo continuazioni di thread tracciato</option>
+                    <option value="false" {% if record.match_is_thread_continuation==0 %}selected{% endif %}>solo prime mail (no risposte)</option>
+                </select>
+                <div class="help">RFC 2822: la mail e' una risposta a un evento gia' processato.</div>
             </div>
 
             <!-- M035: Filtro per gruppi cliente (auto-popolati via Mappatura gruppi) -->
@@ -284,6 +339,60 @@
         </div>
     </div>
     {% endif %}
+
+    <!-- Card Forward target ereditato (M027) -->
+    <div class="rg-card">
+        <h3><i class="fas fa-share"></i> Forward target ereditato</h3>
+        <div class="rg-body">
+            <p class="help" style="margin-top:0;">Destinatari del forward applicabili ai figli con
+                action='forward'. Mutex tra emails e group_id (usa una delle due).</p>
+            <div class="rg-row">
+                <label>Forward to (lista email)</label>
+                <input type="text" name="forward_to_emails"
+                       value="{{ record.forward_to_emails or '' }}"
+                       placeholder="reperibile@studio.it; sostituto@studio.it">
+            </div>
+            <div class="rg-row">
+                <label>Forward to gruppo</label>
+                <select name="forward_to_group_id">
+                    <option value="">— nessun gruppo —</option>
+                    {% for rg in (recipient_groups or []) %}
+                        <option value="{{ rg.id }}"
+                                {% if record.forward_to_group_id == rg.id %}selected{% endif %}>
+                            {{ rg.name }} ({{ rg.member_count or 0 }} membri)
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- Card Shadow mode (M033) -->
+    <div class="rg-card" style="background:#fffbeb; border-color:#f59e0b;">
+        <h3 style="color:#92400e;"><i class="fas fa-moon"></i> Shadow mode</h3>
+        <div class="rg-body">
+            <p class="help" style="margin:0 0 0.6rem; color:#78350f;">
+                Quando attivo, le mail che matchano questo gruppo (e quindi i suoi figli)
+                NON vengono dispatchate: viene fatto solo default_delivery con log di cosa
+                SAREBBE stato fatto. Utile per validare la regola su mail reali prima
+                di passarla in live.
+            </p>
+            <div class="rg-row">
+                <label>Stato</label>
+                <label style="font-weight:normal;">
+                    <input type="checkbox" name="shadow_mode" value="1"
+                           {% if record.shadow_mode %}checked{% endif %}>
+                    🌒 Gruppo in shadow (ereditato dai figli)
+                </label>
+            </div>
+            <div class="rg-row">
+                <label>Note shadow</label>
+                <input type="text" name="shadow_note"
+                       value="{{ record.shadow_note or '' }}"
+                       placeholder="Test 2026-05-05, validare 7gg">
+            </div>
+        </div>
+    </div>
 </div>
 
 <div style="display:flex; gap:0.5rem; padding:1rem 0; max-width:1100px;">

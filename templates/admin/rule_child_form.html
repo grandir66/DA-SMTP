@@ -208,9 +208,24 @@
                 <label>Stato servizio</label>
                 <select name="match_in_service">
                     <option value="" {% if record.match_in_service is none %}selected{% endif %}>indifferente</option>
-                    <option value="true" {% if record.match_in_service==1 %}selected{% endif %}>in orario</option>
-                    <option value="false" {% if record.match_in_service==0 %}selected{% endif %}>fuori orario</option>
+                    <option value="true" {% if record.match_in_service==1 %}selected{% endif %}>solo DENTRO orario operativo del cliente</option>
+                    <option value="false" {% if record.match_in_service==0 %}selected{% endif %}>solo FUORI orario operativo del cliente</option>
                 </select>
+                <div class="help">Calcolato dal profilo del cliente (STD/EXT/H24/NO).</div>
+            </div>
+            <div class="rc-row">
+                <label>Override slot orario</label>
+                <input type="text" name="match_at_hours"
+                       value="{{ record.match_at_hours or '' }}"
+                       placeholder="es. 22:00-06:00 oppure mon=00:00-08:00;sat=*">
+                <div class="help">Se valorizzato, ignora il profilo del cliente e
+                    applica solo se l'orario corrente cade in questo slot.</div>
+            </div>
+            <div class="rc-row">
+                <label>Tag custom</label>
+                <input type="text" name="match_tag" value="{{ record.match_tag or '' }}"
+                       placeholder="es. spam, priority">
+                <div class="help">Match su header X-Tag o equivalente. Vuoto = qualsiasi.</div>
             </div>
             <div class="rc-row">
                 <label>Contratto attivo</label>
@@ -235,6 +250,15 @@
                     <option value="true" {% if record.match_has_exception_today==1 %}selected{% endif %}>solo se eccezione</option>
                     <option value="false" {% if record.match_has_exception_today==0 %}selected{% endif %}>solo senza eccezione</option>
                 </select>
+            </div>
+            <div class="rc-row">
+                <label>Risposta a thread (M036)</label>
+                <select name="match_is_thread_continuation">
+                    <option value="" {% if record.match_is_thread_continuation is none %}selected{% endif %}>indifferente</option>
+                    <option value="true" {% if record.match_is_thread_continuation==1 %}selected{% endif %}>solo continuazioni</option>
+                    <option value="false" {% if record.match_is_thread_continuation==0 %}selected{% endif %}>solo prime mail</option>
+                </select>
+                <div class="help">RFC 2822 In-Reply-To/References.</div>
             </div>
 
             <!-- M035: Filtro per gruppi cliente sul figlio -->

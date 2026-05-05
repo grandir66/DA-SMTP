@@ -82,6 +82,41 @@
         <h3><i class="fas fa-flag"></i> Azione e routing</h3>
         <div class="ed-body">
             {% set pm = event.payload_metadata if event.payload_metadata is mapping else {} %}
+            {% if pm.get('is_thread_continuation') or event.reply_to_event_uuid %}
+            <div style="background:#e0e7ff; border:1px solid #6366f1; border-radius:8px;
+                        padding:0.9rem 1.1rem; margin-bottom:1rem;">
+                <h4 style="margin:0 0 0.5rem; color:#3730a3;"><i class="fas fa-link"></i> 🔗 Risposta a thread tracked (M036)</h4>
+                <p style="margin:0; font-size:0.85rem; color:#3730a3;">
+                    Questa mail e' una continuazione di un thread gia' processato dal sistema.
+                    La regola applicata di solito e' "Thread continuation -> default_delivery"
+                    (priority=5) per evitare ticket duplicati.
+                </p>
+                <dl style="margin:0.6rem 0 0; display:grid; grid-template-columns:200px 1fr; gap:0.3rem 0.7rem; font-size:0.85rem;">
+                    {% if event.reply_to_event_uuid %}
+                    <dt style="font-weight:600; color:#3730a3;">Evento padre</dt>
+                    <dd style="margin:0; font-family:ui-monospace,Menlo,monospace; font-size:0.8rem;">
+                        <a href="?event_uuid={{ event.reply_to_event_uuid }}">{{ event.reply_to_event_uuid }}</a>
+                    </dd>
+                    {% endif %}
+                    {% if event.thread_root_uuid %}
+                    <dt style="font-weight:600; color:#3730a3;">Root del thread</dt>
+                    <dd style="margin:0; font-family:ui-monospace,Menlo,monospace; font-size:0.8rem;">{{ event.thread_root_uuid }}</dd>
+                    {% endif %}
+                    {% if pm.get('thread_parent_ticket_id') %}
+                    <dt style="font-weight:600; color:#3730a3;">Ticket padre</dt>
+                    <dd style="margin:0; font-family:ui-monospace,Menlo,monospace;">{{ pm.get('thread_parent_ticket_id') }}</dd>
+                    {% endif %}
+                    {% if pm.get('thread_parent_action') %}
+                    <dt style="font-weight:600; color:#3730a3;">Azione padre</dt>
+                    <dd style="margin:0;"><code>{{ pm.get('thread_parent_action') }}</code></dd>
+                    {% endif %}
+                    {% if event.in_reply_to %}
+                    <dt style="font-weight:600; color:#3730a3;">In-Reply-To</dt>
+                    <dd style="margin:0; font-family:ui-monospace,Menlo,monospace; font-size:0.78rem;">{{ event.in_reply_to|truncate(80) }}</dd>
+                    {% endif %}
+                </dl>
+            </div>
+            {% endif %}
             {% if pm.get('shadow_mode') %}
             {% set whe = pm.get('would_have_executed') or {} %}
             <div style="background:#fffbeb; border:1px solid #f59e0b; border-radius:8px;

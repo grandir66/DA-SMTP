@@ -213,6 +213,15 @@ def flush_events_to_manager(backend: ManagerBackend, storage: Storage, batch_siz
             bh = r["body_html"]
         except (IndexError, KeyError):
             bh = None
+        # M036: thread tracking - safe access (campi opzionali)
+        try: in_reply_to = r["in_reply_to"]
+        except (IndexError, KeyError): in_reply_to = None
+        try: references_json = r["references_json"]
+        except (IndexError, KeyError): references_json = None
+        try: reply_to_event_uuid = r["reply_to_event_uuid"]
+        except (IndexError, KeyError): reply_to_event_uuid = None
+        try: thread_root_uuid = r["thread_root_uuid"]
+        except (IndexError, KeyError): thread_root_uuid = None
         events_payload.append(
             {
                 "relay_event_uuid": r["event_uuid"],
@@ -228,6 +237,11 @@ def flush_events_to_manager(backend: ManagerBackend, storage: Storage, batch_siz
                 "payload_metadata": r["payload_metadata"],
                 "body_text": bt,
                 "body_html": bh,
+                # M036: thread tracking
+                "in_reply_to": in_reply_to,
+                "references_json": references_json,
+                "reply_to_event_uuid": reply_to_event_uuid,
+                "thread_root_uuid": thread_root_uuid,
             }
         )
         uuids.append(r["event_uuid"])
