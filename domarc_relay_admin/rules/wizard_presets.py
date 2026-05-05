@@ -185,13 +185,16 @@ PRESETS: list[dict[str, Any]] = [
         "description": "Regola attiva SOLO per clienti con contratto H24 "
                        "(servizio 24/7). Tipico: escalation immediata, "
                        "tariffe straordinario, integrazione tecnico "
-                       "reperibile, urgenza ALTA di default.",
+                       "reperibile, urgenza ALTA di default. M035: usa "
+                       "il gruppo built-in 'contract_h24' (auto-popolato "
+                       "al sync) invece del rule_set deprecato.",
         "icon": "fa-user-shield",
         "color": "#dc2626",
         "needs": ["from_regex_optional", "subject_regex_optional",
                   "settore", "urgenza", "action_choice"],
         "defaults": {
-            "rule_set_code": "h24",
+            "rule_set_code": "globali",
+            "match_customer_groups": "contract_h24",
             "action": "create_ticket",
             "priority_hint": 200,
             "action_map": {"urgenza": "ALTA", "settore": "assistenza_h24"},
@@ -201,16 +204,17 @@ PRESETS: list[dict[str, Any]] = [
         "id": "cliente_specifico_std",
         "category": "cliente",
         "title": "Trattamento dedicato per clienti Standard (STD)",
-        "description": "Regola attiva SOLO per clienti con contratto Standard "
-                       "(STD: lun-ven 08:30-13:00 + 14:30-17:30). Tipico: "
-                       "tariffe specifiche, template dedicato, blocco fuori "
-                       "orario specifico.",
+        "description": "Regola attiva SOLO per clienti con contratto Standard. "
+                       "M035: usa il gruppo built-in 'contract_standard' "
+                       "(auto-popolato al sync). Tipico: tariffe specifiche, "
+                       "template dedicato, blocco fuori orario.",
         "icon": "fa-building",
         "color": "#15803d",
         "needs": ["from_regex_optional", "subject_regex_optional",
                   "in_service_choice", "action_choice", "settore", "urgenza"],
         "defaults": {
-            "rule_set_code": "standard",
+            "rule_set_code": "globali",
+            "match_customer_groups": "contract_standard",
             "action": "create_ticket",
             "priority_hint": 200,
             "action_map": {"urgenza": "NORMALE", "settore": "assistenza"},
@@ -220,18 +224,40 @@ PRESETS: list[dict[str, Any]] = [
         "id": "cliente_specifico_ext",
         "category": "cliente",
         "title": "Trattamento dedicato per clienti Esteso (EXT)",
-        "description": "Regola attiva SOLO per clienti EXT (lun-ven "
-                       "06:30-19:30 + sab mattina). Tipico: routing dedicato, "
-                       "priorita' diversa.",
+        "description": "Regola attiva SOLO per clienti EXT. M035: usa il "
+                       "gruppo built-in 'contract_extended' (auto-popolato al sync). "
+                       "Tipico: routing dedicato, priorita' diversa.",
         "icon": "fa-business-time",
         "color": "#a16207",
         "needs": ["from_regex_optional", "subject_regex_optional",
                   "in_service_choice", "action_choice", "settore", "urgenza"],
         "defaults": {
-            "rule_set_code": "esteso",
+            "rule_set_code": "globali",
+            "match_customer_groups": "contract_extended",
             "action": "create_ticket",
             "priority_hint": 200,
             "action_map": {"urgenza": "NORMALE", "settore": "assistenza"},
+        },
+    },
+    {
+        "id": "cliente_vip",
+        "category": "cliente",
+        "title": "Trattamento dedicato per clienti VIP",
+        "description": "Regola che si applica SOLO ai clienti membri del "
+                       "gruppo 'vip' (popolabile sia da Mappatura gruppi che "
+                       "manualmente). Use case classico: cliente STD nel "
+                       "gestionale ma trattato come VIP per accordo informale "
+                       "-> aggiunto manualmente al gruppo vip.",
+        "icon": "fa-crown",
+        "color": "#a855f7",
+        "needs": ["from_regex_optional", "subject_regex_optional",
+                  "action_choice", "settore", "urgenza"],
+        "defaults": {
+            "rule_set_code": "globali",
+            "match_customer_groups": "vip",
+            "action": "create_ticket",
+            "priority_hint": 80,
+            "action_map": {"urgenza": "ALTA", "settore": "assistenza_vip"},
         },
     },
 

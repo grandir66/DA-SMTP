@@ -145,12 +145,24 @@
         <h3><i class="fas fa-tag"></i> Identificazione</h3>
         <div class="rf-body">
             {% if rule_sets %}
+            <!-- M035: Banner pattern semplificato -->
+            <div style="background:linear-gradient(90deg,#ecfdf5,#eff6ff);
+                        border:1px solid #15803d; border-radius:6px;
+                        padding:0.7rem 0.9rem; margin-bottom:1rem;
+                        font-size:0.85rem; color:#0f172a;">
+                <strong><i class="fas fa-wand-magic-sparkles"></i> Pattern semplificato (M035):</strong>
+                la regola va in <strong>"Sempre attive"</strong> di default. Per filtrare per
+                <em>tipo di contratto</em> usa il selettore <strong>Gruppi clienti</strong>
+                qui sotto (gruppi built-in <code>contract_standard</code>, <code>contract_extended</code>,
+                <code>contract_h24</code>, <code>contract_inactive</code> popolati automaticamente
+                via <a href="{{ url_for('group_mapping.list_view') }}" target="_blank">Mappatura gruppi</a>).
+                I set per profilo orario sono deprecati.
+            </div>
             <div class="rf-row">
                 <label>Set di regole *<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
-                    Determina quando la regola viene valutata.
-                    <strong>Globali</strong>: sempre attiva (CloudTIK, AI, sistemi automatici).
-                    <strong>Standard/Esteso/H24/Nessuno</strong>: solo per clienti con quel
-                    profilo orario. Set custom: solo per condizioni specifiche.
+                    Organizzazione logica della regola. <strong>Globali</strong> e' il default
+                    consigliato. Set custom per organizzare la libreria. Per filtrare per
+                    contratto, NON usare il rule_set ma i Gruppi clienti.
                 </span></span></label>
                 <div>
                     <select name="rule_set_id" id="wz-rule-set-select" required style="font-weight:600;"
@@ -164,22 +176,34 @@
                                 {% elif (not record.rule_set_id) and prefill_set_id == rs.id %}selected
                                 {% elif (not record.rule_set_id) and (not prefill_set_id) and rs.code=='globali' %}selected
                                 {% endif %}>
-                                {% if rs.is_always_active %}🌐 {% endif %}{{ rs.name }}{% if rs.profile_code %} ({{ rs.profile_code }}){% endif %}
+                                {% if rs.is_always_active %}🌐 {% endif %}{{ rs.name }}
                             </option>
                         {% endfor %}
+                        {% if deprecated_rule_sets %}
+                        <optgroup label="── Set deprecati (M035, mantenuti per legacy) ──">
+                            {% for rs in deprecated_rule_sets %}
+                            <option value="{{ rs.id }}"
+                                data-profile="{{ rs.profile_code or '' }}"
+                                data-always="0"
+                                data-name="{{ rs.name }}"
+                                data-deprecated="1"
+                                {% if record.rule_set_id == rs.id %}selected{% endif %}>
+                                ⚠️ {{ rs.name }}{% if rs.profile_code %} ({{ rs.profile_code }}){% endif %} [deprecato]
+                            </option>
+                            {% endfor %}
+                        </optgroup>
+                        {% endif %}
                     </select>
                     <div class="help">
                         <a href="{{ url_for('rule_sets.list_view') }}" target="_blank">Gestisci i set</a>
                     </div>
-                    <!-- M029 explainer: mostra il filtro contratto implicato dal set -->
                     <div id="contract-hint" style="margin-top:0.5rem; padding:0.55rem 0.8rem;
                                                     border-radius:6px; font-size:0.85rem;
                                                     background:#eff6ff; border-left:3px solid #3b82f6;
                                                     color:#1e3a8a;">
                         <i class="fas fa-circle-info"></i>
                         <span id="contract-hint-text">
-                            Il set selezionato determina <strong>per quale tipo di contratto cliente</strong>
-                            la regola viene valutata.
+                            Il set selezionato determina <strong>quando la regola viene valutata</strong>.
                         </span>
                     </div>
                 </div>
@@ -191,20 +215,33 @@
                 if (!opt) return;
                 const profile = opt.dataset.profile || '';
                 const always = opt.dataset.always === '1';
+                const deprecated = opt.dataset.deprecated === '1';
                 const name = opt.dataset.name || '';
                 const hint = document.getElementById('contract-hint-text');
-                if (always) {
-                    hint.innerHTML = '🌐 Set <strong>"' + name + '"</strong>: la regola si applica a <strong>tutti i clienti</strong> ' +
-                                     'indipendentemente dal contratto. Per filtrare un sottoinsieme, usa ' +
-                                     '<strong>Gruppi clienti</strong> sotto.';
-                } else if (profile) {
-                    hint.innerHTML = '🎯 Set <strong>"' + name + '"</strong>: la regola scatta SOLO per clienti con ' +
-                                     '<code>tipologia_servizio = ' + profile + '</code> (filtro implicito dal set). ' +
-                                     'Per override personalizzati su clienti specifici (es. cliente STD trattato come H24) ' +
-                                     'usa invece <strong>"globali"</strong> + un <strong>Gruppo cliente custom</strong>.';
+                const box = document.getElementById('contract-hint');
+                if (deprecated) {
+                    box.style.background = '#fef2f2';
+                    box.style.borderLeftColor = '#dc2626';
+                    box.style.color = '#7f1d1d';
+                    hint.innerHTML = '⚠️ <strong>Set DEPRECATO</strong>: filtra ancora per ' +
+                                     '<code>tipologia_servizio = ' + profile + '</code> ma e\\' meglio ' +
+                                     'usare <strong>"Sempre attive"</strong> + Gruppi clienti ' +
+                                     '(<code>contract_' + profile.toLowerCase() + '</code>) qui sotto. ' +
+                                     'Pattern uniforme + override manuale gratuito.';
+                } else if (always) {
+                    box.style.background = '#ecfdf5';
+                    box.style.borderLeftColor = '#15803d';
+                    box.style.color = '#0f172a';
+                    hint.innerHTML = '✓ <strong>"' + name + '"</strong>: la regola si applica a ' +
+                                     '<strong>tutti i clienti</strong>. Per filtrare per contratto/cliente, ' +
+                                     'usa <strong>Gruppi clienti</strong> sotto (gruppi built-in ' +
+                                     'auto-popolati: contract_active, contract_h24, vip, ecc.).';
                 } else {
-                    hint.innerHTML = '⚙️ Set custom <strong>"' + name + '"</strong>: condizioni di attivazione ' +
-                                     'definite manualmente dall\'operatore.';
+                    box.style.background = '#fef9c3';
+                    box.style.borderLeftColor = '#ca8a04';
+                    box.style.color = '#78350f';
+                    hint.innerHTML = '⚙️ Set custom <strong>"' + name + '"</strong>: organizzazione ' +
+                                     'manuale della libreria, condizioni runtime via Gruppi clienti.';
                 }
             }
             window.addEventListener('DOMContentLoaded', updateContractHint);
@@ -398,22 +435,25 @@
                             Tieni Ctrl/Cmd per selezione multipla.
                         </span></span></label>
                         <div>
-                            <!-- Banner: gruppi come override del filtro contratto -->
+                            <!-- M035: Banner pattern unificato -->
                             <div style="margin-bottom:0.5rem; padding:0.55rem 0.8rem;
-                                        background:#fefce8; border-left:3px solid #ca8a04;
-                                        border-radius:0 4px 4px 0; font-size:0.82rem; color:#713f12;">
-                                <i class="fas fa-lightbulb"></i>
-                                <strong>Gruppi cliente vs filtro contratto (rule_set):</strong>
-                                <ul style="margin:0.3rem 0 0; padding-left:1.2rem;">
-                                  <li><strong>Per profilo contratto da gestionale</strong> (STD/EXT/H24/NO):
-                                      usa il <strong>set di regole</strong> sopra. Filtro automatico per
-                                      <code>tipologia_servizio</code>.</li>
-                                  <li><strong>Per gruppi custom</strong> (override del gestionale, es. cliente
-                                      STD trattato come H24 per accordo informale): metti la regola in
-                                      <strong>"globali"</strong> e seleziona qui i gruppi target.</li>
-                                  <li><strong>Combinazione</strong>: regola in set "h24" + gruppo "vip_top"
-                                      = clienti con contratto H24 E membri del gruppo "vip_top" (AND).</li>
-                                </ul>
+                                        background:#ecfdf5; border-left:3px solid #15803d;
+                                        border-radius:0 4px 4px 0; font-size:0.82rem; color:#0f172a;">
+                                <i class="fas fa-bullseye" style="color:#15803d;"></i>
+                                <strong>Filtro per cliente — UNICO meccanismo:</strong> seleziona qui
+                                uno o piu' gruppi cliente. La regola scatta se il cliente del mittente
+                                appartiene ad almeno uno dei gruppi (logica OR).
+                                <br><br>
+                                <strong>Gruppi built-in</strong> (auto-popolati al sync via
+                                <a href="{{ url_for('group_mapping.list_view') }}" target="_blank">Mappatura gruppi</a>):
+                                <code>contract_standard</code>, <code>contract_extended</code>,
+                                <code>contract_h24</code>, <code>contract_active</code>,
+                                <code>contract_inactive</code>, <code>vip</code>, <code>secondary</code>,
+                                <code>do_not_follow</code>.
+                                <br>
+                                <strong>Override gestionale</strong>: aggiungi manualmente un cliente STD
+                                al gruppo <code>vip</code> (o <code>contract_h24</code>) per dargli
+                                trattamento custom. Membership manuale prevale sempre.
                             </div>
                             {% set selected_groups = (record.match_customer_groups or '').split(',') | map('trim') | list %}
                             <select name="match_customer_groups" multiple

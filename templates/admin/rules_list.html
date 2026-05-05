@@ -68,10 +68,11 @@
     {% for rs in rule_sets %}
     <a class="rs-tab {% if active_set_id == rs.id %}active{% endif %} {% if not rs.enabled %}disabled{% endif %}"
        href="{{ url_for('rules.list_view', state=filter_state, set=rs.id) }}"
-       title="{{ rs.description or rs.name }}">
+       title="{% if rs.is_deprecated %}DEPRECATO M035 — {% endif %}{{ rs.description or rs.name }}"
+       {% if rs.is_deprecated %}style="opacity:0.55;"{% endif %}>
         <span class="rs-color-dot" style="background:{{ rs.color or '#cbd5e1' }};"></span>
-        {% if rs.is_always_active %}<i class="fas fa-globe" style="font-size:0.75rem;"></i>{% endif %}
-        {{ rs.name }}
+        {% if rs.is_deprecated %}<i class="fas fa-exclamation-triangle" style="color:#dc2626; font-size:0.7rem;"></i>{% elif rs.is_always_active %}<i class="fas fa-globe" style="font-size:0.75rem;"></i>{% endif %}
+        {{ rs.name }}{% if rs.is_deprecated %} <small style="color:#dc2626;">[deprecato]</small>{% endif %}
         <span class="count">{{ rule_set_counts.get(rs.id, 0) }}</span>
     </a>
     {% endfor %}

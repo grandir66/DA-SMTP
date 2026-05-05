@@ -97,6 +97,8 @@ def wizard_view():
         match_subject_regex = _take("match_subject_regex") or defaults.get("match_subject_regex")
         match_from_domain = _take("match_from_domain") or defaults.get("match_from_domain")
         match_to_domain = _take("match_to_domain") or defaults.get("match_to_domain")
+        # M035: match_customer_groups dal preset (CSV)
+        match_customer_groups = _take("match_customer_groups") or defaults.get("match_customer_groups")
 
         # Recipient group e forward
         match_to_group_id = request.form.get("match_to_group_id")
@@ -162,6 +164,7 @@ def wizard_view():
             "match_from_domain": match_from_domain,
             "match_to_domain": match_to_domain,
             "match_to_group_id": match_to_group_id,
+            "match_customer_groups": match_customer_groups,
             "match_in_service": match_in_service,
             "forward_to_emails": forward_to_emails,
             "forward_to_group_id": forward_to_group_id,
@@ -292,7 +295,10 @@ def form_view(rule_id: int | None = None):
         profiles = []
 
     # M029: lista rule_sets disponibili + prefill da query string
-    rule_sets = _storage().list_rule_sets(tenant_id=_tid(), only_enabled=True)
+    # M035: separa attivi e deprecati per UI semplificata
+    all_rule_sets = _storage().list_rule_sets(tenant_id=_tid(), only_enabled=True)
+    rule_sets = [rs for rs in all_rule_sets if not rs.get("is_deprecated")]
+    deprecated_rule_sets = [rs for rs in all_rule_sets if rs.get("is_deprecated")]
     prefill_set_id: int | None = None
     if is_new:
         try:
@@ -317,6 +323,7 @@ def form_view(rule_id: int | None = None):
         ai_global_status=ai_global_status,
         ai_recent_decisions=ai_recent_decisions,
         rule_sets=rule_sets,
+        deprecated_rule_sets=deprecated_rule_sets,
         prefill_set_id=prefill_set_id,
     )
 

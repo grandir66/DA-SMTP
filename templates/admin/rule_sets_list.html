@@ -64,6 +64,12 @@
             <span class="rs-pill builtin"><i class="fas fa-lock"></i> built-in</span>
         {% endif %}
 
+        {% if rs.is_deprecated %}
+            <span class="rs-pill" style="background:#fee2e2; color:#7f1d1d;">
+                <i class="fas fa-exclamation-triangle"></i> DEPRECATO M035
+            </span>
+        {% endif %}
+
         <span style="margin-left:auto;" class="rs-actions">
             <a href="{{ url_for('rules.list_view') }}?set={{ rs.id }}"
                class="dr-btn" style="width:auto; padding:0.35rem 0.7rem;"
