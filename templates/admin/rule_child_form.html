@@ -41,10 +41,41 @@
         <span class="rule-badge-orphan" style="background:#fff; border:1px solid #cbd5e1;">in: <strong>{{ parent.group_label or parent.name }}</strong></span>
     </div>
 
+    <details style="margin-top:0.7rem; background:#fff7ed; border:1px solid #fb923c;
+                    border-radius:6px; padding:0; overflow:hidden;">
+        <summary style="padding:0.55rem 0.9rem; cursor:pointer; font-weight:600;
+                        color:#9a3412; user-select:none;">
+            <i class="fas fa-lightbulb"></i> Esempio rapido: "fuori orario, certi destinatari → reperibile + auto-reply"
+        </summary>
+        <div style="padding:0 0.9rem 0.7rem; font-size:0.83rem; color:#7c2d12;">
+            <ol style="margin:0.4rem 0; padding-left:1.2rem;">
+                <li>Crea un <a href="{{ url_for('recipient_groups.list_view') }}" target="_blank"><strong>gruppo destinatari</strong></a>
+                    (es. "tecnici_no_fo") e aggiungi le mailbox da reindirizzare.</li>
+                <li>In questo form: <strong>Match aggiuntivi</strong> →
+                    <code>Gruppo destinatari = tecnici_no_fo</code>,
+                    <code>Stato servizio = fuori orario</code>.</li>
+                <li>Azione: scegli <strong>Forward</strong> →
+                    <code>Forward to (lista) = reperibile@studio.it</code>,
+                    spunta <strong>Keep original delivery</strong> per CC al destinatario originale.</li>
+                <li>(opzionale) Crea un secondo figlio con <code>continue_in_group=true</code> sopra
+                    questo, azione <strong>Auto-reply</strong> + template "fuori orario".</li>
+            </ol>
+            <p style="margin:0.3rem 0 0;">
+                Nota: <code>match_in_service=false</code> rispetta la gerarchia STD ⊂ EXT ⊂ H24
+                automaticamente (un cliente H24 e' sempre in_service, quindi questa regola lo salta).
+            </p>
+        </div>
+    </details>
+
     <div class="rule-inherit-banner" style="margin-top:0.7rem;">
         <h4><i class="fas fa-link"></i> Ereditato dal gruppo padre (read-only)</h4>
         <div style="display:flex; gap:1rem; flex-wrap:wrap; font-size:0.8rem;">
             {% if parent.match_to_domain %}<span><strong>to_domain:</strong> <code>{{ parent.match_to_domain }}</code></span>{% endif %}
+            {% if parent.match_to_regex %}<span><strong>to_regex:</strong> <code>{{ parent.match_to_regex|truncate(40) }}</code></span>{% endif %}
+            {% if parent.match_to_group_id %}
+                {% set parent_rg = recipient_groups|selectattr('id','equalto',parent.match_to_group_id)|list|first %}
+                <span><strong>to_group:</strong> <code>{{ parent_rg.name if parent_rg else parent.match_to_group_id }}</code></span>
+            {% endif %}
             {% if parent.match_from_domain %}<span><strong>from_domain:</strong> <code>{{ parent.match_from_domain }}</code></span>{% endif %}
             {% if parent.match_subject_regex %}<span><strong>subj:</strong> <code>{{ parent.match_subject_regex|truncate(40) }}</code></span>{% endif %}
             {% if parent.match_in_service is not none %}<span><strong>in_service:</strong> <code>{{ 'sì' if parent.match_in_service else 'no' }}</code></span>{% endif %}
@@ -137,6 +168,26 @@
             <div class="rc-row">
                 <label>To dominio</label>
                 <input type="text" name="match_to_domain" value="{{ record.match_to_domain or '' }}">
+            </div>
+            <div class="rc-row">
+                <label>Gruppo destinatari (M027)</label>
+                <div>
+                    <select name="match_to_group_id">
+                        <option value="">— nessuno (qualsiasi destinatario) —</option>
+                        {% for rg in recipient_groups or [] %}
+                            <option value="{{ rg.id }}"
+                                    {% if record.match_to_group_id == rg.id %}selected{% endif %}>
+                                {{ rg.name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                    <div class="help">
+                        La regola scatta solo se uno dei destinatari della mail e' membro di
+                        questo gruppo. <strong>Mutex</strong> con "To regex": usa l'uno o
+                        l'altro, non entrambi.
+                        <a href="{{ url_for('recipient_groups.list_view') }}" target="_blank">Gestisci gruppi destinatari</a>.
+                    </div>
+                </div>
             </div>
             <div class="rc-row">
                 <label>Stato servizio</label>
@@ -251,11 +302,37 @@
             </div>
 
             <div class="rc-action-fields {% if record.action == 'forward' %}active{% endif %}" data-action-fields="forward">
+                <div style="background:#eff6ff; border-left:3px solid #3b82f6;
+                            padding:0.55rem 0.8rem; border-radius:0 4px 4px 0;
+                            margin-bottom:0.7rem; font-size:0.82rem; color:#1e3a8a;">
+                    <strong><i class="fas fa-info-circle"></i> Destinatari del forward</strong> (M027):
+                    se compili <code>forward_to_emails</code> o <code>forward_to_group_id</code>, il listener instrada
+                    a <em>quegli</em> indirizzi (sostitutivi); il <code>target</code> SMTP qui sotto resta usato per
+                    relay/smarthost. Mutex tra emails e group_id: usa una delle due.
+                </div>
                 <div class="rc-row">
-                    <label>Target</label>
+                    <label>Forward to (lista email)</label>
+                    <input type="text" name="forward_to_emails"
+                           value="{{ record.forward_to_emails or '' }}"
+                           placeholder="reperibile@studio.it; sostituto@studio.it">
+                </div>
+                <div class="rc-row">
+                    <label>Forward to gruppo</label>
+                    <select name="forward_to_group_id">
+                        <option value="">— nessun gruppo —</option>
+                        {% for rg in recipient_groups or [] %}
+                            <option value="{{ rg.id }}"
+                                    {% if record.forward_to_group_id == rg.id %}selected{% endif %}>
+                                {{ rg.name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="rc-row">
+                    <label>Target SMTP</label>
                     <input type="text" name="action_map_forward_target"
                            value="{{ record.action_map.forward_target if record.action_map else '' }}"
-                           placeholder="smtp.partner.com">
+                           placeholder="smtp.partner.com (smarthost di consegna)">
                 </div>
                 <div class="rc-row">
                     <label>Port</label>
@@ -269,6 +346,14 @@
                         <option value="strict" {% if record.action_map and record.action_map.forward_tls=='strict' %}selected{% endif %}>strict</option>
                         <option value="none" {% if record.action_map and record.action_map.forward_tls=='none' %}selected{% endif %}>none</option>
                     </select>
+                </div>
+                <div class="rc-row">
+                    <label>Keep original delivery</label>
+                    <label style="font-weight:normal;">
+                        <input type="checkbox" name="action_map_keep_original_delivery"
+                               {% if record.action_map and record.action_map.keep_original_delivery %}checked{% endif %}>
+                        CC anche al destinatario originale
+                    </label>
                 </div>
             </div>
 
