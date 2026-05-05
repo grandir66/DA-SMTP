@@ -1,0 +1,103 @@
+{% extends "admin/_base.html" %}
+{% block title %}Mappatura gruppi clienti{% endblock %}
+{% block content %}
+<style>
+.gm-card { background:#fff; border:1px solid #e2e8f0; border-radius:8px;
+           padding:0.85rem 1.1rem; margin-bottom:0.6rem;
+           display:flex; gap:1rem; align-items:center; flex-wrap:wrap; }
+.gm-card.disabled { opacity:0.55; }
+.gm-pill { padding:0.1rem 0.55rem; border-radius:9px; font-size:0.78rem;
+           font-weight:600; }
+.gm-pill.target { background:#dcfce7; color:#15803d; }
+.gm-pill.source { background:#dbeafe; color:#1e40af;
+                  font-family:ui-monospace,Menlo,monospace; }
+.gm-pill.match-type { background:#fef3c7; color:#92400e;
+                       font-family:ui-monospace,Menlo,monospace; }
+.gm-pill.scoped { background:#e0e7ff; color:#3730a3; font-size:0.7rem; }
+.gm-actions { display:flex; gap:0.4rem; margin-left:auto; }
+.gm-empty { text-align:center; padding:2rem; color:#64748b; }
+</style>
+
+<section class="dr-section">
+    <h2><i class="fas fa-diagram-project"></i> Mappatura gruppi clienti (M034)</h2>
+    <p class="dr-hint" style="margin-top:0.3rem;">
+        Le rules di mappatura assegnano automaticamente i clienti ai
+        <a href="{{ url_for('customer_groups.list_view') }}">gruppi cliente</a>
+        in base ai valori dei campi del gestionale (canonici o originali). Ogni rule
+        dice "se campo X soddisfa condizione Y → metti il cliente nel gruppo Z".
+        L'auto-assignment scatta a ogni sync delle sorgenti
+        (<a href="{{ url_for('customer_sync.list_view') }}">customer-sync</a>).
+        Le membership <strong>manuali</strong> non vengono mai cancellate.
+    </p>
+</section>
+
+<div style="display:flex; gap:0.6rem; align-items:center; margin:0.9rem 0 1rem;">
+    <a href="{{ url_for('group_mapping.new_view') }}" class="dr-btn dr-btn-primary" style="width:auto;">
+        <i class="fas fa-plus"></i> Nuova rule
+    </a>
+    <a href="{{ url_for('customer_groups.list_view') }}" class="dr-btn" style="width:auto;">
+        <i class="fas fa-layer-group"></i> Gruppi cliente
+    </a>
+    <a href="{{ url_for('customer_sync.list_view') }}" class="dr-btn" style="width:auto;">
+        <i class="fas fa-rotate"></i> Sorgenti sync
+    </a>
+    <span style="margin-left:auto; color:#64748b; font-size:0.85rem;">
+        {{ rules|length }} rules totali
+    </span>
+</div>
+
+{% if not rules %}
+<div class="gm-card gm-empty">
+    <p>Nessuna rule di mappatura configurata.<br>
+    Crea la prima per popolare automaticamente i gruppi al sync.</p>
+</div>
+{% endif %}
+
+{% for r in rules %}
+<div class="gm-card {% if not r.enabled %}disabled{% endif %}">
+    <span style="color:#64748b; font-family:ui-monospace,Menlo,monospace; font-size:0.78rem;">#{{ r.id }}</span>
+
+    <span style="font-size:0.85rem; color:#334155;">se campo</span>
+    <span class="gm-pill source">{{ r.source_field }}</span>
+
+    <span style="font-size:0.85rem; color:#334155;">{{ r.match_type }}</span>
+    {% if r.match_value %}
+    <span class="gm-pill match-type">{{ r.match_value|truncate(40) }}</span>
+    {% endif %}
+
+    <span style="font-size:0.85rem; color:#334155;">→ assegna a</span>
+    <span class="gm-pill target">
+        <i class="fas fa-layer-group"></i> {{ r.target_group_name }}
+        ({{ auto_counts.get(r.target_group_id, 0) }} auto)
+    </span>
+
+    {% if r.source_id %}
+        {% set src = (sources|selectattr('id', 'equalto', r.source_id)|list|first) %}
+        <span class="gm-pill scoped">
+            <i class="fas fa-filter"></i> solo da: {{ src.name if src else r.source_id }}
+        </span>
+    {% endif %}
+
+    <span class="gm-actions">
+        <a href="{{ url_for('group_mapping.edit_view', rule_id=r.id) }}"
+           class="dr-btn dr-btn-primary" style="width:auto; padding:0.3rem 0.7rem;">
+            <i class="fas fa-pen-to-square"></i> Modifica
+        </a>
+        <form action="{{ url_for('group_mapping.toggle_view', rule_id=r.id) }}"
+              method="post" style="display:inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="dr-btn" style="width:auto; padding:0.3rem 0.7rem;">
+                {% if r.enabled %}<i class="fas fa-toggle-on"></i> Disabilita
+                {% else %}<i class="fas fa-toggle-off"></i> Abilita{% endif %}
+            </button>
+        </form>
+    </span>
+
+    {% if r.description %}
+    <div style="width:100%; font-size:0.8rem; color:#64748b; padding-left:0.4rem;">
+        <i class="fas fa-info-circle"></i> {{ r.description }}
+    </div>
+    {% endif %}
+</div>
+{% endfor %}
+{% endblock %}

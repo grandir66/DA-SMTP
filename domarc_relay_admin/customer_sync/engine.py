@@ -51,6 +51,8 @@ class SyncEngine:
         n_unchanged = 0
         n_flagged_missing = 0
         n_errored = 0
+        n_gmr_added_total = 0
+        n_gmr_removed_total = 0
         report: dict[str, Any] = {}
         status = "running"
         error_message: str | None = None
@@ -66,6 +68,19 @@ class SyncEngine:
             provider = get_provider(kind, config=config,
                                     query_or_path=query, storage=self.storage)
             fetched_codclis: set[str] = set()
+
+            # M034: pre-fetch group_membership_rules per evitare N+1 query.
+            # Filtriamo per source_id: rules con source_id=NULL (globali) +
+            # rules specifiche di questa sorgente.
+            try:
+                gmr_rules = self.storage.list_group_membership_rules(
+                    only_enabled=True, source_id=source_id,
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("M034 list_group_membership_rules failed: %s", exc)
+                gmr_rules = []
+            n_gmr_added_total = 0
+            n_gmr_removed_total = 0
 
             for raw in provider.fetch():
                 n_fetched += 1
@@ -93,6 +108,27 @@ class SyncEngine:
                         n_updated += 1
                     else:
                         n_unchanged += 1
+
+                    # M034: applica auto-assignments di gruppi.
+                    # Eval su record = canonical (mapped) + raw del gestionale.
+                    # Le rules possono guardare in entrambi.
+                    if gmr_rules:
+                        try:
+                            eval_record = {**raw, **mapped}
+                            target_groups = self.storage.evaluate_membership_rules(
+                                eval_record, source_id=source_id,
+                                rules_cache=gmr_rules,
+                            )
+                            n_add, n_rem = self.storage.apply_auto_assignments(
+                                codcli, target_groups,
+                            )
+                            n_gmr_added_total += n_add
+                            n_gmr_removed_total += n_rem
+                        except Exception as exc:  # noqa: BLE001
+                            logger.warning(
+                                "M034 apply_auto_assignments failed for %s: %s",
+                                codcli, exc,
+                            )
                 except Exception as exc:  # noqa: BLE001
                     n_errored += 1
                     logger.exception("Sync %s record error: %s", source_id, exc)
@@ -131,6 +167,9 @@ class SyncEngine:
             "n_unchanged": n_unchanged,
             "n_flagged_missing": n_flagged_missing,
             "n_errored": n_errored,
+            # M034: contatori auto-assignment gruppi
+            "n_auto_groups_added": n_gmr_added_total,
+            "n_auto_groups_removed": n_gmr_removed_total,
             "duration_ms": duration_ms,
             "error_message": error_message,
             "dry_run": dry_run,

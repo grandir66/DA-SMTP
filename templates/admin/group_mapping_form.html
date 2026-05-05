@@ -1,0 +1,217 @@
+{% extends "admin/_base.html" %}
+{% block title %}{{ 'Modifica' if rule else 'Nuova' }} rule mappatura gruppi{% endblock %}
+{% block content %}
+<style>
+.gm-form { max-width:1000px; }
+.gm-form .form-row { display:grid; grid-template-columns:220px 1fr; gap:1rem;
+                     align-items:start; margin-bottom:1rem; }
+.gm-form label { font-weight:600; color:#334155; padding-top:0.4rem; }
+.gm-form input[type=text], .gm-form input[type=number], .gm-form select,
+.gm-form textarea { width:100%; padding:0.5rem; border:1px solid #cbd5e1;
+                    border-radius:6px; font-size:0.9rem; }
+.gm-form .help { font-size:0.8rem; color:#64748b; margin-top:0.2rem; }
+.gm-section { background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px;
+              padding:1rem 1.2rem; margin-bottom:1rem; }
+.gm-explainer { background:#eff6ff; border-left:3px solid #3b82f6;
+                padding:0.7rem 0.9rem; border-radius:0 6px 6px 0;
+                font-size:0.85rem; color:#1e3a8a; margin-bottom:1rem; }
+.gm-match-help { background:#fefce8; border:1px solid #ca8a04; border-radius:6px;
+                 padding:0.6rem 0.8rem; margin-top:0.4rem; font-size:0.8rem;
+                 color:#713f12; }
+.gm-match-help code { background:#fff; padding:0.1rem 0.35rem; border-radius:3px; }
+</style>
+
+<section class="dr-section">
+    <h2><i class="fas fa-diagram-project"></i>
+        {% if rule %}Modifica rule #{{ rule.id }}{% else %}Nuova rule mappatura gruppi{% endif %}
+    </h2>
+    <p class="dr-hint">
+        <a href="{{ url_for('group_mapping.list_view') }}">← Tutte le rules</a>
+    </p>
+</section>
+
+<div class="gm-explainer">
+    <strong><i class="fas fa-info-circle"></i> Come funziona</strong><br>
+    Una rule dice <em>"per ogni cliente sincronizzato dal gestionale, se il valore del
+    campo <strong>X</strong> soddisfa la condizione <strong>Y</strong>, metti
+    automaticamente il cliente nel gruppo <strong>Z</strong>"</em>.
+    <br>L'auto-assignment scatta ad ogni sync (24h) e non tocca le membership manuali.
+    Il record valutato e' il merge di campi <strong>canonici</strong> (codcli,
+    contract_active, tipologia_servizio, ecc.) + campi <strong>raw originali</strong>
+    del gestionale.
+</div>
+
+<form method="post" class="gm-form"
+      action="{{ url_for('group_mapping.edit_view', rule_id=rule.id) if rule else url_for('group_mapping.new_view') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="gm-section">
+        <h3 style="margin:0 0 0.7rem;">Cosa cercare nei dati del cliente</h3>
+
+        <div class="form-row">
+            <label>Nome campo *</label>
+            <div>
+                <input type="text" name="source_field"
+                       value="{{ rule.source_field if rule else '' }}"
+                       required placeholder="tipologia_servizio">
+                <div class="help">
+                    Nome esatto del campo da osservare. Puoi usare:
+                    <strong>campi canonici</strong> (codcli, ragione_sociale,
+                    contract_active, tipologia_servizio, contract_type, contract_expiry,
+                    timezone) oppure <strong>nomi originali del gestionale</strong>
+                    (es. <code>priority_flag</code>, <code>cluster</code>,
+                    <code>aconto</code>, <code>is_active</code>).
+                </div>
+            </div>
+        </div>
+
+        <div class="form-row">
+            <label>Tipo di match *</label>
+            <div>
+                <select name="match_type" required onchange="updateMatchHelp()">
+                    {% for mt in match_types %}
+                        <option value="{{ mt }}"
+                                {% if (rule and rule.match_type==mt) or (not rule and mt=='equals') %}selected{% endif %}>{{ mt }}</option>
+                    {% endfor %}
+                </select>
+                <div id="match-help" class="gm-match-help"></div>
+            </div>
+        </div>
+
+        <div class="form-row" id="match-value-row">
+            <label>Valore atteso</label>
+            <div>
+                <input type="text" name="match_value"
+                       value="{{ rule.match_value if rule and rule.match_value else '' }}"
+                       placeholder="STD">
+                <div class="help">
+                    Per <code>equals</code>/<code>contains</code>: valore singolo (case-insensitive).<br>
+                    Per <code>in_list</code>: CSV (es. <code>A,B,C</code>).<br>
+                    Per <code>regex</code>: regex Python (es. <code>(?i)^premium</code>).<br>
+                    Per <code>truthy</code>/<code>falsy</code>/<code>not_empty</code>: ignorato.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="gm-section">
+        <h3 style="margin:0 0 0.7rem;">Dove assegnare</h3>
+
+        <div class="form-row">
+            <label>Gruppo target *</label>
+            <div>
+                <select name="target_group_id" required>
+                    <option value="">— scegli gruppo —</option>
+                    {% for g in groups %}
+                        <option value="{{ g.id }}"
+                                {% if rule and rule.target_group_id == g.id %}selected{% endif %}>
+                            {% if g.is_builtin %}🏛️ {% endif %}{{ g.code }} — {{ g.name }}{% if g.is_builtin %} (built-in){% endif %}
+                        </option>
+                    {% endfor %}
+                </select>
+                <div class="help">
+                    🏛️ = gruppo built-in (concetti del prodotto).
+                    <a href="{{ url_for('customer_groups.new_view') }}" target="_blank">Crea nuovo gruppo</a>.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="gm-section">
+        <h3 style="margin:0 0 0.7rem;">Scope opzionale</h3>
+
+        <div class="form-row">
+            <label>Solo per sorgente</label>
+            <div>
+                <select name="source_id">
+                    <option value="">— tutte le sorgenti (globale) —</option>
+                    {% for s in sources %}
+                        <option value="{{ s.id }}"
+                                {% if rule and rule.source_id == s.id %}selected{% endif %}>
+                            {{ s.name }} ({{ s.kind }})
+                        </option>
+                    {% endfor %}
+                </select>
+                <div class="help">
+                    Se selezionato, la rule si applica SOLO ai clienti che arrivano
+                    da questa specifica sorgente sync. Utile se hai gestionali diversi
+                    con campi diversi.
+                </div>
+            </div>
+        </div>
+
+        <div class="form-row">
+            <label>Priorita'</label>
+            <div>
+                <input type="number" name="priority" min="1" max="9999"
+                       value="{{ rule.priority if rule else 100 }}" style="max-width:140px;">
+                <div class="help">Numero piu' basso = valutata prima (rilevante solo
+                    tra rules che puntano allo stesso gruppo).</div>
+            </div>
+        </div>
+
+        <div class="form-row">
+            <label>Stato</label>
+            <div>
+                <select name="enabled">
+                    <option value="1" {% if rule is none or rule.enabled %}selected{% endif %}>Abilitata</option>
+                    <option value="0" {% if rule and not rule.enabled %}selected{% endif %}>Disabilitata</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="form-row">
+            <label>Descrizione</label>
+            <div>
+                <textarea name="description" rows="2"
+                          placeholder="es. Clienti CRM premium = VIP">{{ rule.description if rule and rule.description else '' }}</textarea>
+            </div>
+        </div>
+    </div>
+
+    <div style="display:flex; gap:0.6rem; align-items:center; margin-top:1.2rem;">
+        <button type="submit" class="dr-btn dr-btn-primary" style="width:auto;">
+            <i class="fas fa-save"></i> {% if rule %}Aggiorna{% else %}Crea{% endif %}
+        </button>
+        <a href="{{ url_for('group_mapping.list_view') }}" class="dr-btn" style="width:auto;">
+            <i class="fas fa-times"></i> Annulla
+        </a>
+        {% if rule %}
+        <span style="margin-left:auto;"></span>
+        <form action="{{ url_for('group_mapping.delete_view', rule_id=rule.id) }}"
+              method="post" style="display:inline;"
+              onsubmit="return confirm('Eliminare la rule? Le membership auto-assegnate verranno ripulite al prossimo sync.');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="dr-btn" style="width:auto; color:#b91c1c;">
+                <i class="fas fa-trash"></i> Elimina rule
+            </button>
+        </form>
+        {% endif %}
+    </div>
+</form>
+
+<script>
+const MATCH_HELPS = {
+    "equals": "Match esatto case-insensitive. Esempio: campo <code>tipologia_servizio</code> = <code>STD</code>.",
+    "contains": "Match per substring. Esempio: campo <code>cluster</code> contiene <code>PREMIUM</code> -> match anche su PREMIUM_GOLD, PREMIUM_PLATINUM.",
+    "in_list": "Match se il valore e' in una lista CSV. Esempio: campo <code>priority</code> in <code>A,B,X</code>.",
+    "regex": "Regex Python (case-sensitive di default; usa <code>(?i)</code> per case-insensitive). Esempio: <code>^TOP_\\d+$</code>.",
+    "truthy": "Il campo ha un valore 'vero': 1, true, Y, yes, S, si, on, attivo. Match_value ignorato.",
+    "falsy": "Il campo ha un valore 'falso': 0, false, N, no, off, inattivo. Null NON e' considerato falsy. Match_value ignorato.",
+    "not_empty": "Il campo ha un qualsiasi valore non null/empty. Match_value ignorato.",
+};
+function updateMatchHelp() {
+    const sel = document.querySelector('select[name="match_type"]');
+    const mt = sel.value;
+    document.getElementById('match-help').innerHTML =
+        '<strong>' + mt + '</strong>: ' + (MATCH_HELPS[mt] || '');
+    const valueRow = document.getElementById('match-value-row');
+    if (mt === 'truthy' || mt === 'falsy' || mt === 'not_empty') {
+        valueRow.style.opacity = '0.4';
+    } else {
+        valueRow.style.opacity = '1';
+    }
+}
+window.addEventListener('DOMContentLoaded', updateMatchHelp);
+</script>
+{% endblock %}

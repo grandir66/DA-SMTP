@@ -2716,6 +2716,242 @@ class SqliteStorage(Storage):
                 (int(tenant_id),),
             ).fetchall()]
 
+    # ============================================================
+    # M034 — Group membership rules (auto-assegnazione gruppi)
+    # ============================================================
+
+    def list_group_membership_rules(self, *, tenant_id: int = 1,
+                                     only_enabled: bool | None = None,
+                                     target_group_id: int | None = None,
+                                     source_id: int | None = None
+                                     ) -> list[dict[str, Any]]:
+        sql = ["""SELECT gmr.*, cg.code AS target_group_code,
+                          cg.name AS target_group_name
+                     FROM group_membership_rules gmr
+                     JOIN customer_groups cg ON cg.id = gmr.target_group_id
+                    WHERE gmr.tenant_id = ?"""]
+        params: list[Any] = [int(tenant_id)]
+        if only_enabled is True:
+            sql.append("AND gmr.enabled = 1")
+        elif only_enabled is False:
+            sql.append("AND gmr.enabled = 0")
+        if target_group_id is not None:
+            sql.append("AND gmr.target_group_id = ?")
+            params.append(int(target_group_id))
+        if source_id is not None:
+            sql.append("AND (gmr.source_id IS NULL OR gmr.source_id = ?)")
+            params.append(int(source_id))
+        sql.append("ORDER BY gmr.priority, gmr.id")
+        with self._connect() as conn:
+            return [dict(r) for r in conn.execute(" ".join(sql), params).fetchall()]
+
+    def get_group_membership_rule(self, rule_id: int) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                """SELECT gmr.*, cg.code AS target_group_code,
+                          cg.name AS target_group_name
+                     FROM group_membership_rules gmr
+                     JOIN customer_groups cg ON cg.id = gmr.target_group_id
+                    WHERE gmr.id = ?""",
+                (int(rule_id),),
+            ).fetchone()
+            return dict(row) if row else None
+
+    def upsert_group_membership_rule(self, data: dict[str, Any], *,
+                                       tenant_id: int = 1,
+                                       actor: str | None = None) -> int:
+        target_group_id = data.get("target_group_id")
+        source_field = (data.get("source_field") or "").strip()
+        match_type = (data.get("match_type") or "equals").strip()
+        if not target_group_id:
+            raise ValueError("target_group_id obbligatorio")
+        if not source_field:
+            raise ValueError("source_field obbligatorio")
+        if match_type not in {"equals", "contains", "in_list", "regex",
+                                "truthy", "falsy", "not_empty"}:
+            raise ValueError(f"match_type non supportato: {match_type}")
+
+        rid = data.get("id")
+        with self.transaction() as conn:
+            if rid:
+                conn.execute(
+                    """UPDATE group_membership_rules SET
+                          target_group_id=?, source_field=?,
+                          match_type=?, match_value=?, source_id=?,
+                          priority=?, description=?, enabled=?,
+                          updated_at=datetime('now')
+                       WHERE id=? AND tenant_id=?""",
+                    (int(target_group_id), source_field,
+                     match_type, data.get("match_value"),
+                     int(data["source_id"]) if data.get("source_id") else None,
+                     int(data.get("priority", 100)),
+                     data.get("description"),
+                     1 if data.get("enabled", True) else 0,
+                     int(rid), int(tenant_id)),
+                )
+                return int(rid)
+            cur = conn.execute(
+                """INSERT INTO group_membership_rules
+                       (tenant_id, target_group_id, source_field, match_type,
+                        match_value, source_id, priority, description, enabled,
+                        created_by)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (int(tenant_id), int(target_group_id), source_field, match_type,
+                 data.get("match_value"),
+                 int(data["source_id"]) if data.get("source_id") else None,
+                 int(data.get("priority", 100)),
+                 data.get("description"),
+                 1 if data.get("enabled", True) else 0,
+                 actor),
+            )
+            return int(cur.lastrowid)
+
+    def delete_group_membership_rule(self, rule_id: int) -> None:
+        with self.transaction() as conn:
+            conn.execute("DELETE FROM group_membership_rules WHERE id = ?",
+                         (int(rule_id),))
+
+    @staticmethod
+    def _gmr_evaluate_match(value: Any, match_type: str,
+                             match_value: str | None) -> bool:
+        """Valuta una singola rule contro un valore. Helper puro statico."""
+        if match_type == "not_empty":
+            if value is None or value == "" or value == []:
+                return False
+            return True
+        if match_type == "truthy":
+            if value is None:
+                return False
+            if isinstance(value, bool):
+                return value
+            if isinstance(value, (int, float)):
+                return bool(value)
+            s = str(value).strip().lower()
+            return s in {"1", "true", "t", "y", "yes", "s", "si", "sì",
+                          "on", "vero", "attivo", "active"}
+        if match_type == "falsy":
+            if value is None:
+                return False  # null != falsy
+            if isinstance(value, bool):
+                return not value
+            if isinstance(value, (int, float)):
+                return not bool(value)
+            s = str(value).strip().lower()
+            return s in {"0", "false", "f", "n", "no", "off",
+                          "falso", "inattivo", "inactive"}
+        if value is None:
+            return False
+        sval = str(value).strip()
+        mv = (match_value or "")
+        if match_type == "equals":
+            return sval.lower() == mv.strip().lower()
+        if match_type == "contains":
+            return mv.strip().lower() in sval.lower()
+        if match_type == "in_list":
+            options = [o.strip().lower() for o in mv.split(",") if o.strip()]
+            return sval.lower() in options
+        if match_type == "regex":
+            try:
+                import re as _re
+                return bool(_re.search(mv, sval))
+            except Exception:  # noqa: BLE001
+                return False
+        return False
+
+    def evaluate_membership_rules(self, record: dict[str, Any], *,
+                                    tenant_id: int = 1,
+                                    source_id: int | None = None,
+                                    rules_cache: list[dict[str, Any]] | None = None
+                                    ) -> set[int]:
+        """Per un record cliente (canonico + raw), ritorna l'insieme dei
+        target_group_id matchati. `rules_cache` opzionale per evitare re-fetch
+        dal DB durante un sync di N record.
+        """
+        rules = rules_cache
+        if rules is None:
+            rules = self.list_group_membership_rules(
+                tenant_id=tenant_id, only_enabled=True, source_id=source_id,
+            )
+        else:
+            # Filtro su source_id se serve
+            rules = [r for r in rules
+                     if r.get("source_id") is None
+                     or (source_id is not None and r["source_id"] == source_id)]
+        matched: set[int] = set()
+        for rule in rules:
+            field = rule["source_field"]
+            value = record.get(field)
+            if self._gmr_evaluate_match(value, rule["match_type"],
+                                          rule.get("match_value")):
+                matched.add(int(rule["target_group_id"]))
+        return matched
+
+    def apply_auto_assignments(self, codice_cliente: str,
+                                target_group_ids: set[int], *,
+                                tenant_id: int = 1) -> tuple[int, int]:
+        """Aggiorna le membership AUTO per un cliente:
+          - DELETE le auto-assignment correnti che non sono piu' nel set
+          - INSERT le nuove auto-assignment
+        Le membership manuali (is_auto_assigned=0) NON vengono toccate.
+
+        Ritorna (n_added, n_removed).
+        """
+        codcli = (codice_cliente or "").strip().upper()
+        if not codcli:
+            return (0, 0)
+        target_set = {int(g) for g in target_group_ids}
+        with self.transaction() as conn:
+            # 1) Read current AUTO memberships
+            current = conn.execute(
+                """SELECT group_id FROM customer_group_members
+                    WHERE tenant_id = ? AND codice_cliente = ?
+                      AND is_auto_assigned = 1""",
+                (int(tenant_id), codcli),
+            ).fetchall()
+            current_set = {int(r["group_id"]) for r in current}
+
+            to_remove = current_set - target_set
+            to_add = target_set - current_set
+            # NON facciamo NULLA per il caso "membership manuale per group X
+            # che NON e' in target_set" -> resta. E se e' anche auto+manuale
+            # (impossibile per UNIQUE, ma per sicurezza) il manuale prevale.
+
+            if to_remove:
+                placeholders = ",".join("?" * len(to_remove))
+                conn.execute(
+                    f"""DELETE FROM customer_group_members
+                         WHERE tenant_id = ? AND codice_cliente = ?
+                           AND is_auto_assigned = 1
+                           AND group_id IN ({placeholders})""",
+                    [int(tenant_id), codcli, *(int(g) for g in to_remove)],
+                )
+            for gid in to_add:
+                # Conflict: se esiste gia' membership MANUALE per questo
+                # cliente+gruppo, non duplichiamo (UNIQUE clause). Skip.
+                conn.execute(
+                    """INSERT OR IGNORE INTO customer_group_members
+                           (tenant_id, group_id, codice_cliente,
+                            is_auto_assigned, added_by)
+                       VALUES (?, ?, ?, 1, 'auto')""",
+                    (int(tenant_id), int(gid), codcli),
+                )
+            return (len(to_add), len(to_remove))
+
+    def count_auto_memberships_per_group(self, *, tenant_id: int = 1
+                                          ) -> dict[int, int]:
+        """Per ogni group_id, conteggio dei membri auto-assegnati."""
+        out: dict[int, int] = {}
+        with self._connect() as conn:
+            for r in conn.execute(
+                """SELECT group_id, COUNT(*) AS n
+                     FROM customer_group_members
+                    WHERE tenant_id = ? AND is_auto_assigned = 1
+                    GROUP BY group_id""",
+                (int(tenant_id),),
+            ).fetchall():
+                out[int(r["group_id"])] = int(r["n"])
+        return out
+
     # ============================================================= H24 =====
     # Codici autorizzazione intervento urgente a pagamento.
     # - Codici MONOUSO: tabella `authorization_codes` (esistente, esteso con
