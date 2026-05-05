@@ -459,11 +459,23 @@ function setMappingMode(mode) {
 
 function buildMappingFromTable() {
     const out = {};
+    // Se la tabella mostra il placeholder legacy (no input), preserva il sentinel
+    const tbody = document.getElementById('mapping-rows');
+    const isLegacyPlaceholder = tbody && tbody.querySelector('[data-mp-src]') === null
+                                 && tbody.children.length > 0;
+    if (isLegacyPlaceholder) {
+        return {_legacy: true};
+    }
     document.querySelectorAll('#mapping-rows tr').forEach(tr => {
-        const src = tr.querySelector('[data-mp-src]').value.trim();
-        const target = tr.querySelector('[data-mp-target]').value.trim();
-        const transform = tr.querySelector('[data-mp-transform]').value.trim();
-        const def = tr.querySelector('[data-mp-default]').value.trim();
+        const srcEl = tr.querySelector('[data-mp-src]');
+        const tgtEl = tr.querySelector('[data-mp-target]');
+        const trEl = tr.querySelector('[data-mp-transform]');
+        const dfEl = tr.querySelector('[data-mp-default]');
+        if (!srcEl || !tgtEl) return;  // riga placeholder o malformata
+        const src = (srcEl.value || '').trim();
+        const target = (tgtEl.value || '').trim();
+        const transform = trEl ? (trEl.value || '').trim() : '';
+        const def = dfEl ? (dfEl.value || '').trim() : '';
         if (!src || !target) return;
         if (transform || def) {
             const spec = {target};

@@ -76,6 +76,11 @@
         {% endif %}
 
         <span style="margin-left:auto;" class="cs-actions">
+            <a href="{{ url_for('customer_sync.edit_view', source_id=s.id) }}"
+               class="dr-btn dr-btn-primary" style="width:auto; padding:0.35rem 0.8rem;"
+               title="Modifica configurazione, mapping, schedule">
+                <i class="fas fa-pen-to-square"></i> Modifica
+            </a>
             <form action="{{ url_for('customer_sync.test_view', source_id=s.id) }}"
                   method="post" style="display:inline;"
                   onsubmit="testSource(event, {{ s.id }}); return false;">
@@ -103,7 +108,8 @@
             <form action="{{ url_for('customer_sync.toggle_view', source_id=s.id) }}"
                   method="post" style="display:inline;">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button type="submit" class="dr-btn" style="width:auto; padding:0.35rem 0.7rem;">
+                <button type="submit" class="dr-btn" style="width:auto; padding:0.35rem 0.7rem;"
+                        title="{% if s.enabled %}Disabilita la sorgente (lo scheduler la salta){% else %}Abilita la sorgente{% endif %}">
                     {% if s.enabled %}<i class="fas fa-toggle-on"></i> Disabilita
                     {% else %}<i class="fas fa-toggle-off"></i> Abilita{% endif %}
                 </button>

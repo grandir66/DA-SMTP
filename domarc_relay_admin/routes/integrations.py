@@ -42,8 +42,8 @@ def _actor() -> str:
 # Lista parametri con metadata (sezione, type, default)
 PARAMS = {
     # Customer source
-    "customer_source.backend":           ("customer_source", "select", "stormshield",
-                                            ["stormshield", "postgres", "yaml", "sqlite", "rest"]),
+    "customer_source.backend":           ("customer_source", "select", "local",
+                                            ["local", "stormshield", "postgres", "yaml", "sqlite", "rest"]),
     "customer_source.pg.host":           ("customer_source", "text", "192.168.4.41"),
     "customer_source.pg.port":           ("customer_source", "int", "5432"),
     "customer_source.pg.user":           ("customer_source", "text", "stormshield"),
@@ -392,9 +392,33 @@ def test_ai():
 @integrations_bp.route("/sync/customer-source", methods=["POST"])
 @login_required(role="admin")
 def sync_customer_source_now():
-    """Forza un sync immediato del customer source (PG → cache locale)."""
-    cs = current_app.extensions.get("domarc_customer_source")
-    if not cs or not hasattr(cs, "sync_now"):
-        return jsonify({"ok": False, "error": "Customer source attivo non supporta sync (backend non postgres)"}), 400
-    report = cs.sync_now(triggered_by=f"manual:{_actor()}")
+    """Forza un sync immediato della sorgente legacy via SyncEngine (M028).
+
+    Post-M028 il sync non vive piu' nel backend `postgres` (deprecato): la
+    fonte primaria e' la tabella `customers`, alimentata dal SyncEngine via
+    customer_sync_sources. Qui cerchiamo la sorgente seedata "Postgres
+    solution Domarc (legacy)" e la eseguiamo. Per gestione completa delle
+    sorgenti -> /customer-sync/.
+    """
+    storage = current_app.extensions["domarc_storage"]
+    sources = storage.list_customer_sync_sources(only_enabled=True)
+    legacy = next((s for s in sources
+                    if s["kind"] == "postgres"
+                    and (s.get("config_json") or {}).get("_use_legacy_pgconfig")),
+                  None)
+    if legacy is None:
+        return jsonify({
+            "ok": False,
+            "error": "Sorgente legacy non trovata. Configura le sorgenti in "
+                     "/customer-sync/ (post-M028).",
+            "redirect": url_for("customer_sync.list_view"),
+        }), 400
+    from ..customer_sync.engine import SyncEngine
+    engine = SyncEngine(storage)
+    report = engine.run(legacy, triggered_by=f"manual:{_actor()}", dry_run=False)
+    # Adatta il report al formato atteso dal vecchio JS (chiavi rows_synced)
+    report["rows_synced"] = report.get("n_inserted", 0) + report.get("n_updated", 0)
+    report["rows_removed"] = report.get("n_flagged_missing", 0)
+    report["success"] = report.get("status") == "ok"
+    report["redirect_to_new_ui"] = url_for("customer_sync.list_view")
     return jsonify(report)
