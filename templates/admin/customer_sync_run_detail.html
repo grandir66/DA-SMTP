@@ -1,0 +1,50 @@
+{% extends "admin/_base.html" %}
+{% block title %}Run #{{ run.id }} — {{ source.name }}{% endblock %}
+{% block content %}
+<style>
+.kv { display:grid; grid-template-columns: 200px 1fr; gap:0.5rem 1rem; }
+.kv dt { font-weight:600; color:#475569; }
+.kv dd { margin:0; }
+.cs-status { padding:0.15rem 0.55rem; border-radius:9px; font-size:0.78rem; font-weight:600; }
+.cs-status.ok { background:#dcfce7; color:#15803d; }
+.cs-status.error { background:#fee2e2; color:#b91c1c; }
+.cs-status.partial { background:#fef3c7; color:#a16207; }
+.cs-status.running { background:#dbeafe; color:#1e40af; }
+pre.json-block { background:#0f172a; color:#e2e8f0; padding:1rem; border-radius:6px;
+                 overflow:auto; max-height:500px; font-size:0.78rem; }
+</style>
+
+<section class="dr-section">
+    <h2><i class="fas fa-file-lines"></i> Run #{{ run.id }} — {{ source.name }}
+        {% if run.dry_run %}<small style="color:#7c3aed;">(dry-run)</small>{% endif %}
+    </h2>
+    <p class="dr-hint">
+        <a href="{{ url_for('customer_sync.runs_view', source_id=source.id) }}">← Storico run</a>
+        &nbsp; | &nbsp;
+        <a href="{{ url_for('customer_sync.edit_view', source_id=source.id) }}">Configura sorgente</a>
+    </p>
+</section>
+
+<dl class="kv" style="background:#fff; padding:1rem 1.2rem; border:1px solid #e2e8f0; border-radius:8px;">
+    <dt>Stato</dt><dd><span class="cs-status {{ run.status }}">{{ run.status or '—' }}</span></dd>
+    <dt>Trigger</dt><dd>{{ run.triggered_by or '—' }}</dd>
+    <dt>Inizio</dt><dd>{{ run.started_at }}</dd>
+    <dt>Fine</dt><dd>{{ run.finished_at or '—' }}</dd>
+    <dt>Durata</dt><dd>{% if run.duration_ms %}{{ run.duration_ms }} ms{% else %}—{% endif %}</dd>
+    <dt>Dry run</dt><dd>{{ 'Si' if run.dry_run else 'No' }}</dd>
+    <dt>Record fetchati</dt><dd>{{ run.n_fetched or 0 }}</dd>
+    <dt>Inseriti</dt><dd>{{ run.n_inserted or 0 }}</dd>
+    <dt>Aggiornati</dt><dd>{{ run.n_updated or 0 }}</dd>
+    <dt>Invariati</dt><dd>{{ run.n_unchanged or 0 }}</dd>
+    <dt>Mancanti gestiti</dt><dd>{{ run.n_flagged_missing or 0 }}</dd>
+    <dt>Errori</dt><dd>{{ run.n_errored or 0 }}</dd>
+    {% if run.error_message %}
+    <dt>Errore</dt><dd style="color:#b91c1c;">{{ run.error_message }}</dd>
+    {% endif %}
+</dl>
+
+{% if run.report_json %}
+<h3 style="margin-top:1.5rem;">Report dettagliato</h3>
+<pre class="json-block">{{ run.report_json|tojson(indent=2) }}</pre>
+{% endif %}
+{% endblock %}

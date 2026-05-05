@@ -14,6 +14,7 @@ import logging
 import sqlite3
 import threading
 from contextlib import contextmanager
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Iterator
 
@@ -3277,6 +3278,394 @@ class SqliteStorage(Storage):
             )
             return int(cur.lastrowid)
 
+    # ============================================================
+    # M028 — Customer sync sources / runs / locks
+    # ============================================================
+
+    def list_customer_sync_sources(self, *, tenant_id: int = 1,
+                                   only_enabled: bool | None = None
+                                   ) -> list[dict[str, Any]]:
+        sql = "SELECT * FROM customer_sync_sources WHERE tenant_id = ?"
+        params: list[Any] = [tenant_id]
+        if only_enabled is True:
+            sql += " AND enabled = 1"
+        elif only_enabled is False:
+            sql += " AND enabled = 0"
+        sql += " ORDER BY name"
+        with self._connect() as conn:
+            return [_decode_sync_source(r) for r in conn.execute(sql, params).fetchall()]
+
+    def get_customer_sync_source(self, source_id: int) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            r = conn.execute(
+                "SELECT * FROM customer_sync_sources WHERE id = ?", (int(source_id),)
+            ).fetchone()
+            return _decode_sync_source(r) if r else None
+
+    def upsert_customer_sync_source(self, data: dict[str, Any], *,
+                                    tenant_id: int = 1) -> int:
+        """Insert o update di una sorgente. Se id presente in data -> update."""
+        config_json = data.get("config_json") or "{}"
+        if isinstance(config_json, dict):
+            config_json = json.dumps(config_json, ensure_ascii=False)
+        mapping_json = data.get("mapping_json") or "{}"
+        if isinstance(mapping_json, dict):
+            mapping_json = json.dumps(mapping_json, ensure_ascii=False)
+
+        with self.transaction() as conn:
+            sid = data.get("id")
+            if sid:
+                conn.execute(
+                    """UPDATE customer_sync_sources SET
+                            name = ?, kind = ?, enabled = ?,
+                            config_json = ?, query_or_path = ?,
+                            mapping_json = ?, schedule_hours = ?,
+                            on_missing = ?
+                        WHERE id = ? AND tenant_id = ?""",
+                    (data["name"], data["kind"],
+                     1 if data.get("enabled", True) else 0,
+                     config_json, data.get("query_or_path"),
+                     mapping_json,
+                     int(data.get("schedule_hours", 24)),
+                     data.get("on_missing", "flag"),
+                     int(sid), tenant_id),
+                )
+                return int(sid)
+            cur = conn.execute(
+                """INSERT INTO customer_sync_sources
+                       (tenant_id, name, kind, enabled, config_json,
+                        query_or_path, mapping_json, schedule_hours,
+                        on_missing, created_by)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (tenant_id, data["name"], data["kind"],
+                 1 if data.get("enabled", True) else 0,
+                 config_json, data.get("query_or_path"),
+                 mapping_json,
+                 int(data.get("schedule_hours", 24)),
+                 data.get("on_missing", "flag"),
+                 data.get("created_by")),
+            )
+            return int(cur.lastrowid)
+
+    def delete_customer_sync_source(self, source_id: int) -> None:
+        with self.transaction() as conn:
+            conn.execute("DELETE FROM customer_sync_sources WHERE id = ?",
+                         (int(source_id),))
+
+    def toggle_customer_sync_source(self, source_id: int) -> bool:
+        with self.transaction() as conn:
+            r = conn.execute(
+                "SELECT enabled FROM customer_sync_sources WHERE id = ?",
+                (int(source_id),)
+            ).fetchone()
+            if not r:
+                return False
+            new_v = 0 if r["enabled"] else 1
+            conn.execute(
+                "UPDATE customer_sync_sources SET enabled = ? WHERE id = ?",
+                (new_v, int(source_id)),
+            )
+            return bool(new_v)
+
+    def update_customer_sync_source_state(self, source_id: int, *,
+                                          last_run_at: str | None = None,
+                                          last_run_status: str | None = None,
+                                          last_run_error: str | None = None,
+                                          next_run_at: str | None = None) -> None:
+        sets = []
+        params: list[Any] = []
+        if last_run_at is not None:
+            sets.append("last_run_at = ?"); params.append(last_run_at)
+        if last_run_status is not None:
+            sets.append("last_run_status = ?"); params.append(last_run_status)
+        if last_run_error is not None:
+            sets.append("last_run_error = ?"); params.append(last_run_error)
+        if next_run_at is not None:
+            sets.append("next_run_at = ?"); params.append(next_run_at)
+        if not sets:
+            return
+        params.append(int(source_id))
+        with self.transaction() as conn:
+            conn.execute(
+                f"UPDATE customer_sync_sources SET {', '.join(sets)} WHERE id = ?",
+                params,
+            )
+
+    def list_due_customer_sync_sources(self) -> list[dict[str, Any]]:
+        """Sorgenti enabled con next_run_at NULL o <= now (per scheduler)."""
+        now = datetime.utcnow().isoformat(timespec="seconds")
+        with self._connect() as conn:
+            rows = conn.execute(
+                """SELECT * FROM customer_sync_sources
+                    WHERE enabled = 1
+                      AND (next_run_at IS NULL OR next_run_at <= ?)
+                    ORDER BY COALESCE(next_run_at, '0000') ASC""",
+                (now,),
+            ).fetchall()
+            return [_decode_sync_source(r) for r in rows]
+
+    def insert_customer_sync_run(self, *, source_id: int, triggered_by: str,
+                                 dry_run: bool = False) -> int:
+        with self.transaction() as conn:
+            cur = conn.execute(
+                """INSERT INTO customer_sync_runs
+                       (source_id, status, triggered_by, dry_run)
+                   VALUES (?, 'running', ?, ?)""",
+                (int(source_id), triggered_by, 1 if dry_run else 0),
+            )
+            return int(cur.lastrowid)
+
+    def update_customer_sync_run(self, run_id: int, **fields: Any) -> None:
+        if not fields:
+            return
+        allowed = {"finished_at", "duration_ms", "status", "n_fetched",
+                   "n_inserted", "n_updated", "n_unchanged",
+                   "n_flagged_missing", "n_errored", "error_message",
+                   "report_json"}
+        sets = []
+        params: list[Any] = []
+        for k, v in fields.items():
+            if k not in allowed:
+                continue
+            if k == "report_json" and isinstance(v, (dict, list)):
+                v = json.dumps(v, ensure_ascii=False)
+            sets.append(f"{k} = ?"); params.append(v)
+        if not sets:
+            return
+        params.append(int(run_id))
+        with self.transaction() as conn:
+            conn.execute(
+                f"UPDATE customer_sync_runs SET {', '.join(sets)} WHERE id = ?",
+                params,
+            )
+
+    def get_customer_sync_run(self, run_id: int) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            r = conn.execute(
+                "SELECT * FROM customer_sync_runs WHERE id = ?", (int(run_id),)
+            ).fetchone()
+            return _decode_sync_run(r) if r else None
+
+    def list_customer_sync_runs(self, *, source_id: int | None = None,
+                                limit: int = 50) -> list[dict[str, Any]]:
+        sql = "SELECT * FROM customer_sync_runs"
+        params: list[Any] = []
+        if source_id is not None:
+            sql += " WHERE source_id = ?"
+            params.append(int(source_id))
+        sql += " ORDER BY started_at DESC LIMIT ?"
+        params.append(int(limit))
+        with self._connect() as conn:
+            return [_decode_sync_run(r) for r in conn.execute(sql, params).fetchall()]
+
+    def acquire_sync_lock(self, source_id: int, *, ttl_sec: int = 3600,
+                          holder: str = "") -> bool:
+        """Tenta lock atomico. True se acquisito, False se gia' detenuto."""
+        now = datetime.utcnow()
+        now_iso = now.isoformat(timespec="seconds")
+        expires_iso = (now + timedelta(seconds=int(ttl_sec))).isoformat(timespec="seconds")
+        with self.transaction() as conn:
+            # Pulizia preventiva lock scaduti
+            conn.execute(
+                "DELETE FROM customer_sync_locks WHERE expires_at <= ?",
+                (now_iso,),
+            )
+            try:
+                conn.execute(
+                    """INSERT INTO customer_sync_locks
+                           (source_id, acquired_at, expires_at, holder)
+                       VALUES (?, ?, ?, ?)""",
+                    (int(source_id), now_iso, expires_iso, holder),
+                )
+                return True
+            except sqlite3.IntegrityError:
+                return False
+
+    def release_sync_lock(self, source_id: int) -> None:
+        with self.transaction() as conn:
+            conn.execute("DELETE FROM customer_sync_locks WHERE source_id = ?",
+                         (int(source_id),))
+
+    # ------------------------------------------------------------
+    # Customers (tabella autoritativa post-rename M028)
+    # ------------------------------------------------------------
+
+    def upsert_customer_record(self, mapped: dict[str, Any], *,
+                               source_id: int | None) -> str:
+        """Upsert atomico di un cliente sulla tabella `customers`.
+
+        Ritorna 'inserted' | 'updated' | 'unchanged'. `mapped` deve contenere
+        almeno `codcli`. Campi non presenti vengono lasciati intatti su update.
+        """
+        codcli = (mapped.get("codcli") or "").strip().upper()
+        if not codcli:
+            raise ValueError("upsert_customer_record: codcli mancante")
+
+        domains = mapped.get("domains")
+        if isinstance(domains, list):
+            domains_json = json.dumps(domains, ensure_ascii=False)
+        elif isinstance(domains, str):
+            domains_json = domains
+        else:
+            domains_json = None
+
+        aliases = mapped.get("aliases")
+        if isinstance(aliases, list):
+            aliases_json = json.dumps(aliases, ensure_ascii=False)
+        elif isinstance(aliases, str):
+            aliases_json = aliases
+        else:
+            aliases_json = None
+
+        sh = mapped.get("service_hours_json") or mapped.get("service_hours")
+        if isinstance(sh, dict):
+            service_hours_json = json.dumps(sh, ensure_ascii=False) if sh else None
+        elif isinstance(sh, str):
+            service_hours_json = sh
+        else:
+            service_hours_json = None
+
+        raw = mapped.get("raw_json")
+        if isinstance(raw, (dict, list)):
+            raw_json = json.dumps(raw, ensure_ascii=False)
+        else:
+            raw_json = raw
+
+        contract_active = mapped.get("contract_active")
+        if contract_active is None:
+            contract_active_val: int | None = None
+        else:
+            contract_active_val = 1 if contract_active else 0
+
+        now_iso = datetime.utcnow().isoformat(timespec="seconds")
+
+        with self.transaction() as conn:
+            existing = conn.execute(
+                "SELECT * FROM customers WHERE codcli = ?", (codcli,)
+            ).fetchone()
+            if existing is None:
+                conn.execute(
+                    """INSERT INTO customers
+                           (codcli, ragione_sociale, domains_json, aliases_json,
+                            contract_active, contract_type, tipologia_servizio,
+                            service_hours_json, contract_expiry, timezone,
+                            raw_json, last_synced_at, last_synced_from_source_id,
+                            tenant_id)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (codcli,
+                     mapped.get("ragione_sociale"),
+                     domains_json or '[]',
+                     aliases_json or '[]',
+                     1 if contract_active_val is None else contract_active_val,
+                     mapped.get("contract_type"),
+                     mapped.get("tipologia_servizio") or "standard",
+                     service_hours_json,
+                     mapped.get("contract_expiry") or mapped.get("contract_expiry_date"),
+                     mapped.get("timezone") or "Europe/Rome",
+                     raw_json,
+                     now_iso,
+                     int(source_id) if source_id is not None else None,
+                     int(mapped.get("tenant_id", 1))),
+                )
+                return "inserted"
+
+            # UPDATE: aggiorno solo i campi che il mapping ha effettivamente
+            # prodotto (chiave presente in mapped).
+            sets: list[str] = []
+            params: list[Any] = []
+            if "ragione_sociale" in mapped:
+                sets.append("ragione_sociale = ?"); params.append(mapped.get("ragione_sociale"))
+            if domains_json is not None:
+                sets.append("domains_json = ?"); params.append(domains_json)
+            if aliases_json is not None:
+                sets.append("aliases_json = ?"); params.append(aliases_json)
+            if contract_active_val is not None:
+                sets.append("contract_active = ?"); params.append(contract_active_val)
+            if "contract_type" in mapped:
+                sets.append("contract_type = ?"); params.append(mapped.get("contract_type"))
+            if "tipologia_servizio" in mapped:
+                sets.append("tipologia_servizio = ?"); params.append(mapped.get("tipologia_servizio"))
+            if service_hours_json is not None:
+                sets.append("service_hours_json = ?"); params.append(service_hours_json)
+            if "contract_expiry" in mapped or "contract_expiry_date" in mapped:
+                sets.append("contract_expiry = ?")
+                params.append(mapped.get("contract_expiry") or mapped.get("contract_expiry_date"))
+            if "timezone" in mapped:
+                sets.append("timezone = ?"); params.append(mapped.get("timezone") or "Europe/Rome")
+            if raw_json is not None:
+                sets.append("raw_json = ?"); params.append(raw_json)
+            sets.append("last_synced_at = ?"); params.append(now_iso)
+            if source_id is not None:
+                sets.append("last_synced_from_source_id = ?"); params.append(int(source_id))
+
+            if not sets:
+                return "unchanged"
+
+            # Determina se realmente cambia qualcosa (per distinguere updated/unchanged)
+            existing_d = dict(existing)
+            changed = False
+            for k, v in zip([s.split(" = ")[0] for s in sets], params):
+                if k in ("last_synced_at", "last_synced_from_source_id"):
+                    continue
+                if existing_d.get(k) != v:
+                    changed = True; break
+
+            params.append(codcli)
+            conn.execute(
+                f"UPDATE customers SET {', '.join(sets)} WHERE codcli = ?",
+                params,
+            )
+            return "updated" if changed else "unchanged"
+
+    def list_customer_codclis_for_source(self, source_id: int) -> list[str]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT codcli FROM customers WHERE last_synced_from_source_id = ?",
+                (int(source_id),),
+            ).fetchall()
+            return [r["codcli"] for r in rows]
+
+    def flag_missing_customers(self, codclis: list[str]) -> int:
+        if not codclis:
+            return 0
+        placeholders = ",".join("?" * len(codclis))
+        with self.transaction() as conn:
+            cur = conn.execute(
+                f"UPDATE customers SET contract_active = 0 "
+                f"WHERE codcli IN ({placeholders})",
+                codclis,
+            )
+            return cur.rowcount or 0
+
+    def delete_customers(self, codclis: list[str]) -> int:
+        if not codclis:
+            return 0
+        placeholders = ",".join("?" * len(codclis))
+        with self.transaction() as conn:
+            cur = conn.execute(
+                f"DELETE FROM customers WHERE codcli IN ({placeholders})",
+                codclis,
+            )
+            return cur.rowcount or 0
+
+    def list_customers_local(self, *, tenant_id: int | None = None
+                             ) -> list[dict[str, Any]]:
+        sql = "SELECT * FROM customers"
+        params: list[Any] = []
+        if tenant_id is not None:
+            sql += " WHERE tenant_id = ?"; params.append(tenant_id)
+        sql += " ORDER BY ragione_sociale"
+        with self._connect() as conn:
+            return [dict(r) for r in conn.execute(sql, params).fetchall()]
+
+    def get_customer_local(self, codcli: str) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            r = conn.execute(
+                "SELECT * FROM customers WHERE codcli = ?",
+                ((codcli or "").strip().upper(),)
+            ).fetchone()
+            return dict(r) if r else None
+
 
 # ============================================================= HELPERS ===
 
@@ -3355,4 +3744,29 @@ def _decode_profile(row) -> dict[str, Any]:
               "requires_authorization_always", "authorize_outside_hours"):
         if k in d and d[k] is not None:
             d[k] = bool(d[k])
+    return d
+
+
+def _decode_sync_source(row) -> dict[str, Any]:
+    d = dict(row)
+    for k in ("config_json", "mapping_json"):
+        if d.get(k) and isinstance(d[k], str):
+            try:
+                d[k] = json.loads(d[k])
+            except (TypeError, ValueError):
+                d[k] = {}
+    if "enabled" in d and d["enabled"] is not None:
+        d["enabled"] = bool(d["enabled"])
+    return d
+
+
+def _decode_sync_run(row) -> dict[str, Any]:
+    d = dict(row)
+    if d.get("report_json") and isinstance(d["report_json"], str):
+        try:
+            d["report_json"] = json.loads(d["report_json"])
+        except (TypeError, ValueError):
+            pass
+    if "dry_run" in d and d["dry_run"] is not None:
+        d["dry_run"] = bool(d["dry_run"])
     return d

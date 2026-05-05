@@ -1,0 +1,658 @@
+{% extends "admin/_base.html" %}
+{% block title %}{{ 'Modifica' if source else 'Nuova' }} sorgente sync{% endblock %}
+{% block content %}
+<style>
+.cs-form { max-width:1200px; }
+.cs-form .form-row { display:grid; grid-template-columns: 220px 1fr; gap:1rem;
+                     align-items:start; margin-bottom:1rem; }
+.cs-form label { font-weight:600; color:#334155; padding-top:0.4rem; }
+.cs-form input[type=text], .cs-form input[type=number], .cs-form select,
+.cs-form textarea { width:100%; padding:0.5rem; border:1px solid #cbd5e1;
+                    border-radius:6px; font-family:inherit; font-size:0.9rem; }
+.cs-form textarea { min-height:80px; font-family:'SF Mono', monospace; font-size:0.83rem; }
+.cs-form .hint { font-size:0.8rem; color:#64748b; margin-top:0.2rem; }
+.cs-section { background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px;
+              padding:1rem 1.2rem; margin-bottom:1rem; }
+.cs-section h3 { margin:0 0 0.7rem; font-size:1rem; color:#1e293b; }
+.cs-config-block { display:none; }
+.cs-config-block.active { display:block; }
+.cs-mapping-table { width:100%; border-collapse: collapse; font-size:0.88rem; }
+.cs-mapping-table th { background:#e2e8f0; text-align:left; padding:0.4rem 0.6rem; font-weight:600; }
+.cs-mapping-table td { padding:0.3rem 0.4rem; border-bottom:1px solid #e2e8f0; vertical-align: middle;}
+.cs-mapping-table input, .cs-mapping-table select { padding:0.25rem 0.4rem;
+                                                    border:1px solid #cbd5e1; border-radius:4px;
+                                                    font-size:0.85rem; width:100%; }
+.cs-tab-bar { display:flex; gap:0; border-bottom:2px solid #cbd5e1; margin-bottom:0.8rem;}
+.cs-tab { padding:0.55rem 1rem; cursor:pointer; font-weight:600; color:#64748b;
+          border-bottom:3px solid transparent; margin-bottom:-2px; user-select:none; }
+.cs-tab.active { color:#1e293b; border-bottom-color:#3b82f6; background:#fff; }
+.cs-test-result { margin-top:0.6rem; padding:0.6rem 0.9rem; border-radius:6px;
+                  font-size:0.85rem; display:none; }
+.cs-targets-row { display:flex; gap:0.4rem; flex-wrap:wrap; margin-bottom:0.5rem; }
+.cs-target-pill { padding:0.15rem 0.55rem; background:#dbeafe; color:#1e40af;
+                  border-radius:9px; font-size:0.78rem; font-family:monospace; }
+</style>
+
+<section class="dr-section">
+    <h2><i class="fas fa-rotate"></i>
+        {% if source %}{{ source.name }}{% else %}Nuova sorgente sync{% endif %}
+    </h2>
+</section>
+
+<form method="post" class="cs-form" id="syncForm"
+      action="{{ url_for('customer_sync.edit_view', source_id=source.id) if source else url_for('customer_sync.new_view') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="cs-section">
+        <h3><i class="fas fa-tag"></i> Identita'</h3>
+        <div class="form-row">
+            <label for="name">Nome sorgente *</label>
+            <div>
+                <input type="text" id="name" name="name" required
+                       value="{{ source.name if source else '' }}"
+                       placeholder="es. CRM clienti, CSV mensile">
+                <div class="hint">Identificativo libero (univoco per tenant).</div>
+            </div>
+        </div>
+        <div class="form-row">
+            <label for="kind">Tipo provider *</label>
+            <div>
+                <select id="kind" name="kind" required onchange="onKindChange()">
+                    <option value="">— scegli —</option>
+                    {% for k in kinds %}
+                        <option value="{{ k }}" {% if source and source.kind==k %}selected{% endif %}>{{ k }}</option>
+                    {% endfor %}
+                </select>
+                <div class="hint">
+                    <strong>postgres/mssql</strong>: query SQL +
+                    <strong>csv_file</strong>: file su filesystem +
+                    <strong>json_url</strong>: REST + JSONPath
+                </div>
+            </div>
+        </div>
+        <div class="form-row">
+            <label for="enabled">Abilitata</label>
+            <div>
+                <select id="enabled" name="enabled">
+                    <option value="1" {% if source is none or source.enabled %}selected{% endif %}>Si</option>
+                    <option value="0" {% if source and not source.enabled %}selected{% endif %}>No</option>
+                </select>
+            </div>
+        </div>
+        <div class="form-row">
+            <label for="schedule_hours">Schedule (ore)</label>
+            <div>
+                <input type="number" id="schedule_hours" name="schedule_hours" min="1" max="720"
+                       value="{{ source.schedule_hours if source else 24 }}">
+                <div class="hint">Ogni quante ore eseguire il sync (default 24).</div>
+            </div>
+        </div>
+        <div class="form-row">
+            <label for="on_missing">Codcli scomparsi</label>
+            <div>
+                <select id="on_missing" name="on_missing">
+                    {% for opt in on_missing_options %}
+                        <option value="{{ opt }}" {% if source and source.on_missing==opt %}selected{% endif %}>{{ opt }}</option>
+                    {% endfor %}
+                </select>
+                <div class="hint">
+                    <strong>flag</strong>: marca contract_active=0 (default) +
+                    <strong>delete</strong>: rimuove fisicamente +
+                    <strong>keep</strong>: nessuna azione
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="cs-section">
+        <h3><i class="fas fa-plug"></i> Connessione</h3>
+        <div id="cfg-postgres" class="cs-config-block">
+            <div class="form-row">
+                <label>Modalita'</label>
+                <div>
+                    <label style="font-weight:normal;">
+                        <input type="checkbox" id="legacy_check" onchange="toggleLegacy()">
+                        Usa configurazione PG legacy (UI Integrazioni / env vars)
+                    </label>
+                    <div class="hint">Per la sorgente "Postgres solution Domarc" che riusa
+                        la config esistente di solution+stormshield (no duplicazione credenziali).</div>
+                </div>
+            </div>
+            <div id="pg-params">
+                <div class="form-row">
+                    <label>host</label>
+                    <div><input type="text" data-cfg-key="host" placeholder="192.168.x.x"></div>
+                </div>
+                <div class="form-row">
+                    <label>port</label>
+                    <div><input type="text" data-cfg-key="port" placeholder="5432"></div>
+                </div>
+                <div class="form-row">
+                    <label>dbname</label>
+                    <div><input type="text" data-cfg-key="dbname"></div>
+                </div>
+                <div class="form-row">
+                    <label>user</label>
+                    <div><input type="text" data-cfg-key="user"></div>
+                </div>
+                <div class="form-row">
+                    <label>password</label>
+                    <div><input type="text" data-cfg-key="password"></div>
+                </div>
+                <div class="form-row">
+                    <label>sslmode</label>
+                    <div><input type="text" data-cfg-key="sslmode" placeholder="prefer"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="cfg-mssql" class="cs-config-block">
+            <div class="form-row">
+                <label>server</label>
+                <div><input type="text" data-cfg-key="server" placeholder="192.168.x.x\SQLEXPRESS"></div>
+            </div>
+            <div class="form-row">
+                <label>database</label>
+                <div><input type="text" data-cfg-key="database"></div>
+            </div>
+            <div class="form-row">
+                <label>user</label>
+                <div><input type="text" data-cfg-key="user"></div>
+            </div>
+            <div class="form-row">
+                <label>password</label>
+                <div><input type="text" data-cfg-key="password"></div>
+            </div>
+            <div class="form-row">
+                <label>driver</label>
+                <div>
+                    <input type="text" data-cfg-key="driver" placeholder="ODBC Driver 18 for SQL Server">
+                    <div class="hint">Default: ODBC Driver 18 for SQL Server. Richiede msodbcsql18 + unixodbc lato OS.</div>
+                </div>
+            </div>
+            <div class="form-row">
+                <label>encrypt</label>
+                <div><input type="text" data-cfg-key="encrypt" placeholder="yes"></div>
+            </div>
+            <div class="form-row">
+                <label>trust_server_certificate</label>
+                <div><input type="text" data-cfg-key="trust_server_certificate" placeholder="yes"></div>
+            </div>
+        </div>
+
+        <div id="cfg-csv_file" class="cs-config-block">
+            <div class="form-row">
+                <label>path *</label>
+                <div>
+                    <input type="text" data-cfg-key="path" placeholder="/var/lib/domarc/customers.csv">
+                    <div class="hint">Path assoluto. Il file deve essere leggibile dall'utente domarc-relay.</div>
+                </div>
+            </div>
+            <div class="form-row">
+                <label>delimiter</label>
+                <div><input type="text" data-cfg-key="delimiter" placeholder=","></div>
+            </div>
+            <div class="form-row">
+                <label>encoding</label>
+                <div><input type="text" data-cfg-key="encoding" placeholder="utf-8"></div>
+            </div>
+            <div class="form-row">
+                <label>has_header</label>
+                <div>
+                    <select data-cfg-key="has_header">
+                        <option value="true">Si (default)</option>
+                        <option value="false">No (le colonne saranno col0, col1, ...)</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div id="cfg-json_url" class="cs-config-block">
+            <div class="form-row">
+                <label>url *</label>
+                <div><input type="text" data-cfg-key="url" placeholder="https://crm.example.com/api/customers"></div>
+            </div>
+            <div class="form-row">
+                <label>method</label>
+                <div><input type="text" data-cfg-key="method" placeholder="GET"></div>
+            </div>
+            <div class="form-row">
+                <label>headers (JSON)</label>
+                <div>
+                    <textarea data-cfg-key="headers" placeholder='{"Authorization": "Bearer ..."}'
+                              rows="3"></textarea>
+                </div>
+            </div>
+            <div class="form-row">
+                <label>timeout</label>
+                <div><input type="text" data-cfg-key="timeout" placeholder="30"></div>
+            </div>
+            <div class="form-row">
+                <label>verify_ssl</label>
+                <div>
+                    <select data-cfg-key="verify_ssl">
+                        <option value="true">true (default)</option>
+                        <option value="false">false (sconsigliato)</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <input type="hidden" id="config_json" name="config_json"
+               value='{{ source.config_json|tojson if source else "{}" }}'>
+    </div>
+
+    <div class="cs-section">
+        <h3><i class="fas fa-code"></i> Query / Path
+            <span style="font-weight:normal; font-size:0.85rem; color:#64748b;">
+                (richiesto per postgres/mssql/json_url, non per csv_file)
+            </span>
+        </h3>
+        <div class="form-row">
+            <label for="query_or_path">SQL / JSONPath</label>
+            <div>
+                <textarea id="query_or_path" name="query_or_path" rows="6">{{ source.query_or_path or '' if source else '' }}</textarea>
+                <div class="hint">
+                    <strong>postgres/mssql</strong>: SELECT che ritorna 1 riga per cliente.
+                    <strong>json_url</strong>: JSONPath (es. <code>$.data[*]</code>, <code>$.customers</code>, <code>$</code>).
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="cs-section">
+        <h3><i class="fas fa-arrows-left-right"></i> Field mapping</h3>
+        <p style="margin:0 0 0.7rem; font-size:0.88rem; color:#475569;">
+            Mappa le colonne sorgente sui campi canonici della tabella clienti.
+            Campo obbligatorio: <code>codcli</code>.
+        </p>
+
+        <div class="cs-targets-row">
+            <span style="color:#64748b; font-size:0.82rem;">Campi locali disponibili:</span>
+            {% for t in canonical_targets %}
+                <span class="cs-target-pill">{{ t }}</span>
+            {% endfor %}
+        </div>
+
+        <div class="cs-tab-bar">
+            <span class="cs-tab active" id="tab-simple" onclick="setMappingMode('simple')">
+                <i class="fas fa-table"></i> Modalita' semplice
+            </span>
+            <span class="cs-tab" id="tab-advanced" onclick="setMappingMode('advanced')">
+                <i class="fas fa-code"></i> Modalita' avanzata (JSON)
+            </span>
+            <span style="margin-left:auto;">
+                <button type="button" class="dr-btn" style="width:auto; padding:0.3rem 0.7rem;"
+                        onclick="discoverSchema()">
+                    <i class="fas fa-magnifying-glass"></i> Scopri schema dalla sorgente
+                </button>
+            </span>
+        </div>
+
+        <div id="mapping-simple">
+            <table class="cs-mapping-table">
+                <thead>
+                    <tr>
+                        <th style="width:30%;">Colonna sorgente</th>
+                        <th style="width:30%;">Campo locale</th>
+                        <th style="width:25%;">Trasformazione</th>
+                        <th style="width:15%;">Default</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="mapping-rows"></tbody>
+            </table>
+            <button type="button" class="dr-btn" style="width:auto; padding:0.3rem 0.7rem; margin-top:0.4rem;"
+                    onclick="addMappingRow()">
+                <i class="fas fa-plus"></i> Aggiungi riga
+            </button>
+        </div>
+
+        <div id="mapping-advanced" style="display:none;">
+            <textarea id="mapping_json_textarea" rows="14"
+                style="font-family:'SF Mono', monospace; font-size:0.85rem;"></textarea>
+            <div class="hint">
+                Formato: <code>{"src": "target"}</code> oppure
+                <code>{"src": {"target":"col","transform":"split:,","default":"x"}}</code>.
+                Trasformazioni: lowercase, uppercase, strip, bool, int, json_parse,
+                default:&lt;v&gt;, split:&lt;sep&gt;, coalesce:&lt;col1,col2&gt;.
+            </div>
+            <button type="button" class="dr-btn" style="width:auto; padding:0.3rem 0.7rem; margin-top:0.4rem;"
+                    onclick="validateMappingJson()">
+                <i class="fas fa-check"></i> Valida JSON
+            </button>
+            <span id="mapping-json-status" style="margin-left:0.6rem;"></span>
+        </div>
+
+        <input type="hidden" id="mapping_json" name="mapping_json"
+               value='{{ source.mapping_json|tojson if source else "{}" }}'>
+    </div>
+
+    <div style="display:flex; gap:0.6rem; align-items:center; margin-top:1.2rem;">
+        <button type="button" class="dr-btn" style="width:auto;" onclick="testNow()">
+            <i class="fas fa-flask"></i> Test connessione
+        </button>
+        <button type="submit" class="dr-btn dr-btn-primary" style="width:auto;">
+            <i class="fas fa-save"></i> {% if source %}Aggiorna{% else %}Crea{% endif %}
+        </button>
+        {% if source %}
+        <button type="button" class="dr-btn" style="width:auto;" onclick="runDryRun()">
+            <i class="fas fa-vial"></i> Dry-run (preview senza scrivere)
+        </button>
+        <a href="{{ url_for('customer_sync.list_view') }}" class="dr-btn" style="width:auto;">
+            <i class="fas fa-times"></i> Annulla
+        </a>
+        <span style="margin-left:auto;"></span>
+        <form action="{{ url_for('customer_sync.delete_view', source_id=source.id) }}"
+              method="post" style="display:inline;"
+              onsubmit="return confirm('Eliminare la sorgente {{ source.name }}? I clienti gia' sincronizzati restano in tabella.');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="dr-btn" style="width:auto; color:#b91c1c;">
+                <i class="fas fa-trash"></i> Elimina sorgente
+            </button>
+        </form>
+        {% endif %}
+    </div>
+    <div id="cs-test-result" class="cs-test-result"></div>
+</form>
+
+<script>
+const CANONICAL_TARGETS = {{ canonical_targets|tojson }};
+const TRANSFORMS = ['', 'lowercase', 'uppercase', 'strip', 'bool', 'int',
+                    'json_parse', 'split:,', 'split:;', 'default:standard',
+                    'default:Europe/Rome', 'coalesce:'];
+let availableSourceCols = [];
+
+function onKindChange() {
+    const k = document.getElementById('kind').value;
+    document.querySelectorAll('.cs-config-block').forEach(b => b.classList.remove('active'));
+    if (k) {
+        const blk = document.getElementById('cfg-' + k);
+        if (blk) blk.classList.add('active');
+    }
+    // Per csv_file la query non serve
+    document.getElementById('query_or_path').disabled = (k === 'csv_file');
+}
+
+function loadConfigIntoForm() {
+    let cfg = {};
+    try { cfg = JSON.parse(document.getElementById('config_json').value || '{}'); } catch(e){}
+    if (cfg._use_legacy_pgconfig) {
+        document.getElementById('legacy_check').checked = true;
+        toggleLegacy();
+    }
+    document.querySelectorAll('[data-cfg-key]').forEach(el => {
+        const k = el.dataset.cfgKey;
+        if (cfg[k] !== undefined) {
+            if (typeof cfg[k] === 'object') {
+                el.value = JSON.stringify(cfg[k]);
+            } else {
+                el.value = cfg[k];
+            }
+        }
+    });
+}
+
+function rebuildConfigJson() {
+    const k = document.getElementById('kind').value;
+    if (!k) return '{}';
+    if (k === 'postgres' && document.getElementById('legacy_check').checked) {
+        return JSON.stringify({_use_legacy_pgconfig: true});
+    }
+    const block = document.getElementById('cfg-' + k);
+    if (!block) return '{}';
+    const cfg = {};
+    block.querySelectorAll('[data-cfg-key]').forEach(el => {
+        const v = el.value;
+        if (v !== '' && v !== null && v !== undefined) {
+            const key = el.dataset.cfgKey;
+            // headers: parse JSON se possibile
+            if (key === 'headers' && typeof v === 'string') {
+                try { cfg[key] = JSON.parse(v); } catch(e) { cfg[key] = v; }
+            } else if (key === 'has_header' || key === 'verify_ssl') {
+                cfg[key] = (v === 'true' || v === true);
+            } else if (key === 'port' || key === 'timeout') {
+                if (!isNaN(parseFloat(v))) cfg[key] = parseFloat(v);
+                else cfg[key] = v;
+            } else {
+                cfg[key] = v;
+            }
+        }
+    });
+    return JSON.stringify(cfg);
+}
+
+function toggleLegacy() {
+    const isLegacy = document.getElementById('legacy_check').checked;
+    document.getElementById('pg-params').style.display = isLegacy ? 'none' : 'block';
+}
+
+// ====== Mapping editor ======
+
+let mappingMode = 'simple';
+
+function setMappingMode(mode) {
+    if (mode === 'advanced') {
+        // sync simple -> json
+        const j = buildMappingFromTable();
+        document.getElementById('mapping_json_textarea').value = JSON.stringify(j, null, 2);
+        document.getElementById('mapping-simple').style.display = 'none';
+        document.getElementById('mapping-advanced').style.display = 'block';
+        document.getElementById('tab-simple').classList.remove('active');
+        document.getElementById('tab-advanced').classList.add('active');
+    } else {
+        // sync json -> simple
+        try {
+            const j = JSON.parse(document.getElementById('mapping_json_textarea').value || '{}');
+            populateMappingTable(j);
+        } catch(e) {
+            alert('JSON non valido: ' + e);
+            return;
+        }
+        document.getElementById('mapping-simple').style.display = 'block';
+        document.getElementById('mapping-advanced').style.display = 'none';
+        document.getElementById('tab-simple').classList.add('active');
+        document.getElementById('tab-advanced').classList.remove('active');
+    }
+    mappingMode = mode;
+}
+
+function buildMappingFromTable() {
+    const out = {};
+    document.querySelectorAll('#mapping-rows tr').forEach(tr => {
+        const src = tr.querySelector('[data-mp-src]').value.trim();
+        const target = tr.querySelector('[data-mp-target]').value.trim();
+        const transform = tr.querySelector('[data-mp-transform]').value.trim();
+        const def = tr.querySelector('[data-mp-default]').value.trim();
+        if (!src || !target) return;
+        if (transform || def) {
+            const spec = {target};
+            if (transform) spec.transform = transform;
+            if (def) spec.default = def;
+            out[src] = spec;
+        } else {
+            out[src] = target;
+        }
+    });
+    return out;
+}
+
+function populateMappingTable(mapping) {
+    const tbody = document.getElementById('mapping-rows');
+    tbody.innerHTML = '';
+    if (!mapping || mapping._legacy) {
+        if (mapping && mapping._legacy) {
+            tbody.innerHTML = '<tr><td colspan="5" style="padding:1rem; color:#64748b;">Mapping <strong>legacy</strong> attivo: il provider postgres ritorna gia\' record canonici (no field mapping necessario).</td></tr>';
+        }
+        return;
+    }
+    Object.entries(mapping).forEach(([src, spec]) => {
+        if (src.startsWith('_')) return;
+        let target = '', transform = '', def = '';
+        if (typeof spec === 'string') {
+            target = spec;
+        } else if (typeof spec === 'object') {
+            target = spec.target || '';
+            transform = spec.transform || '';
+            def = spec.default || '';
+        }
+        addMappingRow(src, target, transform, def);
+    });
+}
+
+function addMappingRow(src, target, transform, def) {
+    const tbody = document.getElementById('mapping-rows');
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+        <td><input data-mp-src list="dl-source-cols" placeholder="src_col" value="${escapeHtml(src||'')}"></td>
+        <td>
+            <select data-mp-target>
+                <option value="">— scegli —</option>
+                ${CANONICAL_TARGETS.map(t => `<option value="${t}" ${t===target?'selected':''}>${t}</option>`).join('')}
+            </select>
+        </td>
+        <td>
+            <select data-mp-transform>
+                ${TRANSFORMS.map(t => `<option value="${t}" ${t===transform?'selected':''}>${t || '— nessuna —'}</option>`).join('')}
+            </select>
+        </td>
+        <td><input data-mp-default placeholder="(opz.)" value="${escapeHtml(def||'')}"></td>
+        <td><button type="button" class="dr-btn" style="width:auto; padding:0.2rem 0.5rem;" onclick="this.closest('tr').remove();"><i class="fas fa-trash"></i></button></td>
+    `;
+    tbody.appendChild(tr);
+}
+
+function escapeHtml(s) {
+    return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function validateMappingJson() {
+    const t = document.getElementById('mapping_json_textarea').value;
+    const status = document.getElementById('mapping-json-status');
+    try {
+        JSON.parse(t || '{}');
+        status.innerHTML = '<span style="color:#15803d;"><i class="fas fa-check"></i> JSON valido</span>';
+    } catch(e) {
+        status.innerHTML = '<span style="color:#b91c1c;"><i class="fas fa-xmark"></i> ' + e + '</span>';
+    }
+}
+
+// ====== Hooks per submit / azioni ======
+
+function commitMapping() {
+    let final;
+    if (mappingMode === 'simple') {
+        final = buildMappingFromTable();
+    } else {
+        try { final = JSON.parse(document.getElementById('mapping_json_textarea').value || '{}'); }
+        catch(e) {
+            alert('Mapping JSON non valido: ' + e);
+            return false;
+        }
+    }
+    document.getElementById('mapping_json').value = JSON.stringify(final);
+    document.getElementById('config_json').value = rebuildConfigJson();
+    return true;
+}
+
+document.getElementById('syncForm').addEventListener('submit', function(ev) {
+    if (!commitMapping()) { ev.preventDefault(); return; }
+});
+
+function testNow() {
+    {% if source %}
+    if (!commitMapping()) return;
+    const fd = new FormData();
+    fd.append('csrf_token', '{{ csrf_token() }}');
+    fetch('{{ url_for("customer_sync.test_view", source_id=source.id) if source else "" }}',
+          { method: 'POST', body: fd })
+        .then(r => r.json()).then(showTestResult)
+        .catch(err => showTestResult({ok:false, message:String(err)}));
+    {% else %}
+    alert('Salva la sorgente prima di testarla.');
+    {% endif %}
+}
+
+function showTestResult(data) {
+    const div = document.getElementById('cs-test-result');
+    div.style.display = 'block';
+    if (data.ok) {
+        div.style.background = '#dcfce7'; div.style.borderLeft = '3px solid #15803d';
+        div.innerHTML = '<i class="fas fa-check"></i> ' + data.message
+            + (data.sample_count !== undefined && data.sample_count !== null ? ' (~' + data.sample_count + ' record)' : '')
+            + (data.schema && data.schema.length ? '<br><small>colonne: ' + data.schema.join(', ') + '</small>' : '');
+        if (data.schema) {
+            availableSourceCols = data.schema;
+            updateSourceColsDatalist();
+        }
+    } else {
+        div.style.background = '#fee2e2'; div.style.borderLeft = '3px solid #b91c1c';
+        div.innerHTML = '<i class="fas fa-xmark"></i> ' + data.message
+            + (data.error ? '<br><small>' + data.error + '</small>' : '');
+    }
+}
+
+function discoverSchema() {
+    {% if source %}
+    if (!commitMapping()) return;
+    const fd = new FormData();
+    fd.append('csrf_token', '{{ csrf_token() }}');
+    fetch('{{ url_for("customer_sync.test_view", source_id=source.id) if source else "" }}',
+          { method: 'POST', body: fd })
+        .then(r => r.json()).then(data => {
+            showTestResult(data);
+            if (data.schema && data.schema.length) {
+                // Pre-popola righe vuote per le colonne scoperte
+                const existing = new Set();
+                document.querySelectorAll('[data-mp-src]').forEach(el => existing.add(el.value));
+                data.schema.forEach(col => {
+                    if (!existing.has(col)) addMappingRow(col, '', '', '');
+                });
+            }
+        });
+    {% else %}
+    alert('Salva la sorgente prima di scoprirne lo schema.');
+    {% endif %}
+}
+
+function updateSourceColsDatalist() {
+    let dl = document.getElementById('dl-source-cols');
+    if (!dl) {
+        dl = document.createElement('datalist');
+        dl.id = 'dl-source-cols';
+        document.body.appendChild(dl);
+    }
+    dl.innerHTML = availableSourceCols.map(c => `<option value="${escapeHtml(c)}">`).join('');
+}
+
+function runDryRun() {
+    {% if source %}
+    if (!confirm('Eseguire un dry-run? Verranno fetchati i record ma NON scritti in tabella.')) return;
+    if (!commitMapping()) return;
+    const f = document.createElement('form');
+    f.method = 'POST';
+    f.action = '{{ url_for("customer_sync.run_view", source_id=source.id) if source else "" }}';
+    f.innerHTML = `
+        <input name="csrf_token" value="{{ csrf_token() }}">
+        <input name="dry_run" value="1">
+    `;
+    document.body.appendChild(f);
+    f.submit();
+    {% endif %}
+}
+
+// ====== Init ======
+window.addEventListener('DOMContentLoaded', () => {
+    onKindChange();
+    loadConfigIntoForm();
+    let initial = {};
+    try { initial = JSON.parse(document.getElementById('mapping_json').value || '{}'); }
+    catch(e){}
+    populateMappingTable(initial);
+    if (initial._legacy) {
+        // Mostra textarea direttamente
+        setMappingMode('advanced');
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,70 @@
+{% extends "admin/_base.html" %}
+{% block title %}Storico run — {{ source.name }}{% endblock %}
+{% block content %}
+<style>
+.cs-status { padding:0.15rem 0.55rem; border-radius:9px; font-size:0.78rem; font-weight:600; }
+.cs-status.ok { background:#dcfce7; color:#15803d; }
+.cs-status.error { background:#fee2e2; color:#b91c1c; }
+.cs-status.partial { background:#fef3c7; color:#a16207; }
+.cs-status.running { background:#dbeafe; color:#1e40af; }
+.cs-runs-table { width:100%; border-collapse: collapse; }
+.cs-runs-table th { background:#f1f5f9; text-align:left; padding:0.5rem 0.7rem; font-weight:600; font-size:0.85rem; }
+.cs-runs-table td { padding:0.45rem 0.7rem; border-bottom:1px solid #e2e8f0; font-size:0.88rem; }
+</style>
+
+<section class="dr-section">
+    <h2><i class="fas fa-list"></i> Storico run — {{ source.name }}</h2>
+    <p class="dr-hint">
+        <a href="{{ url_for('customer_sync.edit_view', source_id=source.id) }}">← Torna alla configurazione sorgente</a>
+        &nbsp; | &nbsp;
+        <a href="{{ url_for('customer_sync.list_view') }}">Tutte le sorgenti</a>
+    </p>
+</section>
+
+{% if not runs %}
+<div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px;
+            padding:2rem; text-align:center; color:#64748b;">
+    Nessun run eseguito.
+</div>
+{% else %}
+<table class="cs-runs-table">
+    <thead>
+        <tr>
+            <th>Run</th>
+            <th>Stato</th>
+            <th>Inizio</th>
+            <th>Durata</th>
+            <th>Trigger</th>
+            <th>Fetch</th>
+            <th>Insert</th>
+            <th>Update</th>
+            <th>Unchanged</th>
+            <th>Mancanti</th>
+            <th>Errori</th>
+            <th>Errore</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for r in runs %}
+        <tr>
+            <td>
+                <a href="{{ url_for('customer_sync.run_detail', run_id=r.id) }}">#{{ r.id }}</a>
+                {% if r.dry_run %}<small style="color:#7c3aed;">(dry)</small>{% endif %}
+            </td>
+            <td><span class="cs-status {{ r.status or 'running' }}">{{ r.status or 'running' }}</span></td>
+            <td>{{ r.started_at }}</td>
+            <td>{% if r.duration_ms %}{{ '%.1f'|format(r.duration_ms / 1000) }}s{% else %}—{% endif %}</td>
+            <td><small>{{ r.triggered_by or '—' }}</small></td>
+            <td>{{ r.n_fetched or 0 }}</td>
+            <td>{{ r.n_inserted or 0 }}</td>
+            <td>{{ r.n_updated or 0 }}</td>
+            <td>{{ r.n_unchanged or 0 }}</td>
+            <td>{{ r.n_flagged_missing or 0 }}</td>
+            <td>{% if r.n_errored %}<span style="color:#b91c1c;">{{ r.n_errored }}</span>{% else %}0{% endif %}</td>
+            <td><small>{{ (r.error_message or '')[:80] }}</small></td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+{% endblock %}

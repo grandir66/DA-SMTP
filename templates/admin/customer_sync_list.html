@@ -1,0 +1,161 @@
+{% extends "admin/_base.html" %}
+{% block title %}Sync esterni — Clienti{% endblock %}
+{% block content %}
+<style>
+.cs-card { background:#fff; border:1px solid #e2e8f0; border-radius:8px;
+           padding:1rem 1.25rem; margin-bottom:0.7rem; box-shadow:0 1px 2px rgba(0,0,0,0.03); }
+.cs-row { display:flex; gap:1rem; align-items:center; flex-wrap:wrap; }
+.cs-status { padding:0.15rem 0.55rem; border-radius:9px; font-size:0.78rem; font-weight:600; }
+.cs-status.ok { background:#dcfce7; color:#15803d; }
+.cs-status.error { background:#fee2e2; color:#b91c1c; }
+.cs-status.partial { background:#fef3c7; color:#a16207; }
+.cs-status.running { background:#dbeafe; color:#1e40af; }
+.cs-status.never { background:#e2e8f0; color:#475569; }
+.cs-kind-badge { padding:0.15rem 0.55rem; border-radius:9px; font-size:0.78rem;
+                 background:#eff6ff; color:#1e40af; font-weight:600; }
+.cs-disabled { opacity:0.55; }
+.cs-meta { color:#64748b; font-size:0.85rem; }
+.cs-actions { display:flex; gap:0.4rem; }
+.cs-empty { text-align:center; padding:2.5rem 1rem; color:#64748b; }
+</style>
+
+<section class="dr-section">
+    <h2><i class="fas fa-rotate"></i> Sync esterni — Clienti</h2>
+    <p class="dr-hint" style="margin-top:0.3rem;">
+        La tabella clienti e' <strong>autoritativa</strong> e locale.
+        Le sorgenti esterne (postgres, mssql, csv, json url) la alimentano in batch
+        secondo lo schedule configurato (default 24h).
+        Se la sorgente fallisce, l'ultimo snapshot resta valido.
+    </p>
+</section>
+
+<div style="display:flex; gap:0.6rem; align-items:center; margin:0.9rem 0 1.2rem;">
+    <a href="{{ url_for('customer_sync.new_view') }}" class="dr-btn dr-btn-primary" style="width:auto;">
+        <i class="fas fa-plus"></i> Nuova sorgente
+    </a>
+    <a href="{{ url_for('customers.list_view') }}" class="dr-btn" style="width:auto;">
+        <i class="fas fa-users"></i> Vai ai clienti
+    </a>
+    <span style="margin-left:auto;" class="cs-meta">
+        {{ sources|length }} {{ 'sorgente' if sources|length==1 else 'sorgenti' }} configurat{{ 'a' if sources|length==1 else 'e' }}
+    </span>
+</div>
+
+{% if not sources %}
+    <div class="cs-card cs-empty">
+        <p><i class="fas fa-inbox" style="font-size:2rem; color:#cbd5e1;"></i></p>
+        <p>Nessuna sorgente configurata.</p>
+        <p><a href="{{ url_for('customer_sync.new_view') }}">Crea la prima sorgente</a></p>
+    </div>
+{% endif %}
+
+{% for s in sources %}
+<div class="cs-card {% if not s.enabled %}cs-disabled{% endif %}">
+    <div class="cs-row">
+        <strong style="font-size:1.05rem;">
+            <a href="{{ url_for('customer_sync.edit_view', source_id=s.id) }}" style="color:inherit;">
+                {{ s.name }}
+            </a>
+        </strong>
+        <span class="cs-kind-badge">{{ s.kind }}</span>
+        {% if s.enabled %}
+            <span class="cs-status ok">abilitata</span>
+        {% else %}
+            <span class="cs-status never">disabilitata</span>
+        {% endif %}
+
+        {% set lr = last_runs.get(s.id) %}
+        {% if lr %}
+            {% set st = lr.status or 'never' %}
+            <span class="cs-status {{ st }}" title="{{ lr.started_at }}">
+                ultimo: {{ st }}
+            </span>
+            {% if lr.n_errored %}<span class="cs-status error">{{ lr.n_errored }} errori</span>{% endif %}
+        {% else %}
+            <span class="cs-status never">mai eseguita</span>
+        {% endif %}
+
+        <span style="margin-left:auto;" class="cs-actions">
+            <form action="{{ url_for('customer_sync.test_view', source_id=s.id) }}"
+                  method="post" style="display:inline;"
+                  onsubmit="testSource(event, {{ s.id }}); return false;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="dr-btn" style="width:auto; padding:0.35rem 0.7rem;"
+                        title="Test connessione">
+                    <i class="fas fa-flask"></i> Test
+                </button>
+            </form>
+            <form action="{{ url_for('customer_sync.run_view', source_id=s.id) }}"
+                  method="post" style="display:inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="dry_run" value="0">
+                <input type="hidden" name="background" value="1">
+                <button type="submit" class="dr-btn" style="width:auto; padding:0.35rem 0.7rem;"
+                        title="Esegui sync ora (background)">
+                    <i class="fas fa-play"></i> Run
+                </button>
+            </form>
+            <a href="{{ url_for('customer_sync.runs_view', source_id=s.id) }}"
+               class="dr-btn" style="width:auto; padding:0.35rem 0.7rem;"
+               title="Storico run">
+                <i class="fas fa-list"></i> Log
+            </a>
+            <form action="{{ url_for('customer_sync.toggle_view', source_id=s.id) }}"
+                  method="post" style="display:inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="dr-btn" style="width:auto; padding:0.35rem 0.7rem;">
+                    {% if s.enabled %}<i class="fas fa-toggle-on"></i> Disabilita
+                    {% else %}<i class="fas fa-toggle-off"></i> Abilita{% endif %}
+                </button>
+            </form>
+        </span>
+    </div>
+    <div class="cs-row cs-meta" style="margin-top:0.45rem;">
+        <span><i class="fas fa-database"></i> {{ counts.get(s.id, 0) }} clienti da questa sorgente</span>
+        <span><i class="fas fa-clock"></i> ogni {{ s.schedule_hours }}h</span>
+        <span><i class="fas fa-shield"></i> on_missing: <strong>{{ s.on_missing }}</strong></span>
+        {% if s.next_run_at %}
+            <span><i class="fas fa-forward"></i> prossima: {{ s.next_run_at }}</span>
+        {% endif %}
+        {% if s.last_run_at %}
+            <span><i class="fas fa-history"></i> ultima: {{ s.last_run_at }}</span>
+        {% endif %}
+    </div>
+    <div id="test-result-{{ s.id }}" style="margin-top:0.5rem; display:none;
+         padding:0.6rem 0.9rem; border-radius:6px; font-size:0.85rem;"></div>
+</div>
+{% endfor %}
+
+<script>
+function testSource(ev, sourceId) {
+    ev.preventDefault();
+    const form = ev.target;
+    const resDiv = document.getElementById('test-result-' + sourceId);
+    resDiv.style.display = 'block';
+    resDiv.style.background = '#f1f5f9';
+    resDiv.style.borderLeft = '3px solid #94a3b8';
+    resDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Test in corso...';
+    const fd = new FormData(form);
+    fetch(form.action, { method: 'POST', body: fd })
+        .then(r => r.json())
+        .then(data => {
+            if (data.ok) {
+                resDiv.style.background = '#dcfce7';
+                resDiv.style.borderLeft = '3px solid #15803d';
+                resDiv.innerHTML = '<i class="fas fa-check"></i> ' + data.message
+                    + (data.sample_count !== undefined && data.sample_count !== null ? ' (~' + data.sample_count + ' record)' : '')
+                    + (data.schema && data.schema.length ? '<br><small>colonne: ' + data.schema.join(', ') + '</small>' : '');
+            } else {
+                resDiv.style.background = '#fee2e2';
+                resDiv.style.borderLeft = '3px solid #b91c1c';
+                resDiv.innerHTML = '<i class="fas fa-xmark"></i> ' + data.message
+                    + (data.error ? '<br><small>' + data.error + '</small>' : '');
+            }
+        })
+        .catch(err => {
+            resDiv.style.background = '#fee2e2';
+            resDiv.innerHTML = '<i class="fas fa-xmark"></i> ' + err;
+        });
+}
+</script>
+{% endblock %}

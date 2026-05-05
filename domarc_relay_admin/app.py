@@ -118,6 +118,7 @@ def create_app(config: AppConfig | None = None, *, init_db: bool = True) -> Flas
     from .routes.recipients import recipient_groups_bp
     from .routes.codes_h24 import codes_h24_bp
     from .routes.integrations import integrations_bp
+    from .routes.customer_sync import customer_sync_bp
     from .tenants import tenants_bp, register_tenant_middleware
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -148,6 +149,7 @@ def create_app(config: AppConfig | None = None, *, init_db: bool = True) -> Flas
     app.register_blueprint(recipient_groups_bp)
     app.register_blueprint(codes_h24_bp)
     app.register_blueprint(integrations_bp)
+    app.register_blueprint(customer_sync_bp)
     app.register_blueprint(tenants_bp)
 
     # Manual auto-generato: rigenera all'avvio (best-effort, ignora errori).
@@ -168,6 +170,20 @@ def create_app(config: AppConfig | None = None, *, init_db: bool = True) -> Flas
             "load_secrets_into_env fallito (continuo senza): %s", exc,
         )
     register_tenant_middleware(app)
+
+    # Customer sync scheduler (M028): thread daemon che esegue le sorgenti
+    # configurate in customer_sync_sources secondo schedule_hours. Idempotente.
+    # Sostituisce il vecchio start_sync_thread() del backend `postgres`
+    # (la sorgente legacy "Postgres solution Domarc" ora vive come row in
+    # customer_sync_sources con sentinel _use_legacy_pgconfig=true).
+    if init_db:
+        try:
+            from .customer_sync.scheduler import start_sync_scheduler
+            start_sync_scheduler(storage, check_interval_sec=60)
+        except Exception as exc:  # noqa: BLE001
+            logging.getLogger(__name__).warning(
+                "customer_sync scheduler non avviato: %s", exc,
+            )
 
     # First-time admin user: se non esiste alcun utente, crea 'admin' con password = DOMARC_RELAY_BOOTSTRAP_PASSWORD
     # (env var) oppure 'admin123' come fallback con WARNING ben visibile.
