@@ -53,8 +53,11 @@ CATEGORIES = [
         "icon": "fa-building",
         "color": "#15803d",
         "description": "Regole che dipendono dal cliente specifico (codcli, "
-                       "gruppo cliente) o dal contratto. Correlate ai domini "
-                       "del cliente e al suo profilo orario.",
+                       "gruppo cliente) o dal contratto. Per filtrare per "
+                       "tipologia di contratto (STD/EXT/H24) usa direttamente "
+                       "il set di regole; per OVERRIDE custom (es. cliente STD "
+                       "trattato come H24 per accordo informale) usa il set "
+                       "'globali' + un gruppo cliente dedicato.",
     },
     {
         "id": "destinatario",

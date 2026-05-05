@@ -153,9 +153,13 @@
                     profilo orario. Set custom: solo per condizioni specifiche.
                 </span></span></label>
                 <div>
-                    <select name="rule_set_id" required style="font-weight:600;">
+                    <select name="rule_set_id" id="wz-rule-set-select" required style="font-weight:600;"
+                            onchange="updateContractHint()">
                         {% for rs in rule_sets %}
                             <option value="{{ rs.id }}"
+                                data-profile="{{ rs.profile_code or '' }}"
+                                data-always="{{ '1' if rs.is_always_active else '0' }}"
+                                data-name="{{ rs.name }}"
                                 {% if record.rule_set_id == rs.id %}selected
                                 {% elif (not record.rule_set_id) and prefill_set_id == rs.id %}selected
                                 {% elif (not record.rule_set_id) and (not prefill_set_id) and rs.code=='globali' %}selected
@@ -167,8 +171,44 @@
                     <div class="help">
                         <a href="{{ url_for('rule_sets.list_view') }}" target="_blank">Gestisci i set</a>
                     </div>
+                    <!-- M029 explainer: mostra il filtro contratto implicato dal set -->
+                    <div id="contract-hint" style="margin-top:0.5rem; padding:0.55rem 0.8rem;
+                                                    border-radius:6px; font-size:0.85rem;
+                                                    background:#eff6ff; border-left:3px solid #3b82f6;
+                                                    color:#1e3a8a;">
+                        <i class="fas fa-circle-info"></i>
+                        <span id="contract-hint-text">
+                            Il set selezionato determina <strong>per quale tipo di contratto cliente</strong>
+                            la regola viene valutata.
+                        </span>
+                    </div>
                 </div>
             </div>
+            <script>
+            function updateContractHint() {
+                const sel = document.getElementById('wz-rule-set-select');
+                const opt = sel.options[sel.selectedIndex];
+                if (!opt) return;
+                const profile = opt.dataset.profile || '';
+                const always = opt.dataset.always === '1';
+                const name = opt.dataset.name || '';
+                const hint = document.getElementById('contract-hint-text');
+                if (always) {
+                    hint.innerHTML = '🌐 Set <strong>"' + name + '"</strong>: la regola si applica a <strong>tutti i clienti</strong> ' +
+                                     'indipendentemente dal contratto. Per filtrare un sottoinsieme, usa ' +
+                                     '<strong>Gruppi clienti</strong> sotto.';
+                } else if (profile) {
+                    hint.innerHTML = '🎯 Set <strong>"' + name + '"</strong>: la regola scatta SOLO per clienti con ' +
+                                     '<code>tipologia_servizio = ' + profile + '</code> (filtro implicito dal set). ' +
+                                     'Per override personalizzati su clienti specifici (es. cliente STD trattato come H24) ' +
+                                     'usa invece <strong>"globali"</strong> + un <strong>Gruppo cliente custom</strong>.';
+                } else {
+                    hint.innerHTML = '⚙️ Set custom <strong>"' + name + '"</strong>: condizioni di attivazione ' +
+                                     'definite manualmente dall\'operatore.';
+                }
+            }
+            window.addEventListener('DOMContentLoaded', updateContractHint);
+            </script>
             {% endif %}
             <div class="rf-row">
                 <label>Nome *<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
@@ -358,6 +398,23 @@
                             Tieni Ctrl/Cmd per selezione multipla.
                         </span></span></label>
                         <div>
+                            <!-- Banner: gruppi come override del filtro contratto -->
+                            <div style="margin-bottom:0.5rem; padding:0.55rem 0.8rem;
+                                        background:#fefce8; border-left:3px solid #ca8a04;
+                                        border-radius:0 4px 4px 0; font-size:0.82rem; color:#713f12;">
+                                <i class="fas fa-lightbulb"></i>
+                                <strong>Gruppi cliente vs filtro contratto (rule_set):</strong>
+                                <ul style="margin:0.3rem 0 0; padding-left:1.2rem;">
+                                  <li><strong>Per profilo contratto da gestionale</strong> (STD/EXT/H24/NO):
+                                      usa il <strong>set di regole</strong> sopra. Filtro automatico per
+                                      <code>tipologia_servizio</code>.</li>
+                                  <li><strong>Per gruppi custom</strong> (override del gestionale, es. cliente
+                                      STD trattato come H24 per accordo informale): metti la regola in
+                                      <strong>"globali"</strong> e seleziona qui i gruppi target.</li>
+                                  <li><strong>Combinazione</strong>: regola in set "h24" + gruppo "vip_top"
+                                      = clienti con contratto H24 E membri del gruppo "vip_top" (AND).</li>
+                                </ul>
+                            </div>
                             {% set selected_groups = (record.match_customer_groups or '').split(',') | map('trim') | list %}
                             <select name="match_customer_groups" multiple
                                     style="width:100%; min-height:120px; font-family:ui-monospace, monospace; font-size:0.85rem;">
