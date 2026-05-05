@@ -49,9 +49,10 @@ In sintesi:
 1. La mail arriva dal mittente esterno al **Listener SMTP** (aiosmtpd, porta 25 o 587).
 2. **Privacy bypass check**: se mittente o destinatario sono nella *privacy-bypass list* (vedi §12), la mail viene scartata senza neanche essere registrata nel DB. È pensato per indirizzi GDPR-sensitive (es. medici, legali) per cui è vietato persistere il body.
 3. Il **parser** estrae header e body, **decodifica il subject RFC 2047** una sola volta in entrata (così non c'è doppio encoding nei subject delle risposte automatiche), normalizza mittente/destinatari.
-4. Lookup customer: il sistema risolve `from_address` o `to_address` su `customer_aliases` → ricava `codcli` + `contract_active` + `availability_type` (profilo orario STD/EXT/H24/NO).
-5. Il **Rule Engine** scorre le regole in ordine di priorità. Trova la **prima** che fa match tra criteri (regex, dominio, gruppi cliente, gruppi destinatario, orari di servizio, contratto attivo, ecc.).
-6. La regola dice **cosa fare** (`action`):
+4. **Resolve customer** dalla tabella locale autoritativa (post Migration 028, alimentata da feed esterni schedulati 24h via `customer_sync`): da `from_address` / `to_alias` / domain → `codcli` + `contract_active` + `tipologia_servizio` (STD/EXT/H24/NO) + `in_service` (calcolato dal profilo + ora corrente).
+5. **Determina rule_sets attivi** (post Migration 029): il pool è sempre formato dal set `globali` (always active) + il set associato al profilo del cliente. Esempio: cliente STD → `{globali, standard}`, cliente H24 → `{globali, h24}`, cliente sconosciuto → `{globali}` solo.
+6. Il **Rule Engine** scorre le regole appartenenti ai set attivi, in ordine di priorità. Trova la **prima** che fa match tra criteri (regex, dominio, gruppi cliente, gruppi destinatario, `match_in_service`, `match_has_exception_today`, contratto attivo, ecc.).
+7. La regola dice **cosa fare** (`action`):
     - `forward` — inoltra al destinatario reale o a una lista/gruppo
     - `redirect` — riscrive il destinatario
     - `auto_reply` — risponde con template Jinja2 (con o senza codice di autorizzazione)
@@ -60,9 +61,25 @@ In sintesi:
     - `quarantine` — sposta in quarantena per revisione manuale
     - `ai_classify` — chiede all'IA di decidere
     - `ignore` — scarta
-7. Se l'azione è `ai_classify` (o se l'IA è in shadow mode su quella regola), l'IA legge la mail (con i dati personali oscurati dal **PII redactor**) e propone l'azione finale. Il risultato è loggato in *Decisioni IA*.
+8. Se l'azione è `ai_classify` (o se l'IA è in shadow mode su quella regola), l'IA legge la mail (con i dati personali oscurati dal **PII redactor**) e propone l'azione finale. Il risultato è loggato in *Decisioni IA*.
 
 Tutto quello che succede viene tracciato e visualizzabile in **Eventi**, **Activity Live**, **Decisioni IA** e **Codici** (auth codes / h24 codes).
+
+### Logica decisionale: dove metto una nuova regola?
+
+![Logica decisionale rule_sets](img/decision_logic.svg)
+
+La regola d'oro per la collocazione di una regola:
+
+- **`rule_set_id`** = TIPO DI CONTRATTO del cliente (STD/EXT/H24/NO)
+- **`match_in_service`** = FINESTRA TEMPORALE corrente (rispetta automaticamente la gerarchia STD ⊂ EXT ⊂ H24, perché calcolato dal profilo del singolo cliente)
+
+Tradotto in pratica:
+
+- Se la regola è valida per **qualsiasi cliente** (es. CloudTIK alert, AI classify, sistemi automatici, catch-all): metti in **`globali`**.
+- Se la regola dipende **dall'orario** ma non dal contratto specifico (es. auto-reply "preso in carico" durante orario lavorativo): metti in **`globali`** + `match_in_service=true` (oppure `false` per regole "fuori orario"). La gerarchia STD ⊂ EXT ⊂ H24 è gestita automaticamente perché `in_service` legge il profilo del cliente.
+- Se la regola è specifica di un livello di contratto (es. tariffa straordinario, escalation immediata, template dedicato): metti nel set corrispondente (`standard` / `esteso` / `h24` / `nessuno`).
+- **In dubbio? Metti in `globali`**. Una regola in globali si applica a tutti; una regola in un set specifico è invisibile per i clienti degli altri profili.
 
 ---
 

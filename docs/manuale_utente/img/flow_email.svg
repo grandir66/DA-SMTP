@@ -1,8 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 620" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="13">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1080" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="13">
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path d="M 0 0 L 10 5 L 0 10 z" fill="#475569"/>
+    </marker>
+    <marker id="arrow-violet" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#a855f7"/>
     </marker>
     <linearGradient id="gMail" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#dbeafe"/>
@@ -28,6 +31,18 @@
       <stop offset="0%" stop-color="#fee2e2"/>
       <stop offset="100%" stop-color="#fecaca"/>
     </linearGradient>
+    <linearGradient id="gCustomer" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#cffafe"/>
+      <stop offset="100%" stop-color="#a5f3fc"/>
+    </linearGradient>
+    <linearGradient id="gSets" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fef9c3"/>
+      <stop offset="100%" stop-color="#fde047"/>
+    </linearGradient>
+    <linearGradient id="gSync" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f5f3ff"/>
+      <stop offset="100%" stop-color="#ede9fe"/>
+    </linearGradient>
     <filter id="shadow" x="-5%" y="-5%" width="110%" height="115%">
       <feGaussianBlur in="SourceAlpha" stdDeviation="2"/>
       <feOffset dx="0" dy="2" result="off"/>
@@ -37,122 +52,195 @@
   </defs>
 
   <!-- Title -->
-  <text x="460" y="28" text-anchor="middle" font-size="16" font-weight="600" fill="#0f172a">Flusso di una mail in Domarc SMTP Relay</text>
+  <text x="540" y="28" text-anchor="middle" font-size="17" font-weight="700" fill="#0f172a">Flusso di una mail in Domarc SMTP Relay</text>
+  <text x="540" y="48" text-anchor="middle" font-size="12" font-style="italic" fill="#64748b">post Migration 028 (sync clienti agnostico) + 029 (rule sets per profilo orario)</text>
+
+  <!-- ===== Sezione laterale: alimentazione tabella clienti (M028) ===== -->
+  <g filter="url(#shadow)">
+    <rect x="820" y="80" width="240" height="180" rx="10" fill="url(#gSync)" stroke="#7c3aed" stroke-width="1.5" stroke-dasharray="4 3"/>
+    <text x="940" y="102" text-anchor="middle" font-weight="700" fill="#5b21b6" font-size="13">Alimentazione clienti (M028)</text>
+    <text x="940" y="121" text-anchor="middle" font-size="11" fill="#6b21a8">SyncEngine schedulato 24h</text>
+
+    <rect x="838" y="135" width="100" height="32" rx="5" fill="#fff" stroke="#a78bfa"/>
+    <text x="888" y="155" text-anchor="middle" font-size="11" fill="#5b21b6">Postgres legacy</text>
+
+    <rect x="942" y="135" width="100" height="32" rx="5" fill="#fff" stroke="#a78bfa"/>
+    <text x="992" y="155" text-anchor="middle" font-size="11" fill="#5b21b6">CSV / JSON URL</text>
+
+    <rect x="838" y="174" width="100" height="32" rx="5" fill="#fff" stroke="#a78bfa"/>
+    <text x="888" y="194" text-anchor="middle" font-size="11" fill="#5b21b6">MSSQL</text>
+
+    <rect x="942" y="174" width="100" height="32" rx="5" fill="#fff" stroke="#a78bfa"/>
+    <text x="992" y="194" text-anchor="middle" font-size="11" fill="#5b21b6">… provider</text>
+
+    <text x="940" y="227" text-anchor="middle" font-size="11" font-weight="600" fill="#5b21b6">↓ field-mapping + on_missing</text>
+    <text x="940" y="247" text-anchor="middle" font-size="11" fill="#7c3aed" font-style="italic">tabella `customers` autoritativa</text>
+  </g>
 
   <!-- 1. Mittente esterno -->
   <g filter="url(#shadow)">
-    <rect x="360" y="55" width="200" height="50" rx="10" fill="url(#gMail)" stroke="#3b82f6" stroke-width="1.5"/>
-    <text x="460" y="78" text-anchor="middle" font-weight="600" fill="#1e3a8a">Mittente esterno</text>
-    <text x="460" y="94" text-anchor="middle" font-size="11" fill="#475569">invio SMTP</text>
+    <rect x="350" y="75" width="200" height="50" rx="10" fill="url(#gMail)" stroke="#3b82f6" stroke-width="1.5"/>
+    <text x="450" y="98" text-anchor="middle" font-weight="600" fill="#1e3a8a">Mittente esterno</text>
+    <text x="450" y="114" text-anchor="middle" font-size="11" fill="#475569">invio SMTP</text>
   </g>
 
-  <!-- arrow 1->2 -->
-  <line x1="460" y1="105" x2="460" y2="138" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="450" y1="125" x2="450" y2="158" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)"/>
 
   <!-- 2. Listener -->
   <g filter="url(#shadow)">
-    <rect x="320" y="140" width="280" height="55" rx="10" fill="url(#gListener)" stroke="#f59e0b" stroke-width="1.5"/>
-    <text x="460" y="163" text-anchor="middle" font-weight="600" fill="#92400e">Listener SMTP (porta 25)</text>
-    <text x="460" y="180" text-anchor="middle" font-size="11" fill="#78350f">riceve, valida, registra l'evento</text>
+    <rect x="310" y="160" width="280" height="55" rx="10" fill="url(#gListener)" stroke="#f59e0b" stroke-width="1.5"/>
+    <text x="450" y="183" text-anchor="middle" font-weight="600" fill="#92400e">Listener SMTP (porta 25)</text>
+    <text x="450" y="200" text-anchor="middle" font-size="11" fill="#78350f">riceve, valida, registra l'evento</text>
   </g>
 
-  <!-- arrow 2->3 -->
-  <line x1="460" y1="195" x2="460" y2="228" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="450" y1="215" x2="450" y2="248" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)"/>
 
-  <!-- Privacy bypass check (rombo) -->
+  <!-- 3. Privacy bypass -->
   <g filter="url(#shadow)">
-    <polygon points="460,230 580,275 460,320 340,275" fill="#fff" stroke="#94a3b8" stroke-width="1.5"/>
-    <text x="460" y="270" text-anchor="middle" font-weight="600" fill="#334155">Privacy bypass?</text>
-    <text x="460" y="287" text-anchor="middle" font-size="11" fill="#64748b">indirizzo in lista privacy</text>
+    <polygon points="450,250 570,295 450,340 330,295" fill="#fff" stroke="#94a3b8" stroke-width="1.5"/>
+    <text x="450" y="290" text-anchor="middle" font-weight="600" fill="#334155">Privacy bypass?</text>
+    <text x="450" y="307" text-anchor="middle" font-size="11" fill="#64748b">indirizzo in lista privacy</text>
   </g>
 
-  <!-- arrow privacy -> ignore (sx) -->
-  <line x1="340" y1="275" x2="220" y2="275" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <text x="280" y="268" text-anchor="middle" font-size="11" font-style="italic" fill="#0f172a">Sì</text>
+  <line x1="330" y1="295" x2="220" y2="295" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="280" y="288" text-anchor="middle" font-size="11" font-style="italic" fill="#0f172a">Sì</text>
 
   <g filter="url(#shadow)">
-    <rect x="60" y="248" width="160" height="55" rx="10" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"/>
-    <text x="140" y="271" text-anchor="middle" font-weight="600" fill="#334155">Drop silenzioso</text>
-    <text x="140" y="288" text-anchor="middle" font-size="11" fill="#64748b">no log contenuto</text>
+    <rect x="60" y="268" width="160" height="55" rx="10" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"/>
+    <text x="140" y="291" text-anchor="middle" font-weight="600" fill="#334155">Drop silenzioso</text>
+    <text x="140" y="308" text-anchor="middle" font-size="11" fill="#64748b">no log contenuto</text>
   </g>
 
-  <!-- arrow privacy -> rule engine (giu) -->
-  <line x1="460" y1="320" x2="460" y2="353" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <text x="475" y="340" font-size="11" font-style="italic" fill="#0f172a">No</text>
+  <line x1="450" y1="340" x2="450" y2="373" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="465" y="360" font-size="11" font-style="italic" fill="#0f172a">No</text>
 
-  <!-- 4. Rule engine -->
+  <!-- 4. Resolve customer -->
   <g filter="url(#shadow)">
-    <rect x="300" y="355" width="320" height="60" rx="10" fill="url(#gRules)" stroke="#6366f1" stroke-width="1.5"/>
-    <text x="460" y="380" text-anchor="middle" font-weight="600" fill="#3730a3">Rule Engine</text>
-    <text x="460" y="397" text-anchor="middle" font-size="11" fill="#4338ca">cerca la regola che fa match (ordine priorità)</text>
+    <rect x="285" y="375" width="330" height="68" rx="10" fill="url(#gCustomer)" stroke="#06b6d4" stroke-width="1.5"/>
+    <text x="450" y="397" text-anchor="middle" font-weight="700" fill="#0e7490">Resolve customer</text>
+    <text x="450" y="415" text-anchor="middle" font-size="11" fill="#155e75">from_email / to_alias / domain → codcli</text>
+    <text x="450" y="432" text-anchor="middle" font-size="11" font-style="italic" fill="#0e7490">+ tipologia_servizio (STD/EXT/H24/NO) + in_service</text>
   </g>
+
+  <!-- linea da customers feed alla resolve -->
+  <path d="M 820 260 Q 700 320 615 405" fill="none" stroke="#7c3aed" stroke-width="1.2" stroke-dasharray="3 3" marker-end="url(#arrow-violet)"/>
+  <text x="720" y="332" font-size="10" font-style="italic" fill="#7c3aed">lookup tabella locale</text>
+
+  <line x1="450" y1="443" x2="450" y2="475" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- 5. Active rule sets -->
+  <g filter="url(#shadow)">
+    <rect x="245" y="478" width="410" height="92" rx="10" fill="url(#gSets)" stroke="#ca8a04" stroke-width="1.5"/>
+    <text x="450" y="500" text-anchor="middle" font-weight="700" fill="#713f12">Determina rule_sets attivi (M029)</text>
+    <text x="450" y="520" text-anchor="middle" font-size="11" fill="#854d0e">always_active=1 (set "globali") + set legato al profilo cliente</text>
+    <text x="265" y="544" font-size="11" font-family="ui-monospace,Menlo,monospace" fill="#713f12">STD → {globali, standard}</text>
+    <text x="450" y="544" text-anchor="middle" font-size="11" font-family="ui-monospace,Menlo,monospace" fill="#713f12">EXT → {globali, esteso}</text>
+    <text x="635" y="544" text-anchor="end" font-size="11" font-family="ui-monospace,Menlo,monospace" fill="#713f12">H24 → {globali, h24}</text>
+    <text x="265" y="562" font-size="11" font-family="ui-monospace,Menlo,monospace" fill="#713f12">NO → {globali, nessuno}</text>
+    <text x="635" y="562" text-anchor="end" font-size="11" font-family="ui-monospace,Menlo,monospace" fill="#713f12">sconosciuto → {globali}</text>
+  </g>
+
+  <line x1="450" y1="570" x2="450" y2="603" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- 6. Rule Engine -->
+  <g filter="url(#shadow)">
+    <rect x="280" y="605" width="340" height="100" rx="10" fill="url(#gRules)" stroke="#6366f1" stroke-width="1.5"/>
+    <text x="450" y="628" text-anchor="middle" font-weight="700" fill="#3730a3">Rule Engine v2</text>
+    <text x="450" y="648" text-anchor="middle" font-size="11" fill="#4338ca">filtra regole con rule_set_id ∈ active_rule_sets</text>
+    <text x="450" y="665" text-anchor="middle" font-size="11" fill="#4338ca">+ ordina per scope_type, priority ASC</text>
+    <text x="450" y="682" text-anchor="middle" font-size="11" fill="#4338ca">+ valuta criteri AND (regex, in_service, has_exception_today, ...)</text>
+    <text x="450" y="698" text-anchor="middle" font-size="11" font-style="italic" fill="#4338ca">first match wins (o continue_after_match)</text>
+  </g>
+
+  <!-- arrow rule engine -> azioni -->
+  <line x1="450" y1="705" x2="450" y2="735" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="465" y="724" font-size="11" font-style="italic" fill="#0f172a">azione</text>
 
   <!-- 5 azioni: 5 box affiancati -->
-  <line x1="460" y1="415" x2="460" y2="445" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <text x="475" y="432" font-size="11" font-style="italic" fill="#0f172a">azione</text>
-
-  <!-- Action: Ignore -->
   <g filter="url(#shadow)">
-    <rect x="20" y="450" width="160" height="50" rx="8" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"/>
-    <text x="100" y="472" text-anchor="middle" font-weight="600" fill="#334155">ignore</text>
-    <text x="100" y="488" text-anchor="middle" font-size="11" fill="#64748b">drop, nessun forward</text>
+    <rect x="20" y="740" width="155" height="50" rx="8" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"/>
+    <text x="98" y="762" text-anchor="middle" font-weight="600" fill="#334155">ignore</text>
+    <text x="98" y="778" text-anchor="middle" font-size="11" fill="#64748b">drop, nessun forward</text>
   </g>
 
-  <!-- Action: Forward -->
   <g filter="url(#shadow)">
-    <rect x="195" y="450" width="160" height="50" rx="8" fill="url(#gAction)" stroke="#16a34a" stroke-width="1.5"/>
-    <text x="275" y="472" text-anchor="middle" font-weight="600" fill="#14532d">forward</text>
-    <text x="275" y="488" text-anchor="middle" font-size="11" fill="#166534">inoltro al destinatario</text>
+    <rect x="190" y="740" width="155" height="50" rx="8" fill="url(#gAction)" stroke="#16a34a" stroke-width="1.5"/>
+    <text x="268" y="762" text-anchor="middle" font-weight="600" fill="#14532d">forward</text>
+    <text x="268" y="778" text-anchor="middle" font-size="11" fill="#166534">inoltro al destinatario</text>
   </g>
 
-  <!-- Action: AI classify -->
   <g filter="url(#shadow)">
-    <rect x="370" y="450" width="180" height="50" rx="8" fill="url(#gAI)" stroke="#a855f7" stroke-width="1.5"/>
-    <text x="460" y="472" text-anchor="middle" font-weight="600" fill="#581c87">ai_classify</text>
-    <text x="460" y="488" text-anchor="middle" font-size="11" fill="#6b21a8">passa all'IA (Claude)</text>
+    <rect x="360" y="740" width="180" height="50" rx="8" fill="url(#gAI)" stroke="#a855f7" stroke-width="1.5"/>
+    <text x="450" y="762" text-anchor="middle" font-weight="600" fill="#581c87">ai_classify</text>
+    <text x="450" y="778" text-anchor="middle" font-size="11" fill="#6b21a8">passa all'IA (Claude)</text>
   </g>
 
-  <!-- Action: Quarantine -->
   <g filter="url(#shadow)">
-    <rect x="565" y="450" width="160" height="50" rx="8" fill="url(#gQuar)" stroke="#ef4444" stroke-width="1.5"/>
-    <text x="645" y="472" text-anchor="middle" font-weight="600" fill="#7f1d1d">quarantine</text>
-    <text x="645" y="488" text-anchor="middle" font-size="11" fill="#991b1b">in attesa di review</text>
+    <rect x="555" y="740" width="155" height="50" rx="8" fill="url(#gQuar)" stroke="#ef4444" stroke-width="1.5"/>
+    <text x="633" y="762" text-anchor="middle" font-weight="600" fill="#7f1d1d">quarantine</text>
+    <text x="633" y="778" text-anchor="middle" font-size="11" fill="#991b1b">in attesa di review</text>
   </g>
 
-  <!-- Action: Create ticket -->
   <g filter="url(#shadow)">
-    <rect x="740" y="450" width="160" height="50" rx="8" fill="url(#gAction)" stroke="#16a34a" stroke-width="1.5"/>
-    <text x="820" y="472" text-anchor="middle" font-weight="600" fill="#14532d">create_ticket</text>
-    <text x="820" y="488" text-anchor="middle" font-size="11" fill="#166534">apre ticket gestionale</text>
+    <rect x="725" y="740" width="155" height="50" rx="8" fill="url(#gAction)" stroke="#16a34a" stroke-width="1.5"/>
+    <text x="803" y="762" text-anchor="middle" font-weight="600" fill="#14532d">create_ticket</text>
+    <text x="803" y="778" text-anchor="middle" font-size="11" fill="#166534">apre ticket gestionale</text>
   </g>
 
-  <!-- Linee dispatcher: dal rule engine alle 5 azioni -->
-  <path d="M 460 415 L 460 440 L 100 440 L 100 450" fill="none" stroke="#475569" stroke-width="1.2"/>
-  <path d="M 460 415 L 460 440 L 275 440 L 275 450" fill="none" stroke="#475569" stroke-width="1.2"/>
-  <path d="M 460 415 L 460 440 L 645 440 L 645 450" fill="none" stroke="#475569" stroke-width="1.2"/>
-  <path d="M 460 415 L 460 440 L 820 440 L 820 450" fill="none" stroke="#475569" stroke-width="1.2"/>
+  <g filter="url(#shadow)">
+    <rect x="895" y="740" width="170" height="50" rx="8" fill="url(#gAction)" stroke="#16a34a" stroke-width="1.5"/>
+    <text x="980" y="762" text-anchor="middle" font-weight="600" fill="#14532d">auto_reply</text>
+    <text x="980" y="778" text-anchor="middle" font-size="11" fill="#166534">risposta da template</text>
+  </g>
+
+  <!-- linee dispatcher -->
+  <path d="M 450 705 L 450 730 L 98 730 L 98 740" fill="none" stroke="#475569" stroke-width="1.2"/>
+  <path d="M 450 705 L 450 730 L 268 730 L 268 740" fill="none" stroke="#475569" stroke-width="1.2"/>
+  <path d="M 450 705 L 450 730 L 633 730 L 633 740" fill="none" stroke="#475569" stroke-width="1.2"/>
+  <path d="M 450 705 L 450 730 L 803 730 L 803 740" fill="none" stroke="#475569" stroke-width="1.2"/>
+  <path d="M 450 705 L 450 730 L 980 730 L 980 740" fill="none" stroke="#475569" stroke-width="1.2"/>
 
   <!-- Branch IA -->
-  <line x1="460" y1="500" x2="460" y2="535" stroke="#a855f7" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="450" y1="790" x2="450" y2="820" stroke="#a855f7" stroke-width="1.5" marker-end="url(#arrow-violet)"/>
 
   <g filter="url(#shadow)">
-    <rect x="290" y="540" width="340" height="60" rx="10" fill="#fdf4ff" stroke="#a855f7" stroke-width="1.5" stroke-dasharray="4 3"/>
-    <text x="460" y="563" text-anchor="middle" font-weight="600" fill="#581c87">IA propone azione finale</text>
-    <text x="460" y="582" text-anchor="middle" font-size="11" fill="#6b21a8">classificazione + urgenza + sintesi → forward / ticket / drop</text>
+    <rect x="280" y="825" width="340" height="60" rx="10" fill="#fdf4ff" stroke="#a855f7" stroke-width="1.5" stroke-dasharray="4 3"/>
+    <text x="450" y="848" text-anchor="middle" font-weight="600" fill="#581c87">IA propone azione finale</text>
+    <text x="450" y="867" text-anchor="middle" font-size="11" fill="#6b21a8">classificazione + urgenza + sintesi → forward / ticket / drop</text>
+  </g>
+
+  <!-- 7. Persist event -->
+  <line x1="450" y1="885" x2="450" y2="918" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <g filter="url(#shadow)">
+    <rect x="320" y="920" width="260" height="50" rx="10" fill="url(#gMail)" stroke="#3b82f6" stroke-width="1.5"/>
+    <text x="450" y="942" text-anchor="middle" font-weight="600" fill="#1e3a8a">Persist event + audit</text>
+    <text x="450" y="958" text-anchor="middle" font-size="11" fill="#475569">events table, body TTL, payload_metadata, chain</text>
   </g>
 
   <!-- Legenda colori in basso a sinistra -->
-  <g transform="translate(20, 540)">
-    <rect x="0" y="0" width="240" height="70" rx="6" fill="#fff" stroke="#cbd5e1"/>
-    <text x="10" y="18" font-size="11" font-weight="600" fill="#0f172a">Legenda</text>
-    <rect x="10" y="26" width="14" height="10" fill="url(#gRules)" stroke="#6366f1"/>
-    <text x="30" y="35" font-size="11" fill="#334155">Logica deterministica</text>
-    <rect x="10" y="42" width="14" height="10" fill="url(#gAI)" stroke="#a855f7"/>
-    <text x="30" y="51" font-size="11" fill="#334155">Logica IA (semantica)</text>
-    <rect x="10" y="58" width="14" height="10" fill="url(#gAction)" stroke="#16a34a"/>
-    <text x="30" y="67" font-size="11" fill="#334155">Azione di consegna</text>
+  <g transform="translate(20, 990)">
+    <rect x="0" y="0" width="500" height="80" rx="6" fill="#fff" stroke="#cbd5e1"/>
+    <text x="10" y="18" font-size="11" font-weight="700" fill="#0f172a">Legenda</text>
+
+    <rect x="10" y="24" width="14" height="10" fill="url(#gCustomer)" stroke="#06b6d4"/>
+    <text x="30" y="33" font-size="10.5" fill="#334155">Resolve cliente (tabella locale)</text>
+
+    <rect x="200" y="24" width="14" height="10" fill="url(#gSets)" stroke="#ca8a04"/>
+    <text x="220" y="33" font-size="10.5" fill="#334155">Filtraggio per rule_set (M029)</text>
+
+    <rect x="10" y="40" width="14" height="10" fill="url(#gRules)" stroke="#6366f1"/>
+    <text x="30" y="49" font-size="10.5" fill="#334155">Logica deterministica</text>
+
+    <rect x="200" y="40" width="14" height="10" fill="url(#gAI)" stroke="#a855f7"/>
+    <text x="220" y="49" font-size="10.5" fill="#334155">Logica IA (semantica)</text>
+
+    <rect x="10" y="56" width="14" height="10" fill="url(#gAction)" stroke="#16a34a"/>
+    <text x="30" y="65" font-size="10.5" fill="#334155">Azione di consegna</text>
+
+    <rect x="200" y="56" width="14" height="10" fill="url(#gSync)" stroke="#7c3aed" stroke-dasharray="2 2"/>
+    <text x="220" y="65" font-size="10.5" fill="#334155">Sync esterno (M028)</text>
   </g>
 
-  <!-- Tutto è tracciato -->
-  <text x="900" y="608" text-anchor="end" font-size="10" font-style="italic" fill="#64748b">Ogni passaggio è registrato in Eventi + Activity Live</text>
+  <text x="1060" y="1068" text-anchor="end" font-size="10" font-style="italic" fill="#64748b">Ogni passaggio è registrato in Eventi + Activity Live</text>
 </svg>
