@@ -61,6 +61,8 @@ def new_view():
                 description=request.form.get("description") or None,
                 color=request.form.get("color") or None,
                 enabled=request.form.get("enabled") == "1",
+                shadow_mode=request.form.get("shadow_mode") == "1",
+                shadow_note=request.form.get("shadow_note") or None,
                 actor=_actor(),
             )
             flash(f"✓ Gruppo destinatari creato (id {gid}).", "success")
@@ -89,6 +91,8 @@ def detail_view(group_id: int):
                 description=request.form.get("description") or None,
                 color=request.form.get("color") or None,
                 enabled=request.form.get("enabled") == "1",
+                shadow_mode=request.form.get("shadow_mode") == "1",
+                shadow_note=request.form.get("shadow_note") or None,
                 actor=_actor(),
             )
             # Membri: checkbox dei membri esistenti + textarea per aggiunta libera

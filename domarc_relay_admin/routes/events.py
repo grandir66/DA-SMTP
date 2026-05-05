@@ -45,6 +45,7 @@ def list_view():
         "no_client": request.args.get("no_client") in ("on", "true", "1"),
         "no_rule": request.args.get("no_rule") in ("on", "true", "1"),
         "only_ticket": request.args.get("only_ticket") in ("on", "true", "1"),
+        "only_shadow": request.args.get("only_shadow") in ("on", "true", "1"),
     }
     events, total = _storage().list_events(
         tenant_id=_tid(), hours=hours,

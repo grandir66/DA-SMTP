@@ -33,6 +33,40 @@
                                        code_placeholder='tecnici_no_fo',
                                        name_placeholder='Tecnici no fuori orario') }}
 
+        <!-- M030: Shadow mode -->
+        <div class="rf-section" style="background:#fffbeb; border:1px solid #f59e0b; border-radius:8px;">
+            <h3 style="color:#92400e;"><i class="fas fa-moon"></i> Modalita' shadow (osservazione)</h3>
+            <p class="dr-hint" style="margin:0 0 0.7rem;">
+                Quando questo gruppo e' in <strong>shadow mode</strong>, le mail dirette ai suoi membri
+                vengono valutate normalmente dal rule engine (chain visibile in
+                <a href="{{ url_for('events.list_view') }}">/events</a>) ma nessuna azione viene eseguita:
+                la mail arriva al destinatario reale, niente auto-reply, ticket, forward o redirect.
+                In <code>payload_metadata.would_have_executed</code> trovi cosa <em>sarebbe</em> stato fatto.
+            </p>
+            <p class="dr-hint" style="margin:0 0 0.7rem;">
+                Caso d'uso tipico: aggiungi UNA mailbox al gruppo, osserva per qualche giorno,
+                quando sei sicuro che le regole si comportino come vuoi togli la mailbox dal gruppo
+                (passa in live) e aggiungi la prossima.
+            </p>
+            <div style="display:grid; grid-template-columns:200px 1fr; gap:0.8rem; align-items:start;">
+                <label style="font-weight:600; color:#78350f;">Stato</label>
+                <div>
+                    <label style="font-weight:normal;">
+                        <input type="checkbox" name="shadow_mode" value="1"
+                               {% if group and group.shadow_mode %}checked{% endif %}>
+                        🌒 Gruppo in shadow (mail osservate, nessuna azione eseguita)
+                    </label>
+                </div>
+                <label style="font-weight:600; color:#78350f;">Note shadow</label>
+                <div>
+                    <textarea name="shadow_note" rows="2" style="width:100%; padding:0.5rem;
+                              border:1px solid #cbd5e1; border-radius:6px; font-family:inherit;"
+                              placeholder="es. Test 2026-05-05: caselle istituzionali domarc.it, validare regole prima di passare in live">{{ group.shadow_note if group and group.shadow_note else '' }}</textarea>
+                    <div class="dr-hint" style="font-size:0.78rem;">Promemoria perche' il gruppo e' in shadow / quando promuovere a live.</div>
+                </div>
+            </div>
+        </div>
+
         {% if group %}
         <div class="rf-section">
             <h3>Membri attuali ({{ members|length }})</h3>

@@ -58,9 +58,25 @@
         <a href="{{ url_for('recipient_groups.detail_view', group_id=g.id) }}"
            class="group-card {% if not g.enabled %}disabled{% endif %}"
            style="border-left-color: {{ g.color or '#f6c23e' }}; text-decoration:none; color:inherit;">
-            <div class="name">{{ g.name }}</div>
+            <div class="name">
+                {{ g.name }}
+                {% if g.shadow_mode %}
+                <span style="background:#fef3c7; color:#92400e; padding:0.1rem 0.5rem;
+                             border-radius:9px; font-size:0.72rem; font-weight:600;
+                             margin-left:0.4rem; vertical-align:middle;"
+                      title="{{ g.shadow_note or 'Gruppo in shadow: mail osservate, nessuna azione eseguita' }}">
+                    🌒 SHADOW
+                </span>
+                {% endif %}
+            </div>
             <div class="code">{{ g.code }}{% if not g.enabled %} <span style="color:#dc2626;">— disattivato</span>{% endif %}</div>
             {% if g.description %}<div class="desc">{{ g.description|truncate(120) }}</div>{% endif %}
+            {% if g.shadow_mode and g.shadow_note %}
+            <div class="desc" style="background:#fffbeb; border-left:2px solid #f59e0b;
+                                      padding:0.3rem 0.5rem; font-size:0.78rem; color:#78350f;">
+                <strong>Shadow note:</strong> {{ g.shadow_note|truncate(140) }}
+            </div>
+            {% endif %}
             <div class="stats">
                 <i class="fas fa-envelope"></i> {{ g.member_count }} membri
                 <span style="color:#94a3b8; margin-left:0.7rem;">creato {{ (g.created_at or '')|truncate(10, true, '') }}</span>

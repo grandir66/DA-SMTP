@@ -435,6 +435,9 @@ def recipient_groups_active():
             "color": g.get("color"),
             "enabled": bool(g["enabled"]),
             "members": members,
+            # M030: shadow mode (gruppo marcato come "in osservazione")
+            "shadow_mode": bool(g.get("shadow_mode")),
+            "shadow_note": g.get("shadow_note"),
         })
     return jsonify({
         "synced_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),

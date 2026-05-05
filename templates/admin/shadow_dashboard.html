@@ -1,0 +1,175 @@
+{% extends "admin/_base.html" %}
+{% block title %}Shadow mode — Dashboard{% endblock %}
+{% block content %}
+<style>
+.sd-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(280px,1fr));
+           gap:1rem; margin:1rem 0; }
+.sd-card { background:#fff; border:1px solid #e2e8f0; border-radius:8px;
+           padding:1rem 1.2rem; }
+.sd-card h3 { margin:0 0 0.5rem; font-size:1rem; color:#0f172a; }
+.sd-card .big { font-size:2.2rem; font-weight:700; color:#0f172a; line-height:1; }
+.sd-card .label { font-size:0.85rem; color:#64748b; }
+.sd-card.shadow { background:#fffbeb; border-color:#f59e0b; }
+.sd-card.shadow .big { color:#78350f; }
+
+.sd-section { background:#fff; border:1px solid #e2e8f0; border-radius:8px;
+              padding:1rem 1.2rem; margin-bottom:1rem; }
+.sd-section h3 { margin:0 0 0.7rem; color:#0f172a; }
+
+.sd-group { background:#fffbeb; border:1px solid #f59e0b; border-radius:6px;
+            padding:0.6rem 0.9rem; margin-bottom:0.5rem;
+            display:flex; align-items:center; gap:1rem; }
+.sd-group .name { font-weight:700; color:#78350f; flex:1; }
+.sd-group .members { background:#fff; padding:0.15rem 0.55rem; border-radius:9px;
+                     font-size:0.78rem; color:#0f172a; font-weight:600; }
+.sd-group .actions { display:flex; gap:0.4rem; }
+
+.sd-action-stats { display:flex; flex-direction:column; gap:0.3rem; }
+.sd-action-stats .row { display:flex; align-items:center; gap:0.6rem; font-size:0.88rem; }
+.sd-action-stats .bar { flex:1; height:18px; background:#f1f5f9; border-radius:4px; overflow:hidden; position:relative; }
+.sd-action-stats .bar-fill { background:#f59e0b; height:100%; }
+.sd-action-stats .count { font-weight:700; color:#0f172a; min-width:50px; text-align:right; }
+</style>
+
+<section class="dr-section">
+    <h2><i class="fas fa-moon"></i> Shadow mode — Dashboard</h2>
+    <p class="dr-hint">
+        Vista aggregata di tutte le entita' in modalita' shadow (osservazione).
+        Le mail dirette ai destinatari shadow vengono valutate dal rule engine
+        ma <strong>nessuna azione viene eseguita</strong>: la mail arriva al
+        destinatario reale e <code>payload_metadata.would_have_executed</code>
+        registra cosa <em>sarebbe</em> stato fatto.
+    </p>
+</section>
+
+<div class="sd-grid">
+    <div class="sd-card shadow">
+        <div class="label">Gruppi destinatari in shadow</div>
+        <div class="big">{{ shadow_groups|length }}</div>
+        <a href="{{ url_for('recipient_groups.list_view') }}" style="font-size:0.85rem;">
+            Gestisci gruppi →
+        </a>
+    </div>
+    <div class="sd-card shadow">
+        <div class="label">Eventi shadow ultime 24h</div>
+        <div class="big">{{ n_24h }}</div>
+        <a href="{{ url_for('events.list_view') }}?only_shadow=on&hours=24" style="font-size:0.85rem;">
+            Vedi eventi →
+        </a>
+    </div>
+    <div class="sd-card shadow">
+        <div class="label">Eventi shadow ultimi 7gg</div>
+        <div class="big">{{ n_7d }}</div>
+        <a href="{{ url_for('events.list_view') }}?only_shadow=on&hours=168" style="font-size:0.85rem;">
+            Vedi eventi →
+        </a>
+    </div>
+</div>
+
+<div class="sd-section">
+    <h3><i class="fas fa-people-group"></i> Gruppi destinatari in shadow ({{ shadow_groups|length }})</h3>
+    {% if not shadow_groups %}
+    <p style="color:#64748b; margin:0.5rem 0;">
+        Nessun gruppo in shadow. Crea un gruppo destinatari e attiva
+        "Modalità shadow" per iniziare l'osservazione.
+        <br>
+        <a href="{{ url_for('recipient_groups.new_view') }}" class="dr-btn dr-btn-primary"
+           style="width:auto; margin-top:0.5rem;">
+            <i class="fas fa-plus"></i> Nuovo gruppo
+        </a>
+    </p>
+    {% else %}
+    {% for g in shadow_groups %}
+    <div class="sd-group">
+        <div class="name">{{ g.name }}</div>
+        <span class="members">
+            <i class="fas fa-envelope"></i> {{ g.member_count }} {{ 'membro' if g.member_count==1 else 'membri' }}
+        </span>
+        {% if g.shadow_note %}
+        <span style="font-size:0.78rem; color:#78350f; font-style:italic; flex:2;"
+              title="{{ g.shadow_note }}">
+            "{{ g.shadow_note|truncate(80) }}"
+        </span>
+        {% endif %}
+        <span class="actions">
+            <a href="{{ url_for('recipient_groups.detail_view', group_id=g.id) }}"
+               class="dr-btn" style="width:auto; padding:0.3rem 0.7rem;">
+                <i class="fas fa-pen-to-square"></i> Apri
+            </a>
+        </span>
+    </div>
+    {% endfor %}
+    {% endif %}
+</div>
+
+{% if actions_24h %}
+<div class="sd-section">
+    <h3><i class="fas fa-chart-bar"></i> Distribuzione "would_have_executed" ultime 24h</h3>
+    <p class="dr-hint" style="margin-top:0;">
+        Cosa avrebbe fatto il sistema sulle mail in shadow nelle ultime 24h.
+        Utile per validare le regole prima di promuovere le mailbox a live.
+    </p>
+    {% set max_count = (actions_24h | map(attribute=1) | max) or 1 %}
+    <div class="sd-action-stats">
+        {% for action, count in actions_24h %}
+        <div class="row">
+            <code style="min-width:160px; background:#f1f5f9; padding:0.2rem 0.5rem; border-radius:4px;">{{ action }}</code>
+            <div class="bar">
+                <div class="bar-fill" style="width: {{ (count * 100 // max_count) }}%;"></div>
+            </div>
+            <span class="count">{{ count }}</span>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{% if recent_events %}
+<div class="sd-section">
+    <h3><i class="fas fa-history"></i> Ultimi 20 eventi in shadow</h3>
+    <table class="dr-table" style="font-size:0.85rem;">
+        <thead>
+            <tr>
+                <th>ID</th><th>Ricevuto</th><th>Da</th><th>A</th>
+                <th>Oggetto</th><th>Avrebbe fatto</th><th>Regola</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for e in recent_events %}
+            {% set pm = e.payload_metadata if e.payload_metadata is mapping else {} %}
+            {% set whe = pm.get('would_have_executed') or {} %}
+            <tr style="cursor:pointer;" onclick="window.location='{{ url_for('events.detail_view', event_id=e.id) }}'">
+                <td><strong>{{ e.id }}</strong></td>
+                <td><small>{{ e.received_at }}</small></td>
+                <td style="max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ e.from_address }}">{{ e.from_address or '—' }}</td>
+                <td style="max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ e.to_address }}"><small>{{ e.to_address or '—' }}</small></td>
+                <td style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ e.subject }}">{{ e.subject or '—' }}</td>
+                <td>
+                    <span class="action-pill {{ whe.get('action') or '' }}">{{ whe.get('action') or '—' }}</span>
+                </td>
+                <td>
+                    {% if whe.get('rule_id') %}
+                    <a href="{{ url_for('rules.form_view', rule_id=whe.get('rule_id')) }}" onclick="event.stopPropagation();">#{{ whe.get('rule_id') }}</a>
+                    <small>{{ whe.get('rule_name')|truncate(30) }}</small>
+                    {% else %}—{% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<div style="background:#f8fafc; border:1px solid #cbd5e1; border-radius:6px;
+            padding:0.7rem 1rem; font-size:0.85rem; color:#475569; margin-top:1rem;">
+    <strong>Workflow operativo:</strong>
+    1) crea un gruppo destinatari shadow →
+    2) aggiungi UNA mailbox alla volta →
+    3) osserva qui per qualche giorno →
+    4) quando le regole si comportano come vuoi, togli la mailbox dal gruppo (passa in live) →
+    5) aggiungi la prossima mailbox.
+    <br><small style="color:#64748b;">
+    Le fasi successive (M031-M033) estenderanno lo shadow a domini, rule_set e regole singole.
+    </small>
+</div>
+{% endblock %}

@@ -958,6 +958,9 @@ class SqliteStorage(Storage):
                 where.append("rule_id IS NULL")
             if filters.get("only_ticket"):
                 where.append("ticket_id IS NOT NULL AND ticket_id <> ''")
+            if filters.get("only_shadow"):
+                # M030: filtra eventi con shadow_mode=true in payload_metadata
+                where.append("payload_metadata LIKE '%\"shadow_mode\": true%'")
             if filters.get("q"):
                 like = f"%{filters['q'].strip().lower()}%"
                 where.append(
@@ -3123,6 +3126,8 @@ class SqliteStorage(Storage):
                                   description: str | None = None,
                                   color: str | None = None,
                                   enabled: bool = True,
+                                  shadow_mode: bool = False,
+                                  shadow_note: str | None = None,
                                   actor: str | None = None) -> int:
         code = (code or "").strip().lower()
         name = (name or "").strip()
@@ -3135,20 +3140,52 @@ class SqliteStorage(Storage):
                 conn.execute(
                     """UPDATE recipient_groups
                           SET code=?, name=?, description=?, color=?,
-                              enabled=?, updated_at=datetime('now')
+                              enabled=?, shadow_mode=?, shadow_note=?,
+                              updated_at=datetime('now')
                         WHERE id=? AND tenant_id=?""",
                     (code, name, description, color, 1 if enabled else 0,
+                     1 if shadow_mode else 0, shadow_note,
                      int(group_id), int(tenant_id)),
                 )
                 return int(group_id)
             cur = conn.execute(
                 """INSERT INTO recipient_groups
-                       (tenant_id, code, name, description, color, enabled, created_by)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                       (tenant_id, code, name, description, color, enabled,
+                        shadow_mode, shadow_note, created_by)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (int(tenant_id), code, name, description, color,
-                 1 if enabled else 0, actor),
+                 1 if enabled else 0,
+                 1 if shadow_mode else 0, shadow_note, actor),
             )
             return int(cur.lastrowid)
+
+    def list_shadow_recipient_groups(self, *, tenant_id: int = 1
+                                     ) -> list[dict[str, Any]]:
+        """Solo gruppi enabled con shadow_mode=1. Per dashboard /shadow."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                """SELECT g.*,
+                          (SELECT COUNT(*) FROM recipient_group_members m
+                            WHERE m.group_id = g.id) AS member_count
+                     FROM recipient_groups g
+                    WHERE g.tenant_id = ? AND g.enabled = 1 AND g.shadow_mode = 1
+                    ORDER BY g.name COLLATE NOCASE""",
+                (int(tenant_id),),
+            ).fetchall()
+            return [dict(r) for r in rows]
+
+    def emails_in_shadow_groups(self, *, tenant_id: int = 1) -> set[str]:
+        """Tutti gli indirizzi email membri di un gruppo shadow_mode=1.
+        Cache letta in pipeline per check shadow rapido sul listener."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                """SELECT DISTINCT LOWER(m.email) AS email
+                     FROM recipient_group_members m
+                     JOIN recipient_groups g ON g.id = m.group_id
+                    WHERE g.tenant_id = ? AND g.enabled = 1 AND g.shadow_mode = 1""",
+                (int(tenant_id),),
+            ).fetchall()
+            return {r["email"] for r in rows if r["email"]}
 
     def delete_recipient_group(self, group_id: int) -> None:
         with self.transaction() as conn:

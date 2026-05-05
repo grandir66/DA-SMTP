@@ -371,6 +371,9 @@ class Storage:
                 # M029: rule sets organizzati per profilo orario
                 ("rules_cache", "rule_set_id", "ALTER TABLE rules_cache ADD COLUMN rule_set_id INTEGER"),
                 ("customers_cache", "tipologia_servizio", "ALTER TABLE customers_cache ADD COLUMN tipologia_servizio TEXT"),
+                # M030: shadow mode su recipient_groups
+                ("recipient_groups_cache", "shadow_mode", "ALTER TABLE recipient_groups_cache ADD COLUMN shadow_mode INTEGER NOT NULL DEFAULT 0"),
+                ("recipient_groups_cache", "shadow_note", "ALTER TABLE recipient_groups_cache ADD COLUMN shadow_note TEXT"),
             ):
                 try:
                     conn.execute(ddl)
@@ -778,7 +781,8 @@ class Storage:
     # --------------------------------------- recipient_groups_cache (Migration 027)
 
     def replace_recipient_groups(self, groups: list[dict[str, Any]]) -> tuple[int, int]:
-        """Sostituisce atomicamente cache gruppi destinatari + membership."""
+        """Sostituisce atomicamente cache gruppi destinatari + membership.
+        M030: include shadow_mode e shadow_note se presenti nel payload."""
         synced = _now_iso()
         n_members = 0
         with self.transaction() as conn:
@@ -789,10 +793,14 @@ class Storage:
                     continue
                 conn.execute(
                     """INSERT INTO recipient_groups_cache
-                           (id, code, name, enabled, synced_at)
-                       VALUES (?, ?, ?, ?, ?)""",
+                           (id, code, name, enabled, shadow_mode, shadow_note,
+                            synced_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
                     (int(g["id"]), g["code"], g.get("name"),
-                     1 if g.get("enabled", True) else 0, synced),
+                     1 if g.get("enabled", True) else 0,
+                     1 if g.get("shadow_mode") else 0,
+                     g.get("shadow_note"),
+                     synced),
                 )
                 for em in (g.get("members") or []):
                     em = (em or "").strip().lower()
@@ -806,6 +814,25 @@ class Storage:
                     n_members += 1
             self._set_sync_meta(conn, "recipient_groups", synced)
         return (len(groups), n_members)
+
+    def find_shadow_group_for_email(self, email: str) -> dict[str, Any] | None:
+        """M030: ritorna il primo recipient_group con shadow_mode=1 e enabled=1
+        di cui `email` e' membro. None se la mail non e' in alcun gruppo shadow.
+        """
+        em = (email or "").strip().lower()
+        if not em:
+            return None
+        with self._connect() as conn:
+            row = conn.execute(
+                """SELECT g.id, g.code, g.name, g.shadow_note
+                     FROM recipient_groups_cache g
+                     JOIN recipient_group_members_cache m ON m.group_id = g.id
+                    WHERE g.enabled = 1 AND g.shadow_mode = 1
+                      AND m.email = ?
+                    LIMIT 1""",
+                (em,),
+            ).fetchone()
+            return dict(row) if row else None
 
     def get_recipient_group_ids_by_email(self, email: str) -> list[int]:
         """Group_ids a cui appartiene questo destinatario."""

@@ -46,7 +46,7 @@
         {% set in_anag  = ep.startswith('customers') or ep.startswith('addresses') or ep.startswith('domains') or ep.startswith('customer_groups') or ep.startswith('recipient_groups') or ep.startswith('privacy_bypass') or ep.startswith('customer_sync') %}
         {% set in_orari = ep.startswith('service_hours') or ep.startswith('profiles') %}
         {% set in_ai    = ep.startswith('ai.') %}
-        {% set in_sys   = ep.startswith('settings') or ep.startswith('connection') or ep.startswith('tenants') or ep.startswith('users') or ep.startswith('integrations') or ep.startswith('secrets_modules') or ep == 'health.system_dashboard' or ep.startswith('manual') %}
+        {% set in_sys   = ep.startswith('settings') or ep.startswith('connection') or ep.startswith('tenants') or ep.startswith('users') or ep.startswith('integrations') or ep.startswith('secrets_modules') or ep == 'health.system_dashboard' or ep.startswith('manual') or ep.startswith('shadow') %}
         <nav class="dr-mainnav">
             <a href="{{ url_for('dashboard.index') }}" class="{% if ep.startswith('dashboard') %}active{% endif %}">
                 <i class="fas fa-gauge-high"></i> Dashboard
@@ -104,6 +104,7 @@
                 <button type="button" class="dr-nav-btn"><i class="fas fa-gear"></i> Sistema <i class="fas fa-caret-down"></i></button>
                 <div class="dr-nav-menu">
                     <a href="{{ url_for('users.list_view') }}" class="{% if ep.startswith('users') %}active{% endif %}"><i class="fas fa-user-shield"></i> Utenti</a>
+                    <a href="{{ url_for('shadow.dashboard') }}" class="{% if ep.startswith('shadow') %}active{% endif %}" style="color:#92400e;"><i class="fas fa-moon"></i> Shadow mode</a>
                     <a href="{{ url_for('health.system_dashboard') }}" class="{% if ep == 'health.system_dashboard' %}active{% endif %}"><i class="fas fa-heart-pulse"></i> Health sistema</a>
                     <a href="{{ url_for('integrations.index') }}" class="{% if ep.startswith('integrations') %}active{% endif %}" style="color:#2563eb;"><i class="fas fa-plug"></i> Integrazioni</a>
                     <a href="{{ url_for('settings.settings_view') }}" class="{% if ep.startswith('settings') %}active{% endif %}"><i class="fas fa-sliders"></i> Settings</a>

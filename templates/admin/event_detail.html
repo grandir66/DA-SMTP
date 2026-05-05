@@ -81,6 +81,45 @@
     <div class="ed-card">
         <h3><i class="fas fa-flag"></i> Azione e routing</h3>
         <div class="ed-body">
+            {% set pm = event.payload_metadata if event.payload_metadata is mapping else {} %}
+            {% if pm.get('shadow_mode') %}
+            {% set whe = pm.get('would_have_executed') or {} %}
+            <div style="background:#fffbeb; border:1px solid #f59e0b; border-radius:8px;
+                        padding:0.9rem 1.1rem; margin-bottom:1rem;">
+                <h4 style="margin:0 0 0.5rem; color:#78350f;"><i class="fas fa-moon"></i> 🌒 Mail in SHADOW MODE</h4>
+                <p style="margin:0 0 0.4rem; font-size:0.88rem; color:#78350f;">
+                    Nessuna azione eseguita: la mail e' stata consegnata al destinatario reale via
+                    <code>default_delivery</code>. Sotto trovi cosa <em>sarebbe</em> stato fatto.
+                </p>
+                <dl style="margin:0.5rem 0 0; display:grid; grid-template-columns:200px 1fr; gap:0.3rem 0.7rem; font-size:0.85rem;">
+                    <dt style="font-weight:600; color:#78350f;">Origine shadow</dt>
+                    <dd style="margin:0; font-family:ui-monospace,Menlo,monospace; color:#0f172a;">{{ pm.get('shadow_origin') or '—' }}</dd>
+                    <dt style="font-weight:600; color:#78350f;">Destinatario in shadow</dt>
+                    <dd style="margin:0; font-family:ui-monospace,Menlo,monospace; color:#0f172a;">{{ pm.get('shadow_matched_email') or '—' }}</dd>
+                    {% if pm.get('shadow_note') %}
+                    <dt style="font-weight:600; color:#78350f;">Note</dt>
+                    <dd style="margin:0; color:#0f172a;">{{ pm.get('shadow_note') }}</dd>
+                    {% endif %}
+                    <dt style="font-weight:600; color:#78350f;">Avrebbe eseguito</dt>
+                    <dd style="margin:0;">
+                        <span class="ed-action-pill {{ whe.get('action') or '' }}">{{ whe.get('action') or '—' }}</span>
+                        {% if whe.get('rule_id') %}
+                        regola
+                        <a href="{{ url_for('rules.form_view', rule_id=whe.get('rule_id')) }}"><strong>#{{ whe.get('rule_id') }}</strong></a>
+                        {% if whe.get('rule_name') %}<small>— {{ whe.get('rule_name') }}</small>{% endif %}
+                        {% endif %}
+                    </dd>
+                    {% if whe.get('forward_to_emails') %}
+                    <dt style="font-weight:600; color:#78350f;">Avrebbe forward a</dt>
+                    <dd style="margin:0; font-family:ui-monospace,Menlo,monospace; color:#0f172a;">{{ whe.get('forward_to_emails') }}</dd>
+                    {% endif %}
+                    {% if whe.get('action_map') %}
+                    <dt style="font-weight:600; color:#78350f;">Action map</dt>
+                    <dd style="margin:0;"><code style="font-size:0.78rem; background:#fff; padding:0.2rem 0.4rem; border-radius:4px;">{{ whe.get('action_map')|tojson }}</code></dd>
+                    {% endif %}
+                </dl>
+            </div>
+            {% endif %}
             <dl>
                 <dt>Azione</dt>
                 <dd>

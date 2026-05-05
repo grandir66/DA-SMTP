@@ -94,6 +94,31 @@ def _resolve_customer(parsed: ParsedMessage, storage: Storage) -> tuple[Customer
     return ctx, route_row
 
 
+def _check_shadow_recipient_group(parsed: ParsedMessage,
+                                    storage: "Storage") -> dict[str, Any] | None:
+    """M030: ritorna info sul gruppo shadow se uno dei destinatari della mail
+    e' membro di un recipient_group con shadow_mode=1. None altrimenti.
+
+    Controlla primary_to + tutti i to_addresses (la mail puo' avere piu'
+    destinatari, basta che UNO sia in shadow per attivare il flag).
+    """
+    if not hasattr(storage, "find_shadow_group_for_email"):
+        return None
+    candidates: list[str] = []
+    if parsed.primary_to_local and parsed.primary_to_domain:
+        candidates.append(f"{parsed.primary_to_local}@{parsed.primary_to_domain}")
+    for to in (parsed.to_addresses or []):
+        if to and to not in candidates:
+            candidates.append(to)
+    for em in candidates:
+        info = storage.find_shadow_group_for_email(em)
+        if info:
+            info = dict(info)
+            info["matched_email"] = em
+            return info
+    return None
+
+
 def _resolve_active_rule_sets(storage: "Storage",
                                 profile_code: str | None) -> set[int] | None:
     """M029: ritorna l'insieme di rule_set_id attivi per la mail corrente.
@@ -335,8 +360,46 @@ def process(
              "priority": s.priority, "matched": s.matched, "reasons": s.reasons}
             for s in outcome.chain
         ]
+        # M030: shadow check (recipient_group). Se il destinatario e' in un
+        # gruppo shadow, blocca il dispatch reale e forza default_delivery,
+        # ma logga in payload_metadata cosa SAREBBE stato eseguito.
+        shadow_info = _check_shadow_recipient_group(parsed, storage)
+
         if outcome.rule is None:
             action_taken, detail, queue_extra = _do_default_delivery(parsed, storage, "no_rule_match", event_uuid=pre_event_uuid)
+            extra.update(queue_extra)
+            if shadow_info:
+                # Anche senza rule match logghiamo il flag per visibilita'.
+                extra["shadow_mode"] = True
+                extra["shadow_origin"] = f"recipient_group:{shadow_info.get('code')}"
+                extra["shadow_matched_email"] = shadow_info.get("matched_email")
+                extra["would_have_executed"] = {"action": "default_delivery",
+                                                "reason": "no_rule_match"}
+        elif shadow_info:
+            rule_id = int(outcome.rule["id"])
+            action_name = str(outcome.rule.get("action", ""))
+            action_map = outcome.rule.get("action_map") or {}
+            logger.info(
+                "SHADOW MODE: rule_id=%s action=%s SOPPRESSA per gruppo %s "
+                "(destinatario %s)",
+                rule_id, action_name, shadow_info.get("code"),
+                shadow_info.get("matched_email"),
+            )
+            extra["shadow_mode"] = True
+            extra["shadow_origin"] = f"recipient_group:{shadow_info.get('code')}"
+            extra["shadow_matched_email"] = shadow_info.get("matched_email")
+            extra["shadow_note"] = shadow_info.get("shadow_note")
+            extra["would_have_executed"] = {
+                "rule_id": rule_id,
+                "rule_name": outcome.rule.get("name"),
+                "action": action_name,
+                "action_map": action_map,
+                "forward_to_emails": outcome.rule.get("forward_to_emails"),
+                "forward_to_group_id": outcome.rule.get("forward_to_group_id"),
+            }
+            action_taken, detail, queue_extra = _do_default_delivery(
+                parsed, storage, "shadow_mode", event_uuid=pre_event_uuid,
+            )
             extra.update(queue_extra)
         else:
             rule_id = int(outcome.rule["id"])

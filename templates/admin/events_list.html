@@ -68,6 +68,7 @@
                 <label class="cb"><input type="checkbox" name="no_client" {% if filters.no_client %}checked{% endif %}> Solo senza cliente</label>
                 <label class="cb"><input type="checkbox" name="no_rule" {% if filters.no_rule %}checked{% endif %}> Solo senza regola</label>
                 <label class="cb"><input type="checkbox" name="only_ticket" {% if filters.only_ticket %}checked{% endif %}> Solo con ticket aperto</label>
+                <label class="cb" style="background:#fef3c7; padding:0.15rem 0.5rem; border-radius:6px;"><input type="checkbox" name="only_shadow" {% if filters.only_shadow %}checked{% endif %}> 🌒 Solo shadow</label>
                 <button type="submit" class="dr-btn dr-btn-primary" style="width:auto; margin-left:auto;"><i class="fas fa-magnifying-glass"></i> Filtra</button>
                 <a href="{{ url_for('events.list_view') }}" class="dr-btn"><i class="fas fa-rotate-left"></i> Reset</a>
                 {%- set _qs = '?' + (
@@ -127,6 +128,12 @@
                     <span class="action-pill {{ e.action_taken }}">{{ e.action_taken }}</span>
                     {% else %}<span style="color:#cbd5e1;">—</span>{% endif %}
                     {% set pm = e.payload_metadata if e.payload_metadata is mapping else {} %}
+                    {% if pm.get('shadow_mode') %}
+                    <span style="display:inline-block; margin-left:0.3rem; background:#fef3c7; color:#92400e; padding:0.05rem 0.4rem; border-radius:9px; font-size:0.7rem; font-weight:600;"
+                          title="SHADOW: nessuna azione eseguita. Avrebbe fatto: {{ (pm.get('would_have_executed') or {}).get('action') or '—' }} (regola #{{ (pm.get('would_have_executed') or {}).get('rule_id') or '—' }})">
+                       🌒 SHADOW
+                    </span>
+                    {% endif %}
                     {% if pm.get('ai_decision_id') %}
                     <a href="{{ url_for('ai.decision_detail', decision_id=pm['ai_decision_id']) }}"
                        onclick="event.stopPropagation();"
