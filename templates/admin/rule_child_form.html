@@ -236,6 +236,28 @@
                     <option value="false" {% if record.match_has_exception_today==0 %}selected{% endif %}>solo senza eccezione</option>
                 </select>
             </div>
+
+            <!-- M035: Filtro per gruppi cliente sul figlio -->
+            <div class="rc-row" style="background:#fef9c3; padding:0.5rem 0.6rem; border-radius:6px; border-left:3px solid #ca8a04;">
+                <label>Gruppi clienti (M035)</label>
+                <div>
+                    {% set selected_groups = (record.match_customer_groups or '').split(',') | map('trim') | list %}
+                    <select name="match_customer_groups" multiple style="width:100%; min-height:100px; font-size:0.82rem; font-family:ui-monospace,Menlo,monospace;">
+                        {% for g in (customer_groups or []) %}
+                        <option value="{{ g.code }}" {% if g.code in selected_groups %}selected{% endif %}>
+                            {% if g.is_builtin %}🏛️ {% endif %}{{ g.code }} — {{ g.name }} ({{ g.member_count }} membri)
+                        </option>
+                        {% else %}
+                        <option disabled>Nessun gruppo definito</option>
+                        {% endfor %}
+                    </select>
+                    <div class="help" style="font-size:0.78rem; color:#713f12;">
+                        Override del filtro padre. Vuoto = eredita dal padre.
+                        Logica OR (almeno uno dei gruppi). Se padre ha "contract_h24" e figlio "vip"
+                        → cliente deve essere in entrambi (AND di gerarchia + OR all'interno del figlio).
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 

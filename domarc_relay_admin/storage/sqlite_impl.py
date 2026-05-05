@@ -993,12 +993,18 @@ class SqliteStorage(Storage):
 
     def insert_event(self, data: dict[str, Any]) -> int:
         with self.transaction() as conn:
+            # M036: serializza references_json se lista
+            refs = data.get("references_json")
+            if isinstance(refs, list):
+                refs = json.dumps(refs)
             cur = conn.execute(
                 """INSERT INTO events
                        (tenant_id, relay_event_uuid, received_at, from_address, to_address,
                         subject, message_id, codice_cliente, action_taken, rule_id, ticket_id,
-                        payload_metadata, body_text, body_html, body_expires_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        payload_metadata, body_text, body_html, body_expires_at,
+                        in_reply_to, references_json,
+                        reply_to_event_uuid, thread_root_uuid)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                    ON CONFLICT (relay_event_uuid) DO UPDATE SET
                        -- Re-flush dal listener (es. quando dispatch_dead viene aggiornato):
                        -- merge dei campi che il listener arricchisce a posteriori. Body
@@ -1026,6 +1032,10 @@ class SqliteStorage(Storage):
                     data.get("body_text"),
                     data.get("body_html"),
                     data.get("body_expires_at"),
+                    data.get("in_reply_to"),
+                    refs,
+                    data.get("reply_to_event_uuid"),
+                    data.get("thread_root_uuid"),
                 ),
             )
             return int(cur.lastrowid or 0)

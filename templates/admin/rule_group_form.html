@@ -150,6 +150,33 @@
                     <option value="false" {% if record.match_has_exception_today==0 %}selected{% endif %}>solo senza eccezione</option>
                 </select>
             </div>
+
+            <!-- M035: Filtro per gruppi cliente (auto-popolati via Mappatura gruppi) -->
+            <div class="rg-row" style="background:#fef9c3; padding:0.55rem 0.7rem; border-radius:6px; border-left:3px solid #ca8a04;">
+                <label>Gruppi clienti (M035)</label>
+                <div>
+                    {% set selected_groups = (record.match_customer_groups or '').split(',') | map('trim') | list %}
+                    <select name="match_customer_groups" multiple
+                            style="width:100%; min-height:140px; font-size:0.85rem; font-family:ui-monospace,Menlo,monospace;">
+                        {% for g in (customer_groups or []) %}
+                        <option value="{{ g.code }}"
+                                {% if g.code in selected_groups %}selected{% endif %}>
+                            {% if g.is_builtin %}🏛️ {% endif %}{{ g.code }} — {{ g.name }} ({{ g.member_count }} membri)
+                        </option>
+                        {% else %}
+                        <option disabled>Nessun gruppo definito</option>
+                        {% endfor %}
+                    </select>
+                    <div class="help" style="font-size:0.78rem; color:#713f12;">
+                        <strong>Filtro principale per contratto/segmento</strong> (Ctrl/Cmd per multipla, logica OR).
+                        Gruppi built-in 🏛️ auto-popolati via
+                        <a href="{{ url_for('group_mapping.list_view') }}" target="_blank">Mappatura gruppi</a>:
+                        <code>contract_standard</code>, <code>contract_extended</code>, <code>contract_h24</code>,
+                        <code>contract_inactive</code>, <code>vip</code>, <code>secondary</code>, <code>do_not_follow</code>.
+                        Ereditato dai figli del gruppo.
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 

@@ -653,6 +653,10 @@ def group_form_view(group_id: int | None = None):
             "match_contract_active": _tristate(request.form.get("match_contract_active")),
             "match_known_customer": _tristate(request.form.get("match_known_customer")),
             "match_has_exception_today": _tristate(request.form.get("match_has_exception_today")),
+            # M035: match_customer_groups (multi-select CSV)
+            "match_customer_groups": ",".join(
+                sorted(set(g.strip() for g in request.form.getlist("match_customer_groups") if g.strip()))
+            ) or None,
             "action_map": action_map or None,
             "exclusive_match": (request.form.get("exclusive_match") or "").lower() in ("on", "true", "1"),
         }
@@ -668,11 +672,18 @@ def group_form_view(group_id: int | None = None):
             record = {**record, **data}
 
     children = _storage().list_group_children(group_id) if not is_new else []
+    # M035: customer_groups disponibili per il selettore multi-select
+    from ..customer_groups_virtuals import merge_with_virtuals
+    real_groups = _storage().list_customer_groups(tenant_id=_tid())
+    db_path = current_app.extensions["domarc_config"].db_path
+    customer_groups = merge_with_virtuals(real_groups, db_path, _tid())
+
     return render_template(
         "admin/rule_group_form.html",
         is_new=is_new,
         record=record,
         children=children,
+        customer_groups=customer_groups,
     )
 
 
@@ -722,6 +733,12 @@ def child_form_view(group_id: int, child_id: int | None = None):
 
     recipient_groups = _storage().list_recipient_groups(tenant_id=_tid(),
                                                           only_enabled=True)
+    # M035: customer_groups per multi-select nel form child
+    from ..customer_groups_virtuals import merge_with_virtuals
+    real_groups = _storage().list_customer_groups(tenant_id=_tid())
+    db_path = current_app.extensions["domarc_config"].db_path
+    customer_groups = merge_with_virtuals(real_groups, db_path, _tid())
+
     return render_template(
         "admin/rule_child_form.html",
         is_new=is_new,
@@ -730,6 +747,7 @@ def child_form_view(group_id: int, child_id: int | None = None):
         templates=templates,
         effective_action_map=effective_action_map,
         recipient_groups=recipient_groups,
+        customer_groups=customer_groups,
         ai_active_bindings=ai_active_bindings,
         ai_providers=ai_providers_map,
         ai_global_status=ai_global_status,
