@@ -81,6 +81,7 @@ def new_view():
         "admin/customer_sync_form.html",
         source=None, kinds=PROVIDER_KINDS,
         canonical_targets=_mapper.CANONICAL_TARGETS,
+        canonical_targets_info=_mapper.CANONICAL_TARGETS_INFO,
         on_missing_options=("flag", "delete", "keep"),
     )
 
@@ -100,6 +101,7 @@ def edit_view(source_id: int):
         "admin/customer_sync_form.html",
         source=source, kinds=PROVIDER_KINDS,
         canonical_targets=_mapper.CANONICAL_TARGETS,
+        canonical_targets_info=_mapper.CANONICAL_TARGETS_INFO,
         on_missing_options=("flag", "delete", "keep"),
     )
 

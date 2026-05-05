@@ -31,6 +31,31 @@
 .cs-targets-row { display:flex; gap:0.4rem; flex-wrap:wrap; margin-bottom:0.5rem; }
 .cs-target-pill { padding:0.15rem 0.55rem; background:#dbeafe; color:#1e40af;
                   border-radius:9px; font-size:0.78rem; font-family:monospace; }
+.cs-fields-ref { background:#fff; border:1px solid #e2e8f0; border-radius:6px;
+                 margin-bottom:0.8rem; }
+.cs-fields-ref summary { padding:0.6rem 0.9rem; cursor:pointer; font-weight:600;
+                         color:#1e293b; user-select:none; }
+.cs-fields-ref summary:hover { background:#f8fafc; }
+.cs-fields-ref[open] summary { border-bottom:1px solid #e2e8f0; }
+.cs-fields-ref table { width:100%; border-collapse:collapse; font-size:0.85rem; }
+.cs-fields-ref th { background:#f1f5f9; text-align:left; padding:0.45rem 0.6rem;
+                    font-weight:600; }
+.cs-fields-ref td { padding:0.5rem 0.6rem; border-top:1px solid #e2e8f0;
+                    vertical-align:top; }
+.cs-fields-ref td.target-name { font-family:monospace; color:#1e40af; font-weight:600; white-space:nowrap; }
+.cs-fields-ref td.target-type { color:#64748b; font-size:0.78rem; font-family:monospace; white-space:nowrap; }
+.cs-required-pill { background:#fee2e2; color:#b91c1c; padding:0.05rem 0.4rem;
+                    border-radius:8px; font-size:0.7rem; margin-left:0.3rem; font-weight:600;}
+.cs-optional-pill { background:#e2e8f0; color:#475569; padding:0.05rem 0.4rem;
+                    border-radius:8px; font-size:0.7rem; margin-left:0.3rem; }
+.cs-hint-block { background:#fffbeb; border-left:3px solid #f59e0b;
+                 padding:0.45rem 0.7rem; margin-top:0.3rem; font-size:0.8rem;
+                 color:#78350f; border-radius:0 4px 4px 0; }
+#field-info-box { background:#f8fafc; border:1px solid #cbd5e1;
+                  border-left:3px solid #3b82f6; border-radius:0 6px 6px 0;
+                  padding:0.6rem 0.9rem; margin:0.4rem 0; font-size:0.85rem;
+                  display:none; }
+#field-info-box.show { display:block; }
 </style>
 
 <section class="dr-section">
@@ -267,12 +292,80 @@
             Campo obbligatorio: <code>codcli</code>.
         </p>
 
-        <div class="cs-targets-row">
-            <span style="color:#64748b; font-size:0.82rem;">Campi locali disponibili:</span>
-            {% for t in canonical_targets %}
-                <span class="cs-target-pill">{{ t }}</span>
-            {% endfor %}
-        </div>
+        <details class="cs-fields-ref" open>
+            <summary>
+                <i class="fas fa-circle-info"></i> Riferimento campi del modello cliente
+                <span style="font-weight:normal; color:#64748b; font-size:0.85rem;">
+                    — clicca per espandere/comprimere
+                </span>
+            </summary>
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width:170px;">Campo locale</th>
+                        <th style="width:160px;">Tipo</th>
+                        <th>Descrizione + uso a runtime + suggerimenti mapping</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for tname in canonical_targets %}
+                    {% set info = canonical_targets_info.get(tname, {}) %}
+                    <tr>
+                        <td class="target-name">
+                            {{ tname }}
+                            {% if info.required %}
+                                <span class="cs-required-pill">obbligatorio</span>
+                            {% else %}
+                                <span class="cs-optional-pill">opzionale</span>
+                            {% endif %}
+                        </td>
+                        <td class="target-type">{{ info.type or '' }}</td>
+                        <td>
+                            <div>{{ info.description or '' }}</div>
+                            {% if info.used_by %}
+                            <div style="margin-top:0.25rem; color:#475569; font-size:0.78rem;">
+                                <strong>Uso runtime:</strong> {{ info.used_by }}
+                            </div>
+                            {% endif %}
+                            {% if info.hint %}
+                            <div class="cs-hint-block">
+                                <i class="fas fa-lightbulb"></i> {{ info.hint }}
+                            </div>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            <div style="padding:0.6rem 0.9rem; background:#f8fafc; border-top:1px solid #e2e8f0;
+                        font-size:0.82rem; color:#475569;">
+                <strong><i class="fas fa-database"></i> Esempio query SQL per JOIN domini/aliases</strong>
+                (quando i domini stanno in una tabella separata, come <code>client_domains</code>):
+                <pre style="margin:0.4rem 0 0; background:#0f172a; color:#e2e8f0;
+                            padding:0.7rem; border-radius:4px; overflow-x:auto; font-size:0.78rem;">SELECT
+  c.aconto                                    AS codcli,
+  c.ragione_sociale                           AS ragione_sociale,
+  STRING_AGG(d.dominio, ',')                  AS dominii_csv,
+  STRING_AGG(a.alias_name, ',')               AS aliases_csv
+FROM clienti c
+LEFT JOIN client_domains d
+       ON d.codice_cliente = c.aconto
+      AND COALESCE(d.excluded, FALSE) = FALSE
+LEFT JOIN customer_aliases a
+       ON a.codcli = c.aconto
+WHERE COALESCE(c.aescluso, FALSE) = FALSE
+GROUP BY c.aconto, c.ragione_sociale</pre>
+                <p style="margin:0.4rem 0 0;">
+                    Mapping consigliato:
+                    <code>codcli &rarr; codcli</code>,
+                    <code>ragione_sociale &rarr; ragione_sociale</code>,
+                    <code>dominii_csv &rarr; domains (transform: split:,)</code>,
+                    <code>aliases_csv &rarr; aliases (transform: split:,)</code>.
+                </p>
+            </div>
+        </details>
+
+        <div id="field-info-box"></div>
 
         <div class="cs-tab-bar">
             <span class="cs-tab active" id="tab-simple" onclick="setMappingMode('simple')">
@@ -358,10 +451,28 @@
 
 <script>
 const CANONICAL_TARGETS = {{ canonical_targets|tojson }};
+const CANONICAL_INFO = {{ canonical_targets_info|tojson }};
 const TRANSFORMS = ['', 'lowercase', 'uppercase', 'strip', 'bool', 'int',
                     'json_parse', 'split:,', 'split:;', 'default:standard',
                     'default:Europe/Rome', 'coalesce:'];
 let availableSourceCols = [];
+
+function showFieldInfo(target) {
+    const box = document.getElementById('field-info-box');
+    if (!target || !CANONICAL_INFO[target]) {
+        box.classList.remove('show');
+        return;
+    }
+    const info = CANONICAL_INFO[target];
+    box.classList.add('show');
+    box.innerHTML = `
+        <strong>${target}</strong>
+        ${info.required ? '<span class="cs-required-pill">obbligatorio</span>' : '<span class="cs-optional-pill">opzionale</span>'}
+        <span style="color:#64748b; font-family:monospace; font-size:0.78rem; margin-left:0.4rem;">${escapeHtml(info.type || '')}</span>
+        <div style="margin-top:0.25rem;">${escapeHtml(info.description || '')}</div>
+        ${info.hint ? `<div class="cs-hint-block"><i class="fas fa-lightbulb"></i> ${escapeHtml(info.hint)}</div>` : ''}
+    `;
+}
 
 function onKindChange() {
     const k = document.getElementById('kind').value;
@@ -518,9 +629,13 @@ function addMappingRow(src, target, transform, def) {
     tr.innerHTML = `
         <td><input data-mp-src list="dl-source-cols" placeholder="src_col" value="${escapeHtml(src||'')}"></td>
         <td>
-            <select data-mp-target>
+            <select data-mp-target onchange="showFieldInfo(this.value)" onfocus="showFieldInfo(this.value)">
                 <option value="">— scegli —</option>
-                ${CANONICAL_TARGETS.map(t => `<option value="${t}" ${t===target?'selected':''}>${t}</option>`).join('')}
+                ${CANONICAL_TARGETS.map(t => {
+                    const info = CANONICAL_INFO[t] || {};
+                    const label = t + (info.required ? ' *' : '') + (info.type ? ' (' + info.type + ')' : '');
+                    return `<option value="${t}" ${t===target?'selected':''} title="${escapeHtml(info.description || '')}">${escapeHtml(label)}</option>`;
+                }).join('')}
             </select>
         </td>
         <td>

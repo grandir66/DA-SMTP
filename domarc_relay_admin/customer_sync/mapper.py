@@ -48,6 +48,107 @@ CANONICAL_TARGETS = (
     "raw_json",
 )
 
+# Metadata dei campi canonici, esposti alla UI mapping editor.
+# Per ogni campo:
+#   description = cosa rappresenta nel funzionamento del sistema
+#   type        = tipo Python atteso (dopo l'eventuale transform)
+#   required    = se l'upsert fallisce senza questo
+#   used_by     = dove il dato viene letto a runtime (per chi non conosce)
+#   hint        = consiglio operativo (transform tipici, JOIN, ecc.)
+CANONICAL_TARGETS_INFO: dict[str, dict[str, str | bool]] = {
+    "codcli": {
+        "type": "string (UPPERCASE)",
+        "required": True,
+        "description": "Codice cliente — chiave primaria. Match per upsert.",
+        "used_by": "Rule engine (match_known_customer), pipeline.resolve_by_email, "
+                   "API /api/v1/relay/customers/active, customer_groups.",
+        "hint": "Sempre obbligatorio. Sara' normalizzato a UPPERCASE.",
+    },
+    "ragione_sociale": {
+        "type": "string",
+        "required": False,
+        "description": "Denominazione legale del cliente.",
+        "used_by": "UI clienti, audit eventi, payload ticket.",
+        "hint": "Opzionale ma fortemente consigliato per audit leggibile.",
+    },
+    "contract_active": {
+        "type": "bool",
+        "required": False,
+        "description": "Contratto attivo? Tristate match nel rule engine.",
+        "used_by": "Rule engine match_contract_active, regola template no-contract, "
+                   "synthetic groups all_contract / no_contract.",
+        "hint": "Default 1 se omesso. Per CSV/JSON usa transform 'bool' "
+                "(accetta 1/0/true/false/si/no/attivo/inattivo).",
+    },
+    "tipologia_servizio": {
+        "type": "string",
+        "required": False,
+        "description": "Codice profilo orari (STD/EXT/H24/NO o profilo custom).",
+        "used_by": "Rule engine match_in_service, payload listener.",
+        "hint": "Default 'standard' se omesso. Esempio: STD, EXT, H24.",
+    },
+    "contract_type": {
+        "type": "string",
+        "required": False,
+        "description": "Tipo contratto (es. 'Full Service - Gestione Completa').",
+        "used_by": "UI clienti, audit, customer_groups virtuali per tipo.",
+        "hint": "Sara' visibile in /customers come colonna 'TIPO CONTR.'",
+    },
+    "contract_expiry": {
+        "type": "string (ISO date)",
+        "required": False,
+        "description": "Data scadenza contratto.",
+        "used_by": "UI audit (oggi non e' usato dal rule engine).",
+        "hint": "Formato 'YYYY-MM-DD'. Vuoto se senza scadenza.",
+    },
+    "domains": {
+        "type": "list[string]",
+        "required": False,
+        "description": "Domini email del cliente (per resolve from/to).",
+        "used_by": "Pipeline.find_customer_by_domain, routing forward/redirect, "
+                   "rule engine match_from_domain / match_to_domain.",
+        "hint": "Per fonti con tabella separata (es. PG client_domains): "
+                "nella query SQL usa STRING_AGG(d.dominio, ',') GROUP BY codcli "
+                "e poi mapping con transform 'split:,'. Per CSV con piu' domini "
+                "in colonna unica: stesso transform.",
+    },
+    "aliases": {
+        "type": "list[string]",
+        "required": False,
+        "description": "Indirizzi email che identificano il cliente come mittente.",
+        "used_by": "Pipeline.find_customer_by_alias, customer resolve da from_email "
+                   "in rule engine.",
+        "hint": "Per fonti con tabella separata aliases: "
+                "STRING_AGG(a.alias_name, ',') GROUP BY codcli + transform 'split:,'. "
+                "I valori saranno normalizzati a lowercase.",
+    },
+    "timezone": {
+        "type": "string (IANA tz)",
+        "required": False,
+        "description": "Fuso orario per calcolo in_service / has_exception_today.",
+        "used_by": "Pipeline.is_in_service, match_has_exception_today.",
+        "hint": "Default 'Europe/Rome'. Esempi: 'Europe/Rome', 'UTC', 'America/New_York'.",
+    },
+    "service_hours_json": {
+        "type": "object {profile, timezone, schedule, holidays}",
+        "required": False,
+        "description": "Profilo orari + override + festivita' del cliente.",
+        "used_by": "Rule engine match_in_service, match_has_exception_today, "
+                   "calcolo finestre H24 e service hours.",
+        "hint": "Per fonti relazionali: aggrega via json_build_object o passa "
+                "JSON serializzato e usa transform 'json_parse'. Per CSV "
+                "questo campo va lasciato vuoto.",
+    },
+    "raw_json": {
+        "type": "object (audit)",
+        "required": False,
+        "description": "Snapshot completo del record sorgente per audit/debug.",
+        "used_by": "Solo audit (non letto a runtime).",
+        "hint": "Opzionale. Se popolato, viene salvato cosi' com'e'. Utile "
+                "per debugging differenze tra schema sorgente e canonico.",
+    },
+}
+
 TRUTHY = {"1", "true", "t", "yes", "y", "si", "sì", "on", "vero", "attivo"}
 FALSY = {"0", "false", "f", "no", "n", "off", "falso", "inattivo"}
 
