@@ -1,283 +1,144 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 1080" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="13">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 1080" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="13">
   <defs>
-    <marker id="arrow-d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path d="M 0 0 L 10 5 L 0 10 z" fill="#475569"/>
     </marker>
-    <linearGradient id="gStart" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#dbeafe"/>
-      <stop offset="100%" stop-color="#bfdbfe"/>
-    </linearGradient>
-    <linearGradient id="gGlobali" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#dbeafe"/>
-      <stop offset="100%" stop-color="#93c5fd"/>
-    </linearGradient>
-    <linearGradient id="gStandard" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#dcfce7"/>
-      <stop offset="100%" stop-color="#86efac"/>
-    </linearGradient>
-    <linearGradient id="gEsteso" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#fef3c7"/>
-      <stop offset="100%" stop-color="#fcd34d"/>
-    </linearGradient>
-    <linearGradient id="gH24" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#fee2e2"/>
-      <stop offset="100%" stop-color="#fca5a5"/>
-    </linearGradient>
-    <linearGradient id="gNessuno" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#e2e8f0"/>
-      <stop offset="100%" stop-color="#cbd5e1"/>
-    </linearGradient>
-    <linearGradient id="gExample" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#fdf4ff"/>
-      <stop offset="100%" stop-color="#f5d0fe"/>
-    </linearGradient>
-    <filter id="shadow-d" x="-5%" y="-5%" width="110%" height="115%">
-      <feGaussianBlur in="SourceAlpha" stdDeviation="2"/>
-      <feOffset dx="0" dy="2" result="off"/>
-      <feComponentTransfer><feFuncA type="linear" slope="0.18"/></feComponentTransfer>
-      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
+    <linearGradient id="gQ" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#fef3c7"/><stop offset="100%" stop-color="#fde68a"/></linearGradient>
+    <linearGradient id="gG" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#dcfce7"/><stop offset="100%" stop-color="#bbf7d0"/></linearGradient>
+    <linearGradient id="gT" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#e0e7ff"/><stop offset="100%" stop-color="#c7d2fe"/></linearGradient>
+    <linearGradient id="gC" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#cffafe"/><stop offset="100%" stop-color="#a5f3fc"/></linearGradient>
   </defs>
 
-  <!-- Title -->
-  <text x="550" y="28" text-anchor="middle" font-size="17" font-weight="700" fill="#0f172a">Logica decisionale: dove metto una nuova regola?</text>
-  <text x="550" y="48" text-anchor="middle" font-size="12" font-style="italic" fill="#64748b">scegli il rule_set giusto + usa match_in_service per la finestra temporale</text>
+  <text x="590" y="34" font-size="22" font-weight="700" text-anchor="middle" fill="#0f172a">Dove metto una nuova regola? — logica post M035</text>
+  <text x="590" y="56" font-size="13" text-anchor="middle" fill="#475569">Filtro contratto/profilo cliente = match_customer_groups · Filtro orario = match_in_service / match_at_hours</text>
 
-  <!-- Start -->
-  <g filter="url(#shadow-d)">
-    <rect x="430" y="70" width="240" height="60" rx="30" fill="url(#gStart)" stroke="#3b82f6" stroke-width="1.5"/>
-    <text x="550" y="95" text-anchor="middle" font-weight="700" fill="#1e3a8a">DEVO CREARE UNA</text>
-    <text x="550" y="113" text-anchor="middle" font-weight="700" fill="#1e3a8a">REGOLA</text>
-  </g>
+  <rect x="60" y="80" width="1060" height="100" rx="12" fill="#fffbeb" stroke="#f59e0b" stroke-width="2"/>
+  <text x="80" y="106" font-size="14" font-weight="700" fill="#78350f">REGOLA D'ORO (post M035)</text>
+  <text x="80" y="128" font-size="12" fill="#92400e"><tspan font-weight="600">match_customer_groups</tspan> = il filtro per CONTRATTO o TIPO di servizio del cliente (H24, EXT, STD, no-contract).</text>
+  <text x="80" y="146" font-size="12" fill="#92400e"><tspan font-weight="600">match_in_service / match_at_hours</tspan> = il filtro TEMPORALE (DENTRO/FUORI orario operativo, fasce esplicite).</text>
+  <text x="80" y="164" font-size="12" fill="#92400e"><tspan font-weight="600">rule_set_id</tspan> = solo organizzazione UI (`globali`, `std_window`, `ext_window`, `h24_window`). NON gating runtime.</text>
 
-  <line x1="550" y1="130" x2="550" y2="163" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow-d)"/>
+  <text x="60" y="212" font-size="15" font-weight="700" fill="#0f172a">Decision tree</text>
 
-  <!-- Decision 1: dipende dal contratto? -->
-  <g filter="url(#shadow-d)">
-    <polygon points="550,165 760,225 550,285 340,225" fill="#fff" stroke="#475569" stroke-width="1.5"/>
-    <text x="550" y="210" text-anchor="middle" font-weight="700" fill="#0f172a">Riguarda il TIPO di</text>
-    <text x="550" y="228" text-anchor="middle" font-weight="700" fill="#0f172a">CONTRATTO del cliente?</text>
-    <text x="550" y="247" text-anchor="middle" font-size="11" fill="#64748b">(es. tariffe specifiche, escalation</text>
-    <text x="550" y="262" text-anchor="middle" font-size="11" fill="#64748b">diversa per H24, template dedicato)</text>
-  </g>
+  <rect x="60" y="226" width="320" height="90" rx="10" fill="url(#gQ)" stroke="#d97706"/>
+  <text x="220" y="252" font-size="13" font-weight="700" text-anchor="middle" fill="#7c2d12">1. Vale per QUALSIASI cliente?</text>
+  <text x="220" y="270" font-size="11" text-anchor="middle" fill="#92400e">(catch-all, system alerts, AI classify, sistemi automatici)</text>
+  <text x="220" y="290" font-size="11" font-weight="600" text-anchor="middle" fill="#7c2d12">SI - match_customer_groups VUOTO</text>
+  <text x="220" y="306" font-size="10" font-style="italic" text-anchor="middle" fill="#92400e">(rule_set_id consigliato: `globali`)</text>
 
-  <!-- Branch NO (sinistra) -->
-  <line x1="340" y1="225" x2="220" y2="225" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow-d)"/>
-  <text x="280" y="218" text-anchor="middle" font-size="11" font-weight="600" font-style="italic" fill="#0f172a">NO</text>
+  <line x1="380" y1="271" x2="430" y2="271" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
 
-  <!-- Branch SI (destra) -->
-  <line x1="760" y1="225" x2="880" y2="225" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow-d)"/>
-  <text x="820" y="218" text-anchor="middle" font-size="11" font-weight="600" font-style="italic" fill="#0f172a">SÌ</text>
+  <rect x="430" y="240" width="280" height="64" rx="8" fill="url(#gG)" stroke="#16a34a"/>
+  <text x="570" y="260" font-size="12" font-weight="700" text-anchor="middle" fill="#14532d">match_customer_groups = (vuoto)</text>
+  <text x="570" y="278" font-size="10" text-anchor="middle" fill="#166534">Esempio: CloudTIK alert, AI classify,</text>
+  <text x="570" y="293" font-size="10" text-anchor="middle" fill="#166534">catch-all, thread continuation seed</text>
 
-  <!-- ====== RAMO SINISTRO: NO contratto ====== -->
-  <!-- Decision 2: dipende dall'orario? -->
-  <g filter="url(#shadow-d)">
-    <polygon points="220,170 380,230 220,290 60,230" fill="#fff" stroke="#475569" stroke-width="1.5"/>
-    <text x="220" y="215" text-anchor="middle" font-weight="700" fill="#0f172a">Dipende</text>
-    <text x="220" y="232" text-anchor="middle" font-weight="700" fill="#0f172a">dall'ORARIO?</text>
-    <text x="220" y="252" text-anchor="middle" font-size="10.5" fill="#64748b">(orario operativo del</text>
-    <text x="220" y="266" text-anchor="middle" font-size="10.5" fill="#64748b">singolo cliente)</text>
-  </g>
+  <line x1="220" y1="316" x2="220" y2="356" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
 
-  <line x1="120" y1="240" x2="120" y2="335" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow-d)"/>
-  <text x="105" y="305" font-size="11" font-weight="600" font-style="italic" fill="#0f172a">NO</text>
+  <rect x="60" y="356" width="320" height="100" rx="10" fill="url(#gQ)" stroke="#d97706"/>
+  <text x="220" y="382" font-size="13" font-weight="700" text-anchor="middle" fill="#7c2d12">2. Specifica per livello di contratto?</text>
+  <text x="220" y="400" font-size="11" text-anchor="middle" fill="#92400e">H24 / EXT / STD / no-contract</text>
+  <text x="220" y="420" font-size="11" font-weight="600" text-anchor="middle" fill="#7c2d12">SI - seleziona gruppi cliente</text>
+  <text x="220" y="436" font-size="10" font-style="italic" text-anchor="middle" fill="#92400e">(es. h24_customers, std_customers)</text>
 
-  <line x1="320" y1="240" x2="320" y2="335" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow-d)"/>
-  <text x="335" y="305" font-size="11" font-weight="600" font-style="italic" fill="#0f172a">SÌ</text>
+  <line x1="380" y1="406" x2="430" y2="406" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
 
-  <!-- Result: globali plain -->
-  <g filter="url(#shadow-d)">
-    <rect x="20" y="340" width="200" height="180" rx="10" fill="url(#gGlobali)" stroke="#1e40af" stroke-width="2"/>
-    <text x="120" y="365" text-anchor="middle" font-weight="700" fill="#1e3a8a" font-size="14">SET 'globali'</text>
-    <text x="120" y="385" text-anchor="middle" font-size="11" fill="#1e3a8a">sempre attivo</text>
+  <rect x="430" y="370" width="280" height="80" rx="8" fill="url(#gC)" stroke="#0891b2"/>
+  <text x="570" y="392" font-size="12" font-weight="700" text-anchor="middle" fill="#164e63">match_customer_groups = csv</text>
+  <text x="438" y="412" font-size="10" fill="#0e7490">Es: "h24_customers" - solo clienti H24</text>
+  <text x="438" y="426" font-size="10" fill="#0e7490">Es: "h24_customers,ext_customers" - H24+EXT</text>
+  <text x="438" y="440" font-size="10" font-style="italic" fill="#155e75">(M034) i gruppi sono self-contained</text>
 
-    <line x1="35" y1="395" x2="205" y2="395" stroke="#1e40af" stroke-width="0.8" stroke-dasharray="2 2"/>
-    <text x="120" y="412" text-anchor="middle" font-size="10.5" font-weight="600" fill="#1e3a8a">Esempi</text>
-    <text x="120" y="430" text-anchor="middle" font-size="10" fill="#334155">• CloudTIK alerts</text>
-    <text x="120" y="446" text-anchor="middle" font-size="10" fill="#334155">• Sistemi automatici</text>
-    <text x="120" y="462" text-anchor="middle" font-size="10" fill="#334155">• AI learning / classify</text>
-    <text x="120" y="478" text-anchor="middle" font-size="10" fill="#334155">• Privacy bypass</text>
-    <text x="120" y="494" text-anchor="middle" font-size="10" fill="#334155">• Catch-all default</text>
-    <text x="120" y="510" text-anchor="middle" font-size="10" fill="#334155">• Codici autorizzazione H24</text>
-  </g>
+  <line x1="220" y1="456" x2="220" y2="496" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
 
-  <!-- Result: globali + match_in_service -->
-  <g filter="url(#shadow-d)">
-    <rect x="240" y="340" width="240" height="240" rx="10" fill="url(#gGlobali)" stroke="#1e40af" stroke-width="2"/>
-    <text x="360" y="365" text-anchor="middle" font-weight="700" fill="#1e3a8a" font-size="14">SET 'globali' +</text>
-    <text x="360" y="385" text-anchor="middle" font-weight="700" fill="#1e3a8a" font-size="14">match_in_service</text>
+  <rect x="60" y="496" width="320" height="100" rx="10" fill="url(#gQ)" stroke="#d97706"/>
+  <text x="220" y="522" font-size="13" font-weight="700" text-anchor="middle" fill="#7c2d12">3. Dipende dall'orario?</text>
+  <text x="220" y="540" font-size="11" text-anchor="middle" fill="#92400e">Fuori orario / dentro orario / orari custom</text>
+  <text x="220" y="560" font-size="11" font-weight="600" text-anchor="middle" fill="#7c2d12">SI - match_in_service o match_at_hours</text>
+  <text x="220" y="576" font-size="10" font-style="italic" text-anchor="middle" fill="#92400e">in_service usa il profilo del singolo cliente</text>
 
-    <line x1="255" y1="395" x2="465" y2="395" stroke="#1e40af" stroke-width="0.8" stroke-dasharray="2 2"/>
+  <line x1="380" y1="546" x2="430" y2="546" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
 
-    <text x="360" y="415" text-anchor="middle" font-size="11" font-weight="700" fill="#15803d">match_in_service=true</text>
-    <text x="360" y="430" text-anchor="middle" font-size="10" fill="#334155">scatta dentro la finestra</text>
-    <text x="360" y="444" text-anchor="middle" font-size="10" fill="#334155">operativa del singolo cliente:</text>
-    <text x="360" y="460" text-anchor="middle" font-size="10" font-family="ui-monospace,Menlo,monospace" fill="#15803d">STD ✓ EXT ✓ H24 ✓</text>
+  <rect x="430" y="510" width="280" height="80" rx="8" fill="url(#gT)" stroke="#4338ca"/>
+  <text x="570" y="530" font-size="12" font-weight="700" text-anchor="middle" fill="#312e81">match_in_service tristate</text>
+  <text x="438" y="550" font-size="10" fill="#3730a3">DENTRO orario operativo del cliente</text>
+  <text x="438" y="564" font-size="10" fill="#3730a3">FUORI orario operativo del cliente</text>
+  <text x="438" y="578" font-size="10" fill="#3730a3">qualsiasi (vuoto)</text>
 
-    <line x1="270" y1="475" x2="450" y2="475" stroke="#cbd5e1" stroke-width="0.5"/>
+  <text x="60" y="640" font-size="15" font-weight="700" fill="#0f172a">Ricette pratiche (esempi reali)</text>
 
-    <text x="360" y="495" text-anchor="middle" font-size="11" font-weight="700" fill="#b91c1c">match_in_service=false</text>
-    <text x="360" y="510" text-anchor="middle" font-size="10" fill="#334155">scatta SOLO fuori finestra</text>
-    <text x="360" y="524" text-anchor="middle" font-size="10" fill="#334155">operativa:</text>
-    <text x="360" y="540" text-anchor="middle" font-size="10" font-family="ui-monospace,Menlo,monospace" fill="#b91c1c">STD ✓ EXT ✓ H24 ✗ skip</text>
+  <rect x="60" y="654" width="1060" height="380" rx="10" fill="#ffffff" stroke="#cbd5e1" stroke-width="1"/>
 
-    <text x="360" y="565" text-anchor="middle" font-size="10" font-style="italic" fill="#475569">la gerarchia STD ⊂ EXT ⊂ H24</text>
-    <text x="360" y="578" text-anchor="middle" font-size="10" font-style="italic" fill="#475569">si rispetta automaticamente</text>
-  </g>
+  <rect x="60" y="654" width="1060" height="32" fill="#f1f5f9"/>
+  <text x="76" y="675" font-size="11" font-weight="700" fill="#0f172a">Use case</text>
+  <text x="290" y="675" font-size="11" font-weight="700" fill="#0f172a">match_customer_groups</text>
+  <text x="500" y="675" font-size="11" font-weight="700" fill="#0f172a">match_in_service / at_hours</text>
+  <text x="720" y="675" font-size="11" font-weight="700" fill="#0f172a">action</text>
+  <text x="900" y="675" font-size="11" font-weight="700" fill="#0f172a">rule_set_id (UI)</text>
 
-  <!-- ====== RAMO DESTRO: SI contratto ====== -->
-  <line x1="880" y1="245" x2="880" y2="295" stroke="#475569" stroke-width="1.5"/>
+  <line x1="60" y1="686" x2="1120" y2="686" stroke="#e2e8f0"/>
+  <text x="76" y="710" font-size="11" fill="#0f172a">Auto-reply fuori orario per H24</text>
+  <text x="290" y="710" font-size="10" font-family="monospace" fill="#0e7490">h24_customers</text>
+  <text x="500" y="710" font-size="11" fill="#0f172a">FUORI</text>
+  <text x="720" y="710" font-size="10" font-family="monospace" fill="#0f172a">auto_reply (template paid_option)</text>
+  <text x="900" y="710" font-size="10" font-family="monospace" fill="#475569">h24_window</text>
 
-  <text x="880" y="320" text-anchor="middle" font-weight="700" fill="#0f172a" font-size="13">Quale livello di contratto?</text>
+  <line x1="60" y1="722" x2="1120" y2="722" stroke="#e2e8f0"/>
+  <text x="76" y="746" font-size="11" fill="#0f172a">Crea ticket NORMALE clienti STD</text>
+  <text x="290" y="746" font-size="10" font-family="monospace" fill="#0e7490">std_customers</text>
+  <text x="500" y="746" font-size="11" fill="#0f172a">DENTRO</text>
+  <text x="720" y="746" font-size="10" font-family="monospace" fill="#0f172a">create_ticket (urgenza=NORMALE)</text>
+  <text x="900" y="746" font-size="10" font-family="monospace" fill="#475569">std_window</text>
 
-  <line x1="880" y1="335" x2="540" y2="375" stroke="#475569" stroke-width="1.2" marker-end="url(#arrow-d)"/>
-  <line x1="880" y1="335" x2="700" y2="375" stroke="#475569" stroke-width="1.2" marker-end="url(#arrow-d)"/>
-  <line x1="880" y1="335" x2="860" y2="375" stroke="#475569" stroke-width="1.2" marker-end="url(#arrow-d)"/>
-  <line x1="880" y1="335" x2="1020" y2="375" stroke="#475569" stroke-width="1.2" marker-end="url(#arrow-d)"/>
+  <line x1="60" y1="758" x2="1120" y2="758" stroke="#e2e8f0"/>
+  <text x="76" y="782" font-size="11" fill="#0f172a">Cloudtik alerts (qualsiasi cliente)</text>
+  <text x="290" y="782" font-size="10" font-style="italic" fill="#475569">(vuoto)</text>
+  <text x="500" y="782" font-size="10" font-style="italic" fill="#475569">(qualsiasi)</text>
+  <text x="720" y="782" font-size="10" font-family="monospace" fill="#0f172a">create_ticket + match_subject_regex</text>
+  <text x="900" y="782" font-size="10" font-family="monospace" fill="#475569">globali</text>
 
-  <!-- Set standard -->
-  <g filter="url(#shadow-d)">
-    <rect x="500" y="380" width="160" height="170" rx="10" fill="url(#gStandard)" stroke="#15803d" stroke-width="2"/>
-    <text x="580" y="402" text-anchor="middle" font-weight="700" fill="#14532d" font-size="13">SET 'standard'</text>
-    <text x="580" y="418" text-anchor="middle" font-size="10.5" fill="#15803d">solo clienti STD</text>
-    <line x1="515" y1="426" x2="645" y2="426" stroke="#15803d" stroke-width="0.6" stroke-dasharray="2 2"/>
-    <text x="580" y="444" text-anchor="middle" font-size="10" font-weight="600" fill="#14532d">profilo</text>
-    <text x="580" y="458" text-anchor="middle" font-size="10" font-family="ui-monospace,Menlo,monospace" fill="#14532d">STD</text>
-    <text x="580" y="476" text-anchor="middle" font-size="10" fill="#334155">lun-ven</text>
-    <text x="580" y="490" text-anchor="middle" font-size="10" fill="#334155">08:30-13:00</text>
-    <text x="580" y="504" text-anchor="middle" font-size="10" fill="#334155">14:30-17:30</text>
-    <line x1="525" y1="514" x2="635" y2="514" stroke="#15803d" stroke-width="0.5" stroke-dasharray="1 2"/>
-    <text x="580" y="530" text-anchor="middle" font-size="10" font-style="italic" fill="#15803d">tariffe specifiche,</text>
-    <text x="580" y="544" text-anchor="middle" font-size="10" font-style="italic" fill="#15803d">template dedicato</text>
-  </g>
+  <line x1="60" y1="794" x2="1120" y2="794" stroke="#e2e8f0"/>
+  <text x="76" y="818" font-size="11" fill="#0f172a">No-contract: sempre billable</text>
+  <text x="290" y="818" font-size="10" font-family="monospace" fill="#0e7490">no_contract_customers</text>
+  <text x="500" y="818" font-size="10" font-style="italic" fill="#475569">(qualsiasi)</text>
+  <text x="720" y="818" font-size="10" font-family="monospace" fill="#0f172a">auto_reply (always_billable)</text>
+  <text x="900" y="818" font-size="10" font-family="monospace" fill="#475569">globali</text>
 
-  <!-- Set esteso -->
-  <g filter="url(#shadow-d)">
-    <rect x="680" y="380" width="160" height="170" rx="10" fill="url(#gEsteso)" stroke="#a16207" stroke-width="2"/>
-    <text x="760" y="402" text-anchor="middle" font-weight="700" fill="#713f12" font-size="13">SET 'esteso'</text>
-    <text x="760" y="418" text-anchor="middle" font-size="10.5" fill="#854d0e">solo clienti EXT</text>
-    <line x1="695" y1="426" x2="825" y2="426" stroke="#a16207" stroke-width="0.6" stroke-dasharray="2 2"/>
-    <text x="760" y="444" text-anchor="middle" font-size="10" font-weight="600" fill="#713f12">profilo</text>
-    <text x="760" y="458" text-anchor="middle" font-size="10" font-family="ui-monospace,Menlo,monospace" fill="#713f12">EXT</text>
-    <text x="760" y="476" text-anchor="middle" font-size="10" fill="#334155">lun-ven</text>
-    <text x="760" y="490" text-anchor="middle" font-size="10" fill="#334155">06:30-19:30</text>
-    <text x="760" y="504" text-anchor="middle" font-size="10" fill="#334155">+ sab mattina</text>
-    <line x1="705" y1="514" x2="815" y2="514" stroke="#a16207" stroke-width="0.5" stroke-dasharray="1 2"/>
-    <text x="760" y="530" text-anchor="middle" font-size="10" font-style="italic" fill="#854d0e">routing dedicato,</text>
-    <text x="760" y="544" text-anchor="middle" font-size="10" font-style="italic" fill="#854d0e">priorità diversa</text>
-  </g>
+  <line x1="60" y1="830" x2="1120" y2="830" stroke="#e2e8f0"/>
+  <text x="76" y="854" font-size="11" fill="#0f172a">Tecnici no fuori orario (forward H24)</text>
+  <text x="290" y="854" font-size="10" font-style="italic" fill="#475569">(vuoto)</text>
+  <text x="500" y="854" font-size="11" fill="#0f172a">FUORI + match_to_group_id=tecnici</text>
+  <text x="720" y="854" font-size="10" font-family="monospace" fill="#0f172a">forward_to_emails=h24@domarc.it</text>
+  <text x="900" y="854" font-size="10" font-family="monospace" fill="#475569">globali</text>
 
-  <!-- Set h24 -->
-  <g filter="url(#shadow-d)">
-    <rect x="860" y="380" width="160" height="170" rx="10" fill="url(#gH24)" stroke="#b91c1c" stroke-width="2"/>
-    <text x="940" y="402" text-anchor="middle" font-weight="700" fill="#7f1d1d" font-size="13">SET 'h24'</text>
-    <text x="940" y="418" text-anchor="middle" font-size="10.5" fill="#991b1b">solo clienti H24</text>
-    <line x1="875" y1="426" x2="1005" y2="426" stroke="#b91c1c" stroke-width="0.6" stroke-dasharray="2 2"/>
-    <text x="940" y="444" text-anchor="middle" font-size="10" font-weight="600" fill="#7f1d1d">profilo</text>
-    <text x="940" y="458" text-anchor="middle" font-size="10" font-family="ui-monospace,Menlo,monospace" fill="#7f1d1d">H24</text>
-    <text x="940" y="476" text-anchor="middle" font-size="10" fill="#334155">sempre</text>
-    <text x="940" y="490" text-anchor="middle" font-size="10" fill="#334155">in servizio</text>
-    <text x="940" y="504" text-anchor="middle" font-size="10" fill="#334155">(24/7)</text>
-    <line x1="885" y1="514" x2="995" y2="514" stroke="#b91c1c" stroke-width="0.5" stroke-dasharray="1 2"/>
-    <text x="940" y="530" text-anchor="middle" font-size="10" font-style="italic" fill="#991b1b">escalation immediata,</text>
-    <text x="940" y="544" text-anchor="middle" font-size="10" font-style="italic" fill="#991b1b">tariffe straordinario</text>
-  </g>
+  <line x1="60" y1="866" x2="1120" y2="866" stroke="#e2e8f0"/>
+  <text x="76" y="890" font-size="11" fill="#0f172a">H24 codice in subject (qualsiasi)</text>
+  <text x="290" y="890" font-size="10" font-style="italic" fill="#475569">(vuoto)</text>
+  <text x="500" y="890" font-size="11" fill="#0f172a">match_subject_regex AUTH-|H24-</text>
+  <text x="720" y="890" font-size="10" font-family="monospace" fill="#0f172a">create_authorized_ticket</text>
+  <text x="900" y="890" font-size="10" font-family="monospace" fill="#475569">globali</text>
 
-  <!-- Set nessuno -->
-  <g filter="url(#shadow-d)">
-    <rect x="1040" y="380" width="50" height="170" rx="10" fill="url(#gNessuno)" stroke="#64748b" stroke-width="2"/>
-    <text x="1065" y="402" text-anchor="middle" font-weight="700" fill="#334155" font-size="11">'nessuno'</text>
-    <text x="1065" y="418" text-anchor="middle" font-size="9.5" fill="#475569">profilo</text>
-    <text x="1065" y="430" text-anchor="middle" font-size="10" font-family="ui-monospace,Menlo,monospace" fill="#334155">NO</text>
-    <text x="1065" y="450" text-anchor="middle" font-size="9" fill="#475569">aut.</text>
-    <text x="1065" y="463" text-anchor="middle" font-size="9" fill="#475569">sempre</text>
-    <text x="1065" y="476" text-anchor="middle" font-size="9" fill="#475569">richiesta</text>
-  </g>
+  <line x1="60" y1="902" x2="1120" y2="902" stroke="#e2e8f0"/>
+  <text x="76" y="926" font-size="11" fill="#0f172a"><tspan font-weight="700" fill="#7c3aed">Thread continuation (M036)</tspan></text>
+  <text x="290" y="926" font-size="10" font-style="italic" fill="#475569">(vuoto)</text>
+  <text x="500" y="926" font-size="11" fill="#7c3aed">match_is_thread_continuation = SI</text>
+  <text x="720" y="926" font-size="10" font-family="monospace" fill="#0f172a">default_delivery (no nuovo ticket)</text>
+  <text x="900" y="926" font-size="10" font-family="monospace" fill="#475569">globali (priority=5)</text>
 
-  <!-- ====== Sezione esempi concreti ====== -->
-  <g filter="url(#shadow-d)">
-    <rect x="40" y="610" width="1020" height="350" rx="10" fill="#fdfdfd" stroke="#cbd5e1" stroke-width="1.5"/>
-    <text x="60" y="635" font-weight="700" font-size="14" fill="#0f172a">Esempi concreti di mappatura</text>
+  <line x1="60" y1="938" x2="1120" y2="938" stroke="#e2e8f0"/>
+  <text x="76" y="962" font-size="11" fill="#0f172a"><tspan font-weight="700" fill="#16a34a">Catch-all finale</tspan></text>
+  <text x="290" y="962" font-size="10" font-style="italic" fill="#475569">(vuoto)</text>
+  <text x="500" y="962" font-size="10" font-style="italic" fill="#475569">(qualsiasi)</text>
+  <text x="720" y="962" font-size="10" font-family="monospace" fill="#0f172a">default_delivery</text>
+  <text x="900" y="962" font-size="10" font-family="monospace" fill="#475569">globali (priority=999)</text>
 
-    <!-- Tabella header -->
-    <rect x="60" y="650" width="380" height="28" fill="#f1f5f9" stroke="#cbd5e1"/>
-    <text x="70" y="668" font-size="11" font-weight="700" fill="#334155">Caso d'uso</text>
+  <line x1="60" y1="974" x2="1120" y2="974" stroke="#e2e8f0"/>
+  <text x="76" y="998" font-size="11" fill="#0f172a"><tspan font-weight="700" fill="#64748b">Shadow test (qualsiasi regola)</tspan></text>
+  <text x="290" y="998" font-size="10" font-style="italic" fill="#475569">(qualsiasi)</text>
+  <text x="500" y="998" font-size="10" font-style="italic" fill="#475569">(qualsiasi)</text>
+  <text x="720" y="998" font-size="10" font-family="monospace" fill="#475569">action loggata, NON eseguita</text>
+  <text x="900" y="998" font-size="11" fill="#64748b">shadow_mode=1 (M033)</text>
 
-    <rect x="440" y="650" width="160" height="28" fill="#f1f5f9" stroke="#cbd5e1"/>
-    <text x="520" y="668" text-anchor="middle" font-size="11" font-weight="700" fill="#334155">rule_set</text>
-
-    <rect x="600" y="650" width="170" height="28" fill="#f1f5f9" stroke="#cbd5e1"/>
-    <text x="685" y="668" text-anchor="middle" font-size="11" font-weight="700" fill="#334155">match_in_service</text>
-
-    <rect x="770" y="650" width="270" height="28" fill="#f1f5f9" stroke="#cbd5e1"/>
-    <text x="780" y="668" font-size="11" font-weight="700" fill="#334155">Note</text>
-
-    <!-- Row 1: auto-reply orario lavorativo -->
-    <text x="70" y="697" font-size="11" fill="#0f172a">Auto-reply "preso in carico" durante orario lavorativo</text>
-    <rect x="450" y="685" width="140" height="20" rx="10" fill="url(#gGlobali)" stroke="#1e40af"/>
-    <text x="520" y="699" text-anchor="middle" font-size="10.5" font-weight="600" fill="#1e3a8a">globali</text>
-    <text x="685" y="699" text-anchor="middle" font-size="11" font-family="ui-monospace,Menlo,monospace" fill="#15803d">true</text>
-    <text x="780" y="699" font-size="10.5" fill="#475569">una sola regola per tutti i contratti</text>
-
-    <!-- Row 2: auto-reply fuori orario con codice H24 -->
-    <text x="70" y="722" font-size="11" fill="#0f172a">Auto-reply "fuori orario, ecco il codice H24"</text>
-    <rect x="450" y="710" width="140" height="20" rx="10" fill="url(#gGlobali)" stroke="#1e40af"/>
-    <text x="520" y="724" text-anchor="middle" font-size="10.5" font-weight="600" fill="#1e3a8a">globali</text>
-    <text x="685" y="724" text-anchor="middle" font-size="11" font-family="ui-monospace,Menlo,monospace" fill="#b91c1c">false</text>
-    <text x="780" y="724" font-size="10.5" fill="#475569">cliente H24 sempre in_service → skip</text>
-
-    <!-- Row 3: CloudTIK alert -->
-    <text x="70" y="747" font-size="11" fill="#0f172a">CloudTIK alert no-reply@cloudtik.it</text>
-    <rect x="450" y="735" width="140" height="20" rx="10" fill="url(#gGlobali)" stroke="#1e40af"/>
-    <text x="520" y="749" text-anchor="middle" font-size="10.5" font-weight="600" fill="#1e3a8a">globali</text>
-    <text x="685" y="749" text-anchor="middle" font-size="11" font-style="italic" fill="#64748b">(none)</text>
-    <text x="780" y="749" font-size="10.5" fill="#475569">sistema automatico, valuta sempre</text>
-
-    <!-- Row 4: catch-all -->
-    <text x="70" y="772" font-size="11" fill="#0f172a">Catch-all default delivery</text>
-    <rect x="450" y="760" width="140" height="20" rx="10" fill="url(#gGlobali)" stroke="#1e40af"/>
-    <text x="520" y="774" text-anchor="middle" font-size="10.5" font-weight="600" fill="#1e3a8a">globali</text>
-    <text x="685" y="774" text-anchor="middle" font-size="11" font-style="italic" fill="#64748b">(none)</text>
-    <text x="780" y="774" font-size="10.5" fill="#475569">priorità 999, fallback per qualsiasi mail</text>
-
-    <!-- Row 5: STD blocco oltre orario -->
-    <text x="70" y="797" font-size="11" fill="#0f172a">Cliente STD: blocco mail oltre 17:30 con messaggio dedicato</text>
-    <rect x="450" y="785" width="140" height="20" rx="10" fill="url(#gStandard)" stroke="#15803d"/>
-    <text x="520" y="799" text-anchor="middle" font-size="10.5" font-weight="600" fill="#14532d">standard</text>
-    <text x="685" y="799" text-anchor="middle" font-size="11" font-family="ui-monospace,Menlo,monospace" fill="#b91c1c">false</text>
-    <text x="780" y="799" font-size="10.5" fill="#475569">logica specifica solo del contratto STD</text>
-
-    <!-- Row 6: H24 escalation -->
-    <text x="70" y="822" font-size="11" fill="#0f172a">Solo H24: alert immediato a tecnico reperibile</text>
-    <rect x="450" y="810" width="140" height="20" rx="10" fill="url(#gH24)" stroke="#b91c1c"/>
-    <text x="520" y="824" text-anchor="middle" font-size="10.5" font-weight="600" fill="#7f1d1d">h24</text>
-    <text x="685" y="824" text-anchor="middle" font-size="11" font-style="italic" fill="#64748b">(none)</text>
-    <text x="780" y="824" font-size="10.5" fill="#475569">solo clienti contratto H24</text>
-
-    <!-- Row 7: ticket tariffa straordinario -->
-    <text x="70" y="847" font-size="11" fill="#0f172a">Apertura ticket urgente con tariffa H24</text>
-    <rect x="450" y="835" width="140" height="20" rx="10" fill="url(#gGlobali)" stroke="#1e40af"/>
-    <text x="520" y="849" text-anchor="middle" font-size="10.5" font-weight="600" fill="#1e3a8a">globali</text>
-    <text x="685" y="849" text-anchor="middle" font-size="11" font-family="ui-monospace,Menlo,monospace" fill="#b91c1c">false</text>
-    <text x="780" y="849" font-size="10.5" fill="#475569">+ match_known_customer=true</text>
-
-    <!-- Row 8: AI classify -->
-    <text x="70" y="872" font-size="11" fill="#0f172a">AI classify (Claude) per triage automatico</text>
-    <rect x="450" y="860" width="140" height="20" rx="10" fill="url(#gGlobali)" stroke="#1e40af"/>
-    <text x="520" y="874" text-anchor="middle" font-size="10.5" font-weight="600" fill="#1e3a8a">globali</text>
-    <text x="685" y="874" text-anchor="middle" font-size="11" font-style="italic" fill="#64748b">(none)</text>
-    <text x="780" y="874" font-size="10.5" fill="#475569">apprendimento trasversale a tutti</text>
-
-    <!-- Box "regola d'oro" in fondo -->
-    <rect x="60" y="900" width="980" height="50" rx="6" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.2"/>
-    <text x="80" y="921" font-size="12" font-weight="700" fill="#92400e">Regola d'oro</text>
-    <text x="80" y="939" font-size="11" fill="#78350f">
-      <tspan font-family="ui-monospace,Menlo,monospace" font-weight="700">rule_set_id</tspan> = TIPO DI CONTRATTO ·
-      <tspan font-family="ui-monospace,Menlo,monospace" font-weight="700">match_in_service</tspan> = FINESTRA TEMPORALE (rispetta naturalmente STD ⊂ EXT ⊂ H24) ·
-      <tspan font-style="italic">in dubbio? metti in 'globali'</tspan>
-    </text>
-  </g>
-
-  <text x="1090" y="1068" text-anchor="end" font-size="10" font-style="italic" fill="#64748b">Domarc SMTP Relay · M029 rule_sets</text>
+  <text x="76" y="1024" font-size="10" font-style="italic" fill="#475569">M034: i gruppi cliente sono auto-popolati da regole di membership su contract_type / tipologia_servizio / JSON custom — definite in /customer-groups/&lt;id&gt;/membership-rules</text>
 </svg>

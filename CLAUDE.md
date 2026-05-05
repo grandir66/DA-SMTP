@@ -26,9 +26,11 @@ Domarc SMTP Relay
 │   ├── auth/                  # Login, sessione, role-based access (4 ruoli)
 │   ├── routes/                # Blueprint Flask: dashboard, rules, events,
 │   │                          # queue, ai, integrations, customer_groups,
-│   │                          # privacy_bypass, manual, …
+│   │                          # customer_sync, privacy_bypass, manual, …
 │   ├── customer_sources/      # Adapter pluggable: yaml, sqlite, rest,
-│   │                          # stormshield, postgres (con sync periodico)
+│   │                          # stormshield, postgres, **local** (default)
+│   ├── customer_sync/         # M028: provider pluggabili (postgres, mssql,
+│   │                          # csv_file, json_url) + engine + scheduler
 │   ├── storage/               # SqliteStorage (admin.db, schema migrations)
 │   ├── migrations/            # SQL idempotenti, applicate a init_db
 │   ├── ai_assistant/          # PII redactor + provider Anthropic/DGX
@@ -77,7 +79,8 @@ Domarc SMTP Relay
 
 - **Admin SQLite** (`/var/lib/domarc-smtp-relay-admin/admin.db`):
   regole, gruppi, utenti, settings, eventi auditati, API key cifrate,
-  cache clienti syncata da PG (tabella `customers_pg_cache`).
+  **tabella `customers` autoritativa** (M028, ex `customers_pg_cache`)
+  alimentata da provider configurabili in `customer_sync_sources`.
 - **Listener SQLite** (`/var/lib/stormshield-smtp-relay/relay.db`):
   cache clienti/rules/settings/templates, outbound queue, dispatch queue,
   quarantine, events_log.
@@ -154,7 +157,13 @@ solo via API HTTPS (per i ticket) e PostgreSQL read-only (per i clienti).
 mittente → ESVA antispam → 192.168.4.25:25 (listener)
     ├── Privacy bypass check (drop o passthrough silenzioso)
     ├── Kill switch check (se ON → default_delivery, no rules)
+    ├── Thread continuation check (M036): se la mail ha In-Reply-To
+    │   o References che match-ano un message_id di un evento
+    │   precedente, popola is_thread_continuation=true e parent_event
+    ├── Domain shadow check (M031): se dominio in shadow → tutto
+    │   l'evento in shadow_mode → action effettiva = default_delivery
     ├── Rule engine (chain padre→figli, prima match wins)
+    │   └── Recipient_group shadow (M030) / rule shadow (M033) cascade
     │   └── Action dispatcher: ignore | flag_only | quarantine
     │                          | auto_reply | forward | redirect
     │                          | create_ticket | ai_classify
@@ -163,6 +172,10 @@ mittente → ESVA antispam → 192.168.4.25:25 (listener)
     ├── also_deliver_to (CC ad altri destinatari da regola)
     ├── Aggregations (cluster errori semantici)
     └── Insert events_log (audit + flush al admin)
+        ├── M036: thread fields (in_reply_to, references_json,
+        │       reply_to_event_uuid, thread_root_uuid, ticket_id
+        │       eredito da parent)
+        └── M030/M031/M033: shadow_action / shadow_rule_id se shadow
 
 scheduler:
     ├── sync_loop ogni 5min       (pull customers, rules, settings, ...)
@@ -174,16 +187,28 @@ scheduler:
 
 ### Customer source pluggable
 
-4 backend:
+5 backend:
 
+- `local` (**default post-M028**): legge dalla tabella autoritativa
+  `customers` in admin.db, popolata dal `SyncEngine` di
+  `customer_sync/` con provider configurabili dalla UI.
 - `yaml`: file statico, gestione manuale.
-- `sqlite`: tabella in admin.db con UI CRUD.
+- `sqlite`: tabella in admin.db con UI CRUD (compat con vecchi deploy).
 - `rest`: REST API verso CRM proprietario.
 - `stormshield`: chiama API del manager Domarc (legacy,
   `/api/v1/relay/customers/active`).
-- `postgres`: legge direttamente PG `solution` + `stormshield`,
-  sync periodico → `customers_pg_cache` in admin.db.
-  **Backend di default per il nuovo deploy**.
+- `postgres`: legge direttamente PG `solution` + `stormshield` con sync
+  periodico in `customers`. Mantenuto per compat; sostituito di fatto
+  dal provider `postgres` di `customer_sync/` con seed legacy.
+
+### Customer sync agnostico (M028)
+
+Il `customer_sync/` package fornisce provider pluggabili (postgres,
+mssql, csv_file, json_url), un engine di sync schedulato (default 24h)
+e una UI `/customer-sync/` per configurare sorgenti, mapping field-by-
+field e on_missing policy (`flag` / `delete` / `keep`). La tabella
+`customers` è autoritativa: cambi di schema del manager esterno si
+gestiscono modificando il mapping, non il codice.
 
 ### Ticket sink (futuro)
 
@@ -269,7 +294,9 @@ manual generator, module manager, activity helpers.
 | **AI Provider** | `/ai/providers` | CRUD provider Claude/DGX, test connettività |
 | **AI Models** | `/ai/models` | Routing job_code → provider+model, A/B traffic split |
 | **Privacy Bypass** | `/privacy-bypass` | Lista indirizzi/domini esclusi (admin only) |
-| **Customer Groups** | `/customer-groups` | Raggruppamenti N:N per match nelle regole |
+| **Customer Groups** | `/customer-groups` | Raggruppamenti N:N + regole di membership self-contained (M034) |
+| **Customer Sync** | `/customer-sync` | Sorgenti dati clienti agnostiche (postgres/mssql/csv/json) — mapping field-by-field, on_missing policy, schedule, storico run (M028) |
+| **Recipient Groups** | `/recipient-groups` | Gruppi destinatari + shadow mode per gruppo (M030) |
 
 ---
 
@@ -433,4 +460,59 @@ Per dettagli, troubleshooting, comandi diagnostici: vedi `docs/H24_RUNBOOK.md`.
 
 ---
 
-*Ultimo aggiornamento: 2026-05-04 — feature H24 completata + dashboard + settings UI + runbook + reindirizzamento pilota domarc.it→r.grandi@domarc.it.*
+## Customer sync agnostico (M028)
+
+Tabella `customers` autoritativa, alimentata da provider configurabili.
+
+| Componente | Path | Cosa fa |
+|---|---|---|
+| Migration 028 | `domarc_relay_admin/migrations/028_customer_sync_sources.sqlite.sql` | RENAME `customers_pg_cache`→`customers`, tabelle `customer_sync_sources` e `customer_sync_runs`, seed sorgente legacy con sentinel `_use_legacy_pgconfig` |
+| Provider package | `domarc_relay_admin/customer_sync/` | `base.py` (ABC), `postgres.py`, `mssql.py`, `csv_file.py`, `json_url.py`, `mapper.py`, `engine.py`, `scheduler.py` |
+| Backend runtime | `domarc_relay_admin/customer_sources/local_source.py` | Legge da `customers` (default per nuovi deploy) |
+| UI admin | `domarc_relay_admin/routes/customer_sync.py` + 4 template | `/customer-sync/` lista, wizard 4-step, test connessione, mapping editor, storico run |
+
+Policy on_missing per ogni sorgente: `flag` (contract_active=0,
+default), `delete`, `keep`. Schedule default 24h.
+
+---
+
+## Rule engine — semplificato (M035) + thread tracking (M036)
+
+### Filtro contratto: **solo gruppi cliente**
+
+Dopo M035, il filtro contratto/profilo orario nelle regole avviene
+**esclusivamente** via `match_customer_groups`. I rule_sets (M029)
+sono solo container UI per organizzare le regole per profilo orario,
+NON gating runtime.
+
+I gruppi cliente (M018) sono **self-contained** (M034): regole di
+membership configurabili in `/customer-groups/<id>/membership-rules`
+auto-assegnano i clienti al gruppo in base ai campi del cliente
+(`contract_type`, `tipologia_servizio`, JSON custom). Eliminata
+dipendenza dal manager esterno.
+
+### Thread continuation (M036)
+
+Le risposte a mail già tracciate (`In-Reply-To` o `References` che
+match-ano un `message_id` in `events_log`) NON aprono un nuovo ticket.
+Implementata via:
+- ALTER `events_log` con `in_reply_to`, `references_json`,
+  `reply_to_event_uuid`, `thread_root_uuid`.
+- Tristate `match_is_thread_continuation` su rules.
+- Seed regola "Thread continuation — passa al destinatario"
+  priority=5 in rule_set `globali` (azione `default_delivery`).
+- L'evento risposta eredita `ticket_id` dal parent.
+
+### Shadow mode (M030/M031/M033)
+
+Modalità passive per testare regole/gruppi/domini in produzione senza
+eseguire le azioni. Cascade: dominio shadow → tutto in shadow;
+recipient_group shadow → solo destinatari del gruppo; rule shadow →
+solo quella regola. Audit completo in `events_log.shadow_action` /
+`shadow_rule_id` ricostruisce "cosa sarebbe successo".
+
+---
+
+*Ultimo aggiornamento: 2026-05-05 — M028-M036 completate (customer sync
+agnostico, gruppi self-contained, shadow mode in cascata, thread
+tracking RFC 2822, semplificazione rule engine, sync form regole).*

@@ -258,17 +258,25 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 | `error_aggregations` + `error_occurrences` | Aggregazioni statiche (regex) | Legacy fallback per AI clusters |
 | `events` | Log completo di ogni mail processata | TTL body via setting |
 | `addresses_from` + `addresses_to` | Anagrafica indirizzi visti (autodiscovery) | seen_count, codcli mappato |
-| `customers_pg_cache` | Cache locale clienti dal Postgres `solution` | Sync 5min via `customer_sources/postgres_source.py` |
+| `customers` | **Tabella autoritativa clienti** (M028, ex `customers_pg_cache`) | Popolata dal `customer_sync/` engine; vedi §4.8 |
+| `customer_sync_sources` (M028) | Sorgenti configurate (postgres/mssql/csv/json) | Mapping field-by-field, on_missing policy |
+| `customer_sync_runs` (M028) | Storico run (status, conteggi, error) | |
 | `service_hours` + `service_hours_profiles` | Profili orari (STD/EXT/H24/NO + custom) + override per cliente | |
 | `routes` + `domain_routing` | Smarthost SMTP per routing forward/redirect | |
 | `settings` | Chiavi-valore globali (relay_api_key, ai_shadow_mode, ecc.) | |
 
-### 4.2 Customer groups (Migration 018)
+### 4.2 Customer groups (Migration 018 + 034 self-contained)
 
 - `customer_groups`: gruppi logici di clienti (es. "top_customer", "settore_sanita")
-- `customer_group_members`: mapping codcli → group_id
+- `customer_group_members`: mapping codcli → group_id (N:N)
+- **M034** `customer_group_membership_rules`: regole di auto-assegnamento
+  in base ai campi del cliente (`contract_type`, `tipologia_servizio`,
+  JSON custom). Re-evaluation periodica (5min) o on-customer-update via
+  `recompute_group_memberships(group_id)`.
 
-Usati come criterio nelle regole via `match_customer_groups` (CSV).
+Usati come criterio nelle regole via `match_customer_groups` (CSV) —
+**dopo M035 sono l'unica chiave di filtro per contratto/tipo servizio**
+(rule_sets non sono più gating runtime).
 
 ### 4.3 Privacy bypass (Migration 011)
 
@@ -311,9 +319,13 @@ CREATE TABLE rules (
     match_contract_active INTEGER,             -- M020 tristate
     match_known_customer INTEGER,              -- tristate
     match_has_exception_today INTEGER,         -- M009 tristate
-    match_customer_groups TEXT,                -- M018 CSV "top,sanita"
+    match_customer_groups TEXT,                -- M018 CSV "top,sanita" — UNICA chiave filtro contratto/tipo (M035)
+    match_is_thread_continuation INTEGER,      -- M036 tristate: NULL/0/1
     match_tag TEXT,
     match_to_group_id INTEGER,                 -- M027 FK recipient_groups
+    rule_set_id INTEGER,                       -- M029 organizzazione UI per profilo orario (NON gating runtime, post-M035)
+    shadow_mode INTEGER NOT NULL DEFAULT 0,    -- M033 shadow per regola singola
+    shadow_note TEXT,
 
     -- Action
     action TEXT NOT NULL,
@@ -351,13 +363,67 @@ CREATE TABLE rules (
     - source_domain → h24_alias + urgent_fee_eur
     - **M024**: source_email per match più specifico del solo dominio
 
-### 4.7 Recipient groups (Migration 025 + 027)
+### 4.7 Recipient groups (Migration 025 + 027 + 030 shadow)
 
 - `recipient_groups`: gruppi logici di indirizzi destinatari (gemello di customer_groups)
 - `recipient_group_members`: email → group_id
 - `recipients`: autodiscovery destinatari visti (popolato dal listener via api.py:_autodiscover_recipients)
+- **M030**: `recipient_groups.shadow_mode`, `shadow_note` per shadow mode per gruppo
 
 Use case: "Tecnici no fuori orario" → regola con `match_to_group_id=tecnici_no_fo` + `match_in_service=False` → `forward_to_emails=h24@datia.it`.
+
+### 4.8 Customer sync agnostico (Migration 028)
+
+```sql
+CREATE TABLE customer_sync_sources (
+    id INTEGER PRIMARY KEY,
+    tenant_id INTEGER NOT NULL DEFAULT 1,
+    name TEXT NOT NULL,
+    kind TEXT NOT NULL,            -- postgres | mssql | csv_file | json_url
+    enabled INTEGER NOT NULL DEFAULT 1,
+    config_json TEXT NOT NULL,     -- {host,port,user,password_enc,dbname} | {path,delimiter,encoding} | {url,headers,auth_enc}
+    query_or_path TEXT,            -- SQL per postgres/mssql; JSONPath per json_url; null per csv
+    mapping_json TEXT NOT NULL,    -- {"src_col": "target_col"} o {"src_col": {"target":"col","transform":"split:,"}}
+    schedule_hours INTEGER NOT NULL DEFAULT 24,
+    on_missing TEXT NOT NULL DEFAULT 'flag',  -- flag | delete | keep
+    last_run_at, last_run_status, last_run_error, next_run_at,
+    UNIQUE (tenant_id, name)
+);
+CREATE TABLE customer_sync_runs (
+    id INTEGER PRIMARY KEY, source_id INTEGER, started_at, finished_at,
+    status, n_fetched, n_inserted, n_updated, n_unchanged,
+    n_flagged_missing, n_errored, error_message, triggered_by, report_json
+);
+ALTER TABLE customers ADD COLUMN last_synced_from_source_id INTEGER;
+```
+
+Provider in `customer_sync/` (postgres, mssql, csv_file, json_url).
+Engine `customer_sync/engine.py`: fetch → map → upsert → on_missing policy → audit.
+Scheduler `customer_sync/scheduler.py`: thread loop 60s, lock per worker concorrenti.
+
+### 4.9 Rule sets (Migration 029) + thread tracking (Migration 036)
+
+- **M029**: `rule_sets` (`globali`, `std_window`, `ext_window`,
+  `h24_window`) + `rules.rule_set_id`. Dopo M035 sono **solo
+  organizzazione UI** per profilo orario, NON gating runtime.
+- **M036**: ALTER `events_log` ADD `in_reply_to`, `references_json`,
+  `reply_to_event_uuid`, `thread_root_uuid` + ALTER `rules` ADD
+  `match_is_thread_continuation` (tristate). Seed regola "Thread
+  continuation — passa al destinatario" priority=5 in `globali` con
+  azione `default_delivery`.
+
+### 4.10 Shadow mode in cascata (M030/M031/M033)
+
+| Migration | ALTER | Cosa abilita |
+|---|---|---|
+| 030 | `recipient_groups` ADD `shadow_mode`, `shadow_note` | Solo destinatari del gruppo in shadow |
+| 031 | `domain_routes` ADD `shadow_mode`, `shadow_note` | Tutto il dominio in shadow (override globale) |
+| 033 | `rules` ADD `shadow_mode`, `shadow_note` | Solo quella singola regola in shadow |
+
+Cascata: dominio shadow → tutto in shadow; recipient_group shadow →
+solo membri; rule shadow → solo match. Audit in
+`events_log.shadow_action` / `shadow_rule_id` ricostruisce "cosa
+sarebbe successo".
 
 ---
 
@@ -390,7 +456,35 @@ Flag di gruppo:
 - UNIQUE (tenant_id, scope_type, scope_ref, priority)
 - Mutex `match_to_regex` vs `match_to_group_id`
 
-### 5.4 Falsi positivi H24 (Fix B 2026-05-05)
+### 5.4 Thread continuation (M036)
+
+Pre-rule-engine, `pipeline.py` chiama `find_thread_root(in_reply_to,
+references)` di `relay/storage.py`. Se la mail risponde a un
+`message_id` già presente in `events_log`:
+- `ev_dict["is_thread_continuation"] = True`
+- `extra["reply_to_event_uuid"]` e `extra["thread_root_uuid"]`
+  popolati
+- L'evento eredita `ticket_id` dal parent
+- La regola seed (priority=5 in `globali`) con
+  `match_is_thread_continuation=1` matcha → `default_delivery` →
+  NESSUN nuovo ticket
+
+Per disabilitare per casi specifici, basta una regola a priorità
+inferiore con `match_is_thread_continuation=0` o tristate libero.
+
+### 5.5 Shadow mode runtime
+
+Cascata in `pipeline.py`:
+1. **Domain shadow** (M031): se `domain_routes.shadow_mode=1` per il
+   dominio destinatario → tutto l'evento in shadow → action effettiva
+   `default_delivery`, action shadow registrata in `events_log`.
+2. **Recipient group shadow** (M030): per ogni destinatario
+   appartenente a un gruppo shadow → solo per quel destinatario
+   shadow.
+3. **Rule shadow** (M033): se la regola matchata ha `shadow_mode=1` →
+   action shadow registrata, action effettiva `default_delivery`.
+
+### 5.6 Falsi positivi H24 (Fix B 2026-05-05)
 
 Quando `action=create_authorized_ticket`:
 - Il regex estrae un codice dal subject
@@ -477,7 +571,7 @@ Worker async analizza `ai_decisions`:
 Dashboard | Flusso mail
 ▼ Regole & Mail flow      (Regole, Template, Aggregazioni con tab statiche/AI)
 ▼ H24 & Autorizzazioni    (Panoramica /codes-h24/, Monouso, Permanenti, Mailbox, Settings)
-▼ Anagrafiche             (Clienti, Gruppi clienti, Gruppi destinatari, Indirizzi, Domini, Privacy)
+▼ Anagrafiche             (Clienti, Gruppi clienti, Gruppi destinatari, Sync esterni, Indirizzi, Domini, Privacy)
 ▼ Orari                   (Orari per cliente, Profili)
 AI Assistant              (top-level, admin only)
 ▼ Sistema                 (Utenti, Health, Integrazioni, Settings, API keys, Documentazione)
@@ -518,7 +612,7 @@ Tutti sotto `/api/v1/relay/`, autenticati via `X-API-Key` (no CSRF). Chiave in `
 |---|---|
 | `/customers/active` | Tutti i clienti del tenant |
 | `/customer-groups/active` | Gruppi clienti + membri |
-| `/recipient-groups/active` | M027 — gruppi destinatari + membri |
+| `/recipient-groups/active` | M027 — gruppi destinatari + membri (+ M030 shadow flags) |
 | `/rules/active` | Regole flat (gruppi espansi in figli con action_map deep-merged) |
 | `/templates/active` | Template attivi |
 | `/aggregations/active` | Aggregazioni statiche attive |
@@ -603,12 +697,21 @@ d389faa feat(ui): righe editabili in /h24-targets + profilo orario contestuale i
 025    recipient_groups + members + recipients (autodiscovery)
 026    h24_tracking_extended (sent_to/sent_at/accepted/state + body_excerpt)
 027    rules_recipient_match (match_to_group_id + forward_to_emails)
+028    customer_sync_sources + customer_sync_runs (rename customers_pg_cache → customers, sorgente legacy seed)
+029    rule_sets (organizzazione UI per profilo orario, post-M035 non più gating)
+030    shadow_recipient_groups (shadow_mode + shadow_note)
+031    shadow_domain_routing (shadow_mode + shadow_note)
+033    shadow_rules (shadow_mode + shadow_note su rules)
+034    group_membership_rules (auto-assignment self-contained gruppi cliente)
+035    simplify_rules_to_group_based (filtro contratto solo via match_customer_groups)
+036    thread_tracking (in_reply_to/references/reply_to_event_uuid + match_is_thread_continuation + seed regola)
 ```
 
 ### 10.3 Regole esempio in produzione
 
 ```
 1     Codice H24 in subject (qualsiasi mailbox)   priority=1   regex ristretto post-fix 2026-05-05
+60    Thread continuation — passa al destinatario priority=5   M036, seed in `globali`
 55    CloudTIK/OptiWize alert - Problem            priority=60  Fix C 2026-05-05
 44    Da evento — riccardo.grandi@gmail.com        priority=100
 28    Auto-reply out_of_hours                       priority=510
@@ -629,6 +732,8 @@ stormshield-smtp-relay-scheduler.service active (sync 5min)
 - ✅ **2026-05-04**: doppio encoding RFC 2047 nel subject delle reply (fix in parser.py:_decode_mime_header)
 - ✅ **2026-05-04**: cliente senza contratto non riceveva template dedicato (override automatico actions.py)
 - ✅ **2026-05-05**: regola H24 catturava nomi device CloudTIK come codici (regex ristretto + recovery falsi positivi)
+- ✅ **2026-05-05**: risposta a thread tracked apriva un nuovo ticket (M036 thread tracking RFC 2822)
+- ✅ **2026-05-05**: form gruppo padre/figlio mancavano di campi importanti (recipient_groups, fasce orarie, subject/body, gruppi cliente) — sincronizzati 3 form
 
 ### 10.6 Limiti noti / da gestire
 
@@ -698,4 +803,4 @@ Priorità:
 
 ---
 
-*Documento mantenuto a mano, aggiornare quando arrivano feature significative. Ultima modifica: 2026-05-05 dopo refactor UI v0.9.x.*
+*Documento mantenuto a mano, aggiornare quando arrivano feature significative. Ultima modifica: 2026-05-05 dopo M028-M036 (customer sync agnostico, gruppi self-contained, shadow mode in cascata, thread tracking RFC 2822, semplificazione rule engine, sync form regole).*

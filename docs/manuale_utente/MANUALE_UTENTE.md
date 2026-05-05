@@ -1,9 +1,17 @@
 # Domarc SMTP Relay — Manuale Utente
 
-> **Versione:** 0.9.2 (Beta) · **Aggiornato:** 2026-05-05
+> **Versione:** 0.9.3 (Beta) · **Aggiornato:** 2026-05-05
 > **Pubblico:** operatori e amministratori che gestiscono regole di smistamento mail, IA, autorizzazioni H24 e configurazioni di servizio.
 
-> **Convenzioni UI v0.9.2**:
+> **Novità 0.9.3** (Migration 028-036):
+> - **Customer sync agnostico** (M028): la tabella clienti è autoritativa, alimentabile da postgres / mssql / csv / json url con mapping configurabile. Non sei più legato a un manager esterno specifico.
+> - **Gruppi cliente self-contained** (M034): regole di auto-assegnamento basate sui campi del cliente. I gruppi si compongono da soli.
+> - **Rule semplificate** (M035): il filtro contratto/profilo si fa **solo via gruppi cliente**. Più semplice, più chiaro.
+> - **Shadow mode in cascata** (M030/M031/M033): testa nuove regole/gruppi/domini in produzione senza eseguire le azioni.
+> - **Thread continuation RFC 2822** (M036): le risposte a una mail già tracciata NON aprono un nuovo ticket.
+> - **Form regole sincronizzati**: orfana, gruppo padre, figlio hanno gli stessi campi (recipient_groups, fasce orarie, gruppi cliente, shadow, thread, …).
+
+> **Convenzioni UI v0.9.x**:
 > - Tabelle: **ordinamento cliccando l'intestazione** (▲/▼) — auto-detection text/numero/data.
 > - Form regole: **5 sotto-card** (Origine, Destinazione, Oggetto, Cliente, Orario) con campi mutex grigiati e preset orari da profili.
 > - Header: **indicatore globale stato kill switch** (verde "OK" / rosso "KILL ON" pulsante) sempre visibile.
@@ -22,7 +30,9 @@ Questo manuale descrive **come si usa** la console web Domarc SMTP Relay con lin
 3. [Dashboard](#3-dashboard)
 4. [Le regole — il cuore del sistema](#4-le-regole--il-cuore-del-sistema)
 5. [Anagrafica clienti, gruppi clienti e orari di servizio](#5-anagrafica-clienti-gruppi-clienti-e-orari-di-servizio)
-6. [Destinatari & gruppi destinatari (Migration 025)](#6-destinatari--gruppi-destinatari-migration-025)
+   - 5.1 Customer sync agnostico (Migration 028)
+   - 5.2 Gruppi cliente self-contained (Migration 034)
+6. [Destinatari & gruppi destinatari (Migration 025/030)](#6-destinatari--gruppi-destinatari-migration-025)
 7. [H24 — autorizzazioni interventi fuori orario](#7-h24--autorizzazioni-interventi-fuori-orario)
 8. [Cronologia eventi e Activity live](#8-cronologia-eventi-e-activity-live)
 9. [Coda e quarantena](#9-coda-e-quarantena)
@@ -49,9 +59,9 @@ In sintesi:
 1. La mail arriva dal mittente esterno al **Listener SMTP** (aiosmtpd, porta 25 o 587).
 2. **Privacy bypass check**: se mittente o destinatario sono nella *privacy-bypass list* (vedi §12), la mail viene scartata senza neanche essere registrata nel DB. È pensato per indirizzi GDPR-sensitive (es. medici, legali) per cui è vietato persistere il body.
 3. Il **parser** estrae header e body, **decodifica il subject RFC 2047** una sola volta in entrata (così non c'è doppio encoding nei subject delle risposte automatiche), normalizza mittente/destinatari.
-4. **Resolve customer** dalla tabella locale autoritativa (post Migration 028, alimentata da feed esterni schedulati 24h via `customer_sync`): da `from_address` / `to_alias` / domain → `codcli` + `contract_active` + `tipologia_servizio` (STD/EXT/H24/NO) + `in_service` (calcolato dal profilo + ora corrente).
-5. **Determina rule_sets attivi** (post Migration 029): il pool è sempre formato dal set `globali` (always active) + il set associato al profilo del cliente. Esempio: cliente STD → `{globali, standard}`, cliente H24 → `{globali, h24}`, cliente sconosciuto → `{globali}` solo.
-6. Il **Rule Engine** scorre le regole appartenenti ai set attivi, in ordine di priorità. Trova la **prima** che fa match tra criteri (regex, dominio, gruppi cliente, gruppi destinatario, `match_in_service`, `match_has_exception_today`, contratto attivo, ecc.).
+4. **Resolve customer** dalla tabella `customers` locale autoritativa (Migration 028, alimentata da feed esterni schedulati 24h via `customer_sync` configurabile dalla UI): da `from_address` / `to_alias` / domain → `codcli` + `contract_active` + `tipologia_servizio` (STD/EXT/H24/NO) + `in_service` (calcolato dal profilo + ora corrente).
+5. **Thread continuation check** (Migration 036): se la mail è una risposta a un'email già tracciata (`In-Reply-To` o `References` matchano un `message_id` registrato), il sistema lo riconosce e l'evento eredita il `ticket_id` del parent. La regola seed "Thread continuation" la inoltra al destinatario senza aprire un nuovo ticket.
+6. Il **Rule Engine** scorre tutte le regole abilitate in ordine di priorità globale. Trova la **prima** che fa match tra criteri (regex, dominio, **gruppi cliente** [M035 unica chiave per filtrare contratto/profilo], gruppi destinatario, `match_in_service`, `match_has_exception_today`, `match_is_thread_continuation`, ecc.).
 7. La regola dice **cosa fare** (`action`):
     - `forward` — inoltra al destinatario reale o a una lista/gruppo
     - `redirect` — riscrive il destinatario
@@ -65,21 +75,63 @@ In sintesi:
 
 Tutto quello che succede viene tracciato e visualizzabile in **Eventi**, **Activity Live**, **Decisioni IA** e **Codici** (auth codes / h24 codes).
 
-### Logica decisionale: dove metto una nuova regola?
+### Logica decisionale: dove metto una nuova regola? (post-M035 semplificato)
 
 ![Logica decisionale rule_sets](img/decision_logic.svg)
 
-La regola d'oro per la collocazione di una regola:
+La regola d'oro post Migration 035:
 
-- **`rule_set_id`** = TIPO DI CONTRATTO del cliente (STD/EXT/H24/NO)
-- **`match_in_service`** = FINESTRA TEMPORALE corrente (rispetta automaticamente la gerarchia STD ⊂ EXT ⊂ H24, perché calcolato dal profilo del singolo cliente)
+- **Filtro per contratto/profilo del cliente** = `match_customer_groups`
+  (CSV di gruppi cliente, es. `h24_customers,std_customers`).
+- **Filtro per finestra temporale** = `match_in_service` (DENTRO orario
+  operativo del cliente / FUORI / qualsiasi) + `match_at_hours`
+  (override esplicito, es. `Mo-Fr 09:00-18:00`).
+- **`rule_set_id`** = solo organizzazione UI per profilo orario
+  (`globali`, `std_window`, `ext_window`, `h24_window`). NON è più
+  gating runtime.
 
 Tradotto in pratica:
 
-- Se la regola è valida per **qualsiasi cliente** (es. CloudTIK alert, AI classify, sistemi automatici, catch-all): metti in **`globali`**.
-- Se la regola dipende **dall'orario** ma non dal contratto specifico (es. auto-reply "preso in carico" durante orario lavorativo): metti in **`globali`** + `match_in_service=true` (oppure `false` per regole "fuori orario"). La gerarchia STD ⊂ EXT ⊂ H24 è gestita automaticamente perché `in_service` legge il profilo del cliente.
-- Se la regola è specifica di un livello di contratto (es. tariffa straordinario, escalation immediata, template dedicato): metti nel set corrispondente (`standard` / `esteso` / `h24` / `nessuno`).
-- **In dubbio? Metti in `globali`**. Una regola in globali si applica a tutti; una regola in un set specifico è invisibile per i clienti degli altri profili.
+- Se la regola è valida per **qualsiasi cliente** (es. CloudTIK alert, AI classify, sistemi automatici, catch-all): NON mettere `match_customer_groups`.
+- Se la regola dipende **dal contratto** del cliente (es. tariffa straordinario, escalation H24, template dedicato): seleziona uno o più gruppi cliente in `match_customer_groups`. I gruppi sono auto-popolati dalle membership rules (M034) in base ai campi del cliente.
+- Se la regola dipende **dall'orario**: usa `match_in_service` (DENTRO/FUORI orario operativo del cliente). La gerarchia STD ⊂ EXT ⊂ H24 è gestita automaticamente perché `in_service` legge il profilo del cliente.
+- **In dubbio? Lascia `match_customer_groups` vuoto**. Si applica a tutti.
+
+I rule_sets restano per **organizzare visivamente** le regole nei tab
+della UI per profilo orario, ma la decisione di quali regole vengono
+valutate dipende solo dai `match_*` dei singoli record.
+
+#### Gruppi cliente self-contained (M034)
+
+In `/customer-groups/<id>/membership-rules` definisci regole di
+auto-assegnamento basate sui campi del cliente (`contract_type`,
+`tipologia_servizio`, JSON custom). Esempio:
+
+- Gruppo `h24_customers`:
+  - regola: `tipologia_servizio = H24`
+- Gruppo `std_customers`:
+  - regola: `tipologia_servizio = STD` OR `tipologia_servizio NULL`
+
+Il sistema ricalcola le membership ogni 5 minuti o quando un cliente
+viene aggiornato. Eliminata la dipendenza dal manager esterno per la
+composizione dei gruppi.
+
+#### Shadow mode (M030/M031/M033)
+
+Per testare una nuova regola senza far eseguire l'azione: spunta
+**Shadow mode** sul form regola. Il sistema valuta tutto, registra
+nell'evento `shadow_action` e `shadow_rule_id`, ma esegue solo
+`default_delivery`. In `/events` vedi cosa **sarebbe successo** se la
+regola fosse stata live.
+
+Cascata applicabile a tre livelli:
+- **Dominio** (`/integrations/`/Domini): tutto il traffico del dominio in shadow.
+- **Gruppo destinatari** (`/recipient-groups/`): solo i destinatari del gruppo.
+- **Singola regola** (`/rules/`): solo quella regola.
+
+Use case: porti in produzione una nuova regola, la lasci in shadow per
+qualche giorno, controlli `events_log` per vedere se avrebbe fatto le
+cose giuste — quando sei sicuro togli il flag.
 
 ---
 
@@ -249,13 +301,16 @@ Le decisioni sono **deterministiche** quando non c'è azione `ai_classify` (prio
 
 ![Anagrafica clienti](img/03_customers_list.png)
 
-Dati derivati dal Postgres `solution` (master del gestionale), sincronizzati ogni 5 minuti. Per ciascun cliente:
+La tabella `customers` è **autoritativa** (Migration 028) e
+alimentata da feed esterni configurabili (vedi §5.4 Customer sync).
+Per ciascun cliente:
 
 - `codcli` + `ragione_sociale`
 - `domains` + `aliases` (su quali indirizzi mail ricade)
 - `contract_active` (True/False) e `contract_type` (HW/SW/MS/...)
 - `availability_type` (profilo orario: STD = standard 9-18, EXT = esteso 8-20, H24 = 24h, NO = no orario)
 - `service_hours` (eventuali orari custom + eccezioni date)
+- `last_synced_from_source_id` (sorgente che ha aggiornato il record per ultima)
 
 **Filtri avanzati** in alto: ricerca testo (mode AND/OR/NOT), profilo (IN/NOT IN), tipo contratto (IN/NOT IN), stato contratto (attivo/no), gruppo (IN/NOT_IN). I filtri sono combinabili.
 
@@ -266,13 +321,80 @@ Dati derivati dal Postgres `solution` (master del gestionale), sincronizzati ogn
 - contratto attivo ma profilo NULL → "profilo non assegnato" (warning)
 - contratto non attivo → "sempre a pagamento" (rosso) — qualunque richiesta è billable
 
-### 5.2 Gruppi clienti
+### 5.2 Gruppi clienti (self-contained, M034)
 
 ![Gruppi clienti](img/23_customer_groups.png)
 
-Raggruppamenti logici (es. "Top customer", "Settore sanità"). Un cliente può appartenere a più gruppi. Usati come criterio nel campo regola `match_customer_groups`.
+Raggruppamenti logici (es. "Top customer", "Settore sanità", "H24
+contract", "Std contract"). Un cliente può appartenere a più gruppi.
+Usati come criterio nel campo regola `match_customer_groups` — dopo
+M035 sono **l'unica chiave di filtro per contratto/profilo** nelle
+regole.
+
+**Membership rules (M034)**: i gruppi sono **self-contained**, ovvero
+i membri vengono auto-assegnati in base a regole sui campi del
+cliente. In `/customer-groups/<id>/membership-rules`:
+
+| Campo | Operatore | Valore |
+|---|---|---|
+| `contract_type` | `=` | `HW` |
+| `tipologia_servizio` | `IN` | `H24,EXT` |
+| `JSON.settore` | `=` | `sanita` |
+| `domains_json` | `contains` | `asl` |
+
+Il sistema ricalcola le membership ogni 5 minuti o on-customer-update
+via `recompute_group_memberships(group_id)`. Pulsante "Ricalcola
+adesso" forza il refresh.
+
+**Vantaggio**: non dipendi più dal manager esterno per la composizione
+dei gruppi. La logica vive interamente nel relay.
+
+### 5.4 Customer sync agnostico (M028)
+
+In `/customer-sync/` configuri le **sorgenti** che alimentano la
+tabella clienti. La sorgente "Postgres solution Domarc" è seedata di
+default e usa la connessione PG configurata in `/integrations/`.
+
+**Provider supportati**:
+- `postgres` (PostgreSQL via `psycopg2`)
+- `mssql` (SQL Server via `pyodbc`)
+- `csv_file` (file CSV su filesystem del relay)
+- `json_url` (REST API che ritorna array JSON, con JSONPath per estrarre)
+
+**Wizard 4-step**:
+1. **Tipo**: scegli il provider.
+2. **Connessione**: host/port/credenziali (cifrate con Fernet) o
+   path/URL.
+3. **Test**: connessione + preview prime 10 righe della query/file.
+4. **Mapping & schedule**:
+   - Mapping field-by-field con modalità Semplice (dropdown) o
+     Avanzata (JSON). Pulsante "Scopri schema dalla sorgente"
+     auto-compila le opzioni source.
+   - Schedule (default 24h).
+   - On_missing policy: `flag` (default, `contract_active=0`),
+     `delete`, `keep`.
+
+**Campi target supportati** (contratto canonico):
+- `codcli` (PK, obbligatorio)
+- `ragione_sociale`, `contract_active`, `tipologia_servizio`,
+  `contract_type`, `contract_expiry`, `domains` (list), `aliases`
+  (list), `timezone`, `service_hours_json` (dict)
+
+**Trasformazioni mapper**: `lowercase`, `strip`, `default:<v>`,
+`split:<sep>`, `bool`, `json_parse`, `coalesce:<col1,col2>`.
+
+**Trigger manuale**: bottone "Esegui adesso" (con flag dry-run per
+preview senza scrivere).
+
+**Storico run** in `/customer-sync/<id>/runs`: status (ok / error /
+partial), n_fetched, n_inserted, n_updated, n_unchanged,
+n_flagged_missing, n_errored, error_message, triggered_by.
 
 ### 5.3 Orari di servizio + eccezioni
+
+(numerazione storica mantenuta — §5.4 customer sync inserito sopra)
+
+
 
 ![Orari clienti + eccezioni](img/14_service_hours.png)
 
@@ -743,6 +865,83 @@ Questo evita falsi "fuori orario" per clienti che non sono mai in orario contrat
 ### "Cos'è successo al subject delle risposte? Vedevo `=?UTF-8?B?...?=` in chiaro"
 
 Bug fixato in v0.9.0 (2026-05-04). Il parser ora decodifica RFC 2047 una sola volta in entrata (`email.header.decode_header` + `make_header`), così il subject originale è già Unicode pulito quando viene concatenato nei template. L'invio outbound applica un solo encoding nuovo (UTF-8 base64 standard) se necessario. Niente più doppio encoding.
+
+### "Voglio cambiare il manager esterno che alimenta i clienti"
+
+Vai in `/customer-sync/`. La sorgente "Postgres solution Domarc" è il
+seed legacy che usa la connessione PG configurata in
+`/integrations/`. Per svincolarti:
+
+1. Crea una nuova sorgente (es. CSV file, MSSQL, JSON URL).
+2. Configura il **mapping** dei campi (modalità Semplice con dropdown o
+   Avanzata in JSON). Il bottone "Scopri schema dalla sorgente" auto-
+   compila le opzioni source.
+3. Test connessione + preview prime 10 righe.
+4. Schedule (default 24h) + on_missing policy:
+   - **flag** (default): clienti spariti dalla sorgente → `contract_active=0`. Audit conservato.
+   - **delete**: clienti spariti vengono eliminati.
+   - **keep**: clienti mai modificati dalla sorgente.
+5. Quando la nuova sorgente funziona, **disabilita la sorgente legacy**
+   in `/customer-sync/<id>/edit`.
+
+Il primo run scatta entro 60s. Storico in `/customer-sync/<id>/runs`.
+
+### "Una mail di risposta apre un nuovo ticket. Come evitare?"
+
+Risolto da Migration 036 (Thread tracking RFC 2822). Quando il sistema
+riceve una mail con `In-Reply-To` o `References` che match-ano un
+`message_id` di un evento già tracciato, la regola seed "Thread
+continuation — passa al destinatario" (priority=5 in rule_set
+`globali`, azione `default_delivery`) si attiva e l'evento NON apre un
+nuovo ticket. Il `ticket_id` viene ereditato dal parent.
+
+Verifica in `/events`: badge 🔗 thread accanto all'azione. In
+dettaglio evento, card violetta "Risposta a thread tracked" mostra
+link al parent, thread root, parent ticket, In-Reply-To.
+
+Per disabilitare per casi specifici, basta una regola a priority più
+bassa (es. priority=4) con `match_is_thread_continuation=0` o tristate
+libero.
+
+### "Come metto una regola in shadow mode?"
+
+Tre livelli di granularità, in cascata:
+
+1. **Singola regola**: in `/rules/<id>/edit`, spunta "Shadow mode" (M033). Solo quella regola loggata in shadow.
+2. **Gruppo destinatari**: in `/recipient-groups/<id>/edit`, spunta "Shadow mode" (M030). Solo le mail ai destinatari del gruppo loggate in shadow.
+3. **Dominio**: in `/integrations/`/Domini, spunta "Shadow mode" sulla riga del dominio (M031). Tutto il traffico del dominio in shadow.
+
+Il sistema valuta tutto e scrive `events_log.shadow_action` /
+`shadow_rule_id`. Effettivamente esegue solo `default_delivery`.
+
+In `/events` vedi cosa **sarebbe successo** se la cosa non fosse stata
+shadow. Quando sei sicuro, togli il flag.
+
+### "Come popolo i gruppi cliente senza dover fare check uno per uno?"
+
+Vai in `/customer-groups/<id>/membership-rules` (M034). Definisci
+regole di auto-assegnamento basate sui campi del cliente. Esempio:
+
+- Gruppo `clienti_sanita`:
+  - regola: `JSON.settore = 'sanita'`
+  - regola: `domains_json contiene 'asl'`
+
+Il sistema ricalcola i membri del gruppo ogni 5 minuti (o on-customer-
+update). Il bottone "Ricalcola adesso" forza il refresh.
+
+### "Le regole avevano `active_rule_set_ids`, ora non lo trovo più"
+
+Esatto. Migration 035 ha **rimosso** il filtro runtime via rule_sets.
+Il filtro contratto/profilo cliente si fa ora solo via
+`match_customer_groups`. I rule_sets restano per organizzare le regole
+nei tab della UI.
+
+Se hai una regola del genere "applica solo a clienti H24":
+1. Crea/scegli un gruppo cliente (es. `h24_customers`) con membership
+   rule `tipologia_servizio = H24`.
+2. In `/rules/<id>/edit`, metti `match_customer_groups=h24_customers`.
+
+Più chiaro, niente magia runtime.
 
 ---
 

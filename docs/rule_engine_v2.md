@@ -3,6 +3,14 @@
 Documento operatore per la gestione delle regole SMTP nell'admin Domarc Relay
 dopo l'introduzione del modello padre/figlio (migration 010).
 
+> **Aggiornato 2026-05-05** con M028-M036:
+> - **M029** rule_sets per profilo orario (organizzazione UI; **non** gating runtime dopo M035)
+> - **M033** shadow mode per regola singola
+> - **M034** gruppi cliente self-contained (auto-assignment via mapping rules)
+> - **M035** filtro contratto **solo** via `match_customer_groups` (no più
+>   `active_rule_set_ids` runtime)
+> - **M036** thread continuation RFC 2822 (no duplicate ticket su risposte)
+
 ## Concetti
 
 ### Tre tipi di record
@@ -172,6 +180,53 @@ Mail da `mario@cliente.com` a `assistenza@domarc.it` alle 23:00:
 Comportamento identico al modello flat duplicato precedente, ma con un solo
 punto di edit per i match condivisi.
 
+## Filtro per contratto/profilo cliente — solo via gruppi cliente (M035)
+
+Dopo la semplificazione M035, il filtro di una regola sul tipo di contratto
+(STD/EXT/H24) o sul profilo orario del cliente avviene **esclusivamente**
+tramite `match_customer_groups` (CSV).
+
+I gruppi cliente sono **self-contained** (M034): in
+`/customer-groups/<id>/membership-rules` si definiscono regole di
+auto-assegnamento basate sui campi del cliente (`contract_type`,
+`tipologia_servizio`, JSON custom). Il sistema ricalcola i membri ogni 5min
+o on-demand.
+
+I rule_sets (M029, `globali` / `std_window` / `ext_window` / `h24_window`)
+restano per **organizzazione UI** delle regole per profilo orario, ma NON
+sono più gating runtime: una regola in `h24_window` non viene saltata se
+il cliente è STD — la sua attivazione dipende solo dal `match_*` (gruppi
+cliente, fasce orarie, ecc.).
+
+## Thread continuation (M036)
+
+Le risposte a una mail già tracciata (`In-Reply-To` o `References` che
+match-ano un `message_id` registrato in `events_log`) attivano la regola
+seed priority=5 in rule_set `globali`:
+
+- `match_is_thread_continuation = 1`
+- `action = default_delivery`
+
+L'evento risposta NON apre un nuovo ticket (il `ticket_id` è ereditato
+dall'evento parent). Il match `match_is_thread_continuation` è tristate
+(NULL/0/1) e disponibile su tutti i form (orfana, gruppo padre, figlio).
+
+## Shadow mode (M030/M031/M033)
+
+Regole/gruppi/domini possono essere messi in **shadow mode**: il rule
+engine valuta tutto e registra `shadow_action` / `shadow_rule_id`
+nell'evento, ma l'azione effettiva è `default_delivery`. Audit completo
+permette di confrontare "cosa sarebbe successo se non shadow".
+
+Cascata:
+1. **Domain shadow** (M031): copre tutto l'evento.
+2. **Recipient group shadow** (M030): solo destinatari del gruppo.
+3. **Rule shadow** (M033): solo quella regola.
+
+Use case tipico: portare in produzione una nuova regola a basso rischio,
+osservare per N giorni in shadow, poi disattivare il flag quando si è
+sicuri.
+
 ## API listener (retro-compatibile)
 
 `GET /api/v1/relay/rules/active` ritorna sempre regole flat con i campi
@@ -187,4 +242,8 @@ arricchire l'audit log con `flow_path = "group:{X} → rule:{Y}"`.
 - Codice: [domarc_relay_admin/rules/](../domarc_relay_admin/rules/)
 - Test parità: [tests/test_rule_engine_parity.py](../tests/test_rule_engine_parity.py)
 - Migration: [domarc_relay_admin/migrations/010_rule_groups.sqlite.sql](../domarc_relay_admin/migrations/010_rule_groups.sqlite.sql)
-- Listener: `/opt/stormshield-smtp-relay/relay/rules.py` (NON modificato)
+- Migration: [domarc_relay_admin/migrations/029_rule_sets.sqlite.sql](../domarc_relay_admin/migrations/029_rule_sets.sqlite.sql)
+- Migration: [domarc_relay_admin/migrations/034_group_membership_rules.sqlite.sql](../domarc_relay_admin/migrations/034_group_membership_rules.sqlite.sql)
+- Migration: [domarc_relay_admin/migrations/035_simplify_rules_to_group_based.sqlite.sql](../domarc_relay_admin/migrations/035_simplify_rules_to_group_based.sqlite.sql)
+- Migration: [domarc_relay_admin/migrations/036_thread_tracking.sqlite.sql](../domarc_relay_admin/migrations/036_thread_tracking.sqlite.sql)
+- Listener: `/opt/stormshield-smtp-relay/relay/rules.py` (esteso con `match_is_thread_continuation`)

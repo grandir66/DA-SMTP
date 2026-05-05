@@ -4,7 +4,158 @@
 Tutte le modifiche rilevanti a questo progetto vengono documentate in questo file.
 Il formato è basato su [Keep a Changelog](https://keepachangelog.com/it/1.1.0/).
 
-## [Unreleased] — 2026-05-04
+## [Unreleased] — 2026-05-05
+
+### Aggiunte — M036 Thread tracking RFC 2822 (no duplicate ticket su risposte)
+
+Implementato tracking standard delle conversazioni mail per evitare riapertura
+ticket sulle risposte successive (cliente H24 manda mail → ticket aperto →
+tecnico risponde → cliente replica → la risposta NON deve riaprire un nuovo
+ticket).
+
+- **Migration 036** `036_thread_tracking.sqlite.sql`:
+  - ALTER `events_log` ADD `in_reply_to`, `references_json`,
+    `reply_to_event_uuid`, `thread_root_uuid` (+ indici).
+  - ALTER `rules` ADD `match_is_thread_continuation` (tristate -1/0/1).
+  - Seed regola "Thread continuation — passa al destinatario" priority=5
+    nel rule_set `globali` (azione `default_delivery`, no ticket).
+- **Listener** (`relay/storage.py`, `relay/pipeline.py`, `relay/rules.py`):
+  - Mini-migrations idempotenti su `events_log` e `rules_cache`.
+  - Helper `find_thread_root(in_reply_to, references)` cerca message_id
+    matching nei propri events_log.
+  - Pre-rule-engine: popola `extra` con info thread, set
+    `ev_dict["is_thread_continuation"]` per il matcher.
+  - `match_is_thread_continuation` aggiunto al loop tristate insieme a
+    `match_contract_active`, `match_known_customer`,
+    `match_has_exception_today`.
+  - `insert_event` salva i 4 nuovi campi + eredita `ticket_id` dal parent.
+- **API admin** (`routes/api.py`):
+  - `/rules/active` payload include `match_is_thread_continuation`.
+  - `POST /events` accetta i 4 nuovi campi.
+- **UI admin**:
+  - Lista eventi: badge 🔗 thread accanto all'azione quando reply_to_event_uuid o is_thread_continuation valorizzati.
+  - Dettaglio evento: card violetta "Risposta a thread tracked (M036)" con link al parent, thread root, parent ticket, action, In-Reply-To.
+  - Form regola (orfana, gruppo, figlio): tristate `match_is_thread_continuation`.
+
+Smoke test e2e: mail 1 (no In-Reply-To) → catch-all rule;
+mail 2 (con In-Reply-To = mail1.message_id) → match seed thread continuation,
+`reply_to_event_uuid` popolato, NO duplicate ticket.
+
+### Aggiunte — Form regole sincronizzati (orfana / gruppo padre / figlio)
+
+I 3 form regola avevano feature parity disallineata: i form gruppo e figlio
+mancavano di campi importanti presenti nel form orfana (recipient_groups,
+fasce orarie, match subject/body, gruppi cliente). Allineati tutti.
+
+- `templates/admin/rule_group_form.html`:
+  - Aggiunti: `description`, `match_at_hours`, `match_to_group_id`,
+    `match_tag`, `match_customer_groups`,
+    `forward_to_emails`/`forward_to_group_id`, `shadow_mode`,
+    `shadow_note`, `match_is_thread_continuation`.
+- `templates/admin/rule_child_form.html`:
+  - Aggiunti: `match_at_hours`, `match_tag`, `match_customer_groups`,
+    `match_is_thread_continuation`.
+  - Etichette `match_in_service`: "DENTRO orario operativo del cliente" /
+    "FUORI orario operativo del cliente" (più chiare di "in servizio").
+- `routes/rules.py`:
+  - `_parse_form` aggiornato per i 3 nuovi campi tristate/text.
+  - `group_form_view` parsa tutti i nuovi campi e passa `recipient_groups`
+    al template.
+
+### Aggiunte — M035 Semplificazione runtime: regole solo per gruppo cliente
+
+`active_rule_set_ids` non viene più calcolato runtime per filtrare il
+contratto: il filtro si appoggia esclusivamente a `match_customer_groups`.
+I rule_sets (M029) restano per organizzare le regole nella UI per profilo
+orario, ma non più come gating del runtime.
+
+- **Migration 035** `035_simplify_rules_to_group_based.sqlite.sql`.
+- `relay/pipeline.py` non popola più `active_rule_set_ids` nell'event_dict.
+- `relay/rules.py` rimuove il check su rule_set vs lista attiva.
+- UI form regole: rimossi badge "set attivi", aggiunti banner esplicativi
+  sui gruppi cliente come unica chiave di filtro.
+
+### Aggiunte — M034 Gruppi cliente self-contained (auto-assignment via mapping)
+
+Sistema di regole di assegnazione automatica al gruppo cliente basate sui
+campi del cliente (contract_type, tipologia_servizio, custom JSON).
+Eliminata dipendenza dal manager esterno per la composizione dei gruppi.
+
+- **Migration 034** `034_group_membership_rules.sqlite.sql`:
+  - Tabella `customer_group_membership_rules` (group_id, source_field,
+    operator, value_json, priority).
+  - Re-evaluation periodica (5min) o on-customer-update.
+- UI `/customer-groups/<id>/membership-rules`: CRUD regole mapping.
+- Storage `recompute_group_memberships(group_id)` ricostruisce N:N.
+
+### Aggiunte — M030/M031/M033 Shadow mode in cascata (recipient_group / domain / rule)
+
+Modalità "passive" per testare regole in produzione senza far eseguire
+le azioni: la pipeline calcola tutto, registra nell'evento la decisione
+shadow (`shadow_action`, `shadow_rule_id`) ma esegue solo
+`default_delivery`.
+
+- **Migration 030** `030_shadow_recipient_groups.sqlite.sql`: ALTER
+  `recipient_groups` ADD `shadow_mode`, `shadow_note`.
+- **Migration 031** `031_shadow_domain_routing.sqlite.sql`: ALTER
+  `domain_routes` ADD `shadow_mode`, `shadow_note`.
+- **Migration 033** `033_shadow_rules.sqlite.sql`: ALTER `rules` ADD
+  `shadow_mode`, `shadow_note`.
+- Cascade evaluation in `relay/pipeline.py`: dominio shadow → tutto in
+  shadow; recipient_group shadow → solo destinatari del gruppo in
+  shadow; rule shadow → solo quella regola in shadow.
+- Audit: `events_log.shadow_*` riempiti per ricostruzione "cosa sarebbe
+  successo se non shadow".
+- UI: badge "SHADOW" sulle regole/gruppi/domini in shadow + colonna
+  dedicata in lista eventi.
+
+### Aggiunte — M029 Rule sets per profilo orario (organizzazione UI)
+
+I rule_sets (`globali`, `std_window`, `ext_window`, `h24_window`) sono
+container organizzativi per regole per profilo orario. Dopo M035 NON
+sono più gating runtime: solo organizzazione editoriale nella UI.
+
+- **Migration 029** `029_rule_sets.sqlite.sql`: tabella `rule_sets` +
+  `rules.rule_set_id` + seed 4 set base + assignment regole esistenti.
+- UI `/rules/`: tab per rule_set, drag&drop tra set, descrizioni
+  guidate ("dove va una regola h24-only?" → set `h24_window`).
+- Wizard creazione regola 3-step (categoria → preset → personalizzazione)
+  con preset organizzati per rule_set.
+
+### Aggiunte — M028 Customer sync agnostico (tabella autoritativa + adapter pluggabili)
+
+La tabella `customers` (rinominata da `customers_pg_cache`) diventa
+autoritativa. Sync configurabile da UI con field-mapping per sorgente.
+Eliminato hardcode dello schema PG `solution`/`stormshield`.
+
+- **Migration 028** `028_customer_sync_sources.sqlite.sql`:
+  - Tabelle `customer_sync_sources`, `customer_sync_runs`.
+  - RENAME `customers_pg_cache` → `customers` + ADD
+    `last_synced_from_source_id`.
+  - Seed sorgente "Postgres solution Domarc" con sentinel
+    `_use_legacy_pgconfig` (riusa `PgConfig` esistente da
+    `secrets.env` / UI Integrations).
+- **Package nuovo** `customer_sync/`:
+  - `base.py` ABC `CustomerSyncProvider` (fetch/test/describe_schema).
+  - `postgres.py`, `csv_file.py`, `json_url.py`, `mssql.py` (pyodbc).
+  - `mapper.py` (trasformazioni: lowercase, strip, default, split,
+    bool, json_parse, coalesce).
+  - `engine.py` orchestratore (fetch → map → upsert → on_missing →
+    audit). Policies on_missing: `flag` (default), `delete`, `keep`.
+  - `scheduler.py` thread loop 60s, lock per worker concorrenti.
+- **UI** `/customer-sync/`:
+  - Lista sorgenti, wizard 4-step (kind → config → test → mapping +
+    schedule), test connessione + preview 10 righe, trigger manuale,
+    storico run, mapping editor (modalità avanzata JSON / dropdown UI).
+  - Pannello riferimento campi target con discover-schema dalla
+    sorgente.
+- **Customer source backend `local`**:
+  - `customer_sources/local_source.py` legge da tabella `customers`
+    (autoritativa). `postgres_source.start_sync_thread()` rimpiazzato
+    da `start_sync_scheduler()` in `app.py`.
+  - Default backend per nuove install: `local`.
+
+## [v0.9.0-pre-prod] — 2026-05-04
 
 ### Aggiunte — H24 feature COMPLETATA (Fasi A-F): autorizzazione interventi urgenti a pagamento via codice in oggetto mail
 

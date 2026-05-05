@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1080" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="13">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 1340" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="13">
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path d="M 0 0 L 10 5 L 0 10 z" fill="#475569"/>
@@ -7,240 +7,166 @@
     <marker id="arrow-violet" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path d="M 0 0 L 10 5 L 0 10 z" fill="#a855f7"/>
     </marker>
-    <linearGradient id="gMail" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#dbeafe"/>
-      <stop offset="100%" stop-color="#bfdbfe"/>
-    </linearGradient>
-    <linearGradient id="gListener" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#fef3c7"/>
-      <stop offset="100%" stop-color="#fde68a"/>
-    </linearGradient>
-    <linearGradient id="gRules" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#e0e7ff"/>
-      <stop offset="100%" stop-color="#c7d2fe"/>
-    </linearGradient>
-    <linearGradient id="gAI" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#f3e8ff"/>
-      <stop offset="100%" stop-color="#e9d5ff"/>
-    </linearGradient>
-    <linearGradient id="gAction" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#dcfce7"/>
-      <stop offset="100%" stop-color="#bbf7d0"/>
-    </linearGradient>
-    <linearGradient id="gQuar" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#fee2e2"/>
-      <stop offset="100%" stop-color="#fecaca"/>
-    </linearGradient>
-    <linearGradient id="gCustomer" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#cffafe"/>
-      <stop offset="100%" stop-color="#a5f3fc"/>
-    </linearGradient>
-    <linearGradient id="gSets" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#fef9c3"/>
-      <stop offset="100%" stop-color="#fde047"/>
-    </linearGradient>
-    <linearGradient id="gSync" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#f5f3ff"/>
-      <stop offset="100%" stop-color="#ede9fe"/>
-    </linearGradient>
-    <filter id="shadow" x="-5%" y="-5%" width="110%" height="115%">
-      <feGaussianBlur in="SourceAlpha" stdDeviation="2"/>
-      <feOffset dx="0" dy="2" result="off"/>
-      <feComponentTransfer><feFuncA type="linear" slope="0.18"/></feComponentTransfer>
-      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#dc2626"/>
+    </marker>
+    <linearGradient id="gMail" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#dbeafe"/><stop offset="100%" stop-color="#bfdbfe"/></linearGradient>
+    <linearGradient id="gListener" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#fef3c7"/><stop offset="100%" stop-color="#fde68a"/></linearGradient>
+    <linearGradient id="gRules" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#e0e7ff"/><stop offset="100%" stop-color="#c7d2fe"/></linearGradient>
+    <linearGradient id="gShadow" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#f1f5f9"/><stop offset="100%" stop-color="#cbd5e1"/></linearGradient>
+    <linearGradient id="gThread" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#fae8ff"/><stop offset="100%" stop-color="#e9d5ff"/></linearGradient>
+    <linearGradient id="gAction" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#dcfce7"/><stop offset="100%" stop-color="#bbf7d0"/></linearGradient>
+    <linearGradient id="gPersist" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#fee2e2"/><stop offset="100%" stop-color="#fecaca"/></linearGradient>
+    <linearGradient id="gSync" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#cffafe"/><stop offset="100%" stop-color="#a5f3fc"/></linearGradient>
   </defs>
 
-  <!-- Title -->
-  <text x="540" y="28" text-anchor="middle" font-size="17" font-weight="700" fill="#0f172a">Flusso di una mail in Domarc SMTP Relay</text>
-  <text x="540" y="48" text-anchor="middle" font-size="12" font-style="italic" fill="#64748b">post Migration 028 (sync clienti agnostico) + 029 (rule sets per profilo orario)</text>
+  <text x="590" y="34" font-size="22" font-weight="700" text-anchor="middle" fill="#0f172a">Vita di una mail in Domarc SMTP Relay</text>
+  <text x="590" y="56" font-size="13" text-anchor="middle" fill="#475569">Pipeline post Migration 028-036 (customer sync agnostico, shadow cascata, thread tracking)</text>
 
-  <!-- ===== Sezione laterale: alimentazione tabella clienti (M028) ===== -->
-  <g filter="url(#shadow)">
-    <rect x="820" y="80" width="240" height="180" rx="10" fill="url(#gSync)" stroke="#7c3aed" stroke-width="1.5" stroke-dasharray="4 3"/>
-    <text x="940" y="102" text-anchor="middle" font-weight="700" fill="#5b21b6" font-size="13">Alimentazione clienti (M028)</text>
-    <text x="940" y="121" text-anchor="middle" font-size="11" fill="#6b21a8">SyncEngine schedulato 24h</text>
+  <!-- 1. Mittente -->
+  <rect x="40" y="80" width="220" height="62" rx="10" fill="url(#gMail)" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="150" y="106" font-size="14" font-weight="600" text-anchor="middle" fill="#1e3a8a">Mittente esterno</text>
+  <text x="150" y="125" font-size="11" text-anchor="middle" fill="#1e40af">ESVA antispam → relay :25</text>
+  <line x1="260" y1="111" x2="320" y2="111" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
 
-    <rect x="838" y="135" width="100" height="32" rx="5" fill="#fff" stroke="#a78bfa"/>
-    <text x="888" y="155" text-anchor="middle" font-size="11" fill="#5b21b6">Postgres legacy</text>
-
-    <rect x="942" y="135" width="100" height="32" rx="5" fill="#fff" stroke="#a78bfa"/>
-    <text x="992" y="155" text-anchor="middle" font-size="11" fill="#5b21b6">CSV / JSON URL</text>
-
-    <rect x="838" y="174" width="100" height="32" rx="5" fill="#fff" stroke="#a78bfa"/>
-    <text x="888" y="194" text-anchor="middle" font-size="11" fill="#5b21b6">MSSQL</text>
-
-    <rect x="942" y="174" width="100" height="32" rx="5" fill="#fff" stroke="#a78bfa"/>
-    <text x="992" y="194" text-anchor="middle" font-size="11" fill="#5b21b6">… provider</text>
-
-    <text x="940" y="227" text-anchor="middle" font-size="11" font-weight="600" fill="#5b21b6">↓ field-mapping + on_missing</text>
-    <text x="940" y="247" text-anchor="middle" font-size="11" fill="#7c3aed" font-style="italic">tabella `customers` autoritativa</text>
-  </g>
-
-  <!-- 1. Mittente esterno -->
-  <g filter="url(#shadow)">
-    <rect x="350" y="75" width="200" height="50" rx="10" fill="url(#gMail)" stroke="#3b82f6" stroke-width="1.5"/>
-    <text x="450" y="98" text-anchor="middle" font-weight="600" fill="#1e3a8a">Mittente esterno</text>
-    <text x="450" y="114" text-anchor="middle" font-size="11" fill="#475569">invio SMTP</text>
-  </g>
-
-  <line x1="450" y1="125" x2="450" y2="158" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)"/>
-
-  <!-- 2. Listener -->
-  <g filter="url(#shadow)">
-    <rect x="310" y="160" width="280" height="55" rx="10" fill="url(#gListener)" stroke="#f59e0b" stroke-width="1.5"/>
-    <text x="450" y="183" text-anchor="middle" font-weight="600" fill="#92400e">Listener SMTP (porta 25)</text>
-    <text x="450" y="200" text-anchor="middle" font-size="11" fill="#78350f">riceve, valida, registra l'evento</text>
-  </g>
-
-  <line x1="450" y1="215" x2="450" y2="248" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <!-- 2. Listener parser -->
+  <rect x="320" y="80" width="280" height="62" rx="10" fill="url(#gListener)" stroke="#d97706" stroke-width="1.5"/>
+  <text x="460" y="104" font-size="14" font-weight="600" text-anchor="middle" fill="#7c2d12">Listener (aiosmtpd) + Parser MIME</text>
+  <text x="460" y="123" font-size="11" text-anchor="middle" fill="#92400e">Decode RFC 2047, message_id, In-Reply-To, References</text>
+  <line x1="600" y1="111" x2="660" y2="111" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
 
   <!-- 3. Privacy bypass -->
-  <g filter="url(#shadow)">
-    <polygon points="450,250 570,295 450,340 330,295" fill="#fff" stroke="#94a3b8" stroke-width="1.5"/>
-    <text x="450" y="290" text-anchor="middle" font-weight="600" fill="#334155">Privacy bypass?</text>
-    <text x="450" y="307" text-anchor="middle" font-size="11" fill="#64748b">indirizzo in lista privacy</text>
-  </g>
+  <rect x="660" y="80" width="220" height="62" rx="10" fill="#fee2e2" stroke="#dc2626" stroke-width="1.5"/>
+  <text x="770" y="104" font-size="14" font-weight="600" text-anchor="middle" fill="#991b1b">Privacy bypass list</text>
+  <text x="770" y="123" font-size="11" text-anchor="middle" fill="#7f1d1d">SE in lista → drop senza log (GDPR)</text>
+  <line x1="880" y1="111" x2="940" y2="111" stroke="#dc2626" stroke-width="2" marker-end="url(#arrow-red)"/>
 
-  <line x1="330" y1="295" x2="220" y2="295" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <text x="280" y="288" text-anchor="middle" font-size="11" font-style="italic" fill="#0f172a">Sì</text>
+  <!-- 4. Kill switch -->
+  <rect x="940" y="80" width="200" height="62" rx="10" fill="#fee2e2" stroke="#dc2626" stroke-width="1.5"/>
+  <text x="1040" y="104" font-size="14" font-weight="600" text-anchor="middle" fill="#991b1b">Kill switch</text>
+  <text x="1040" y="123" font-size="11" text-anchor="middle" fill="#7f1d1d">SE ON → default_delivery only</text>
 
-  <g filter="url(#shadow)">
-    <rect x="60" y="268" width="160" height="55" rx="10" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"/>
-    <text x="140" y="291" text-anchor="middle" font-weight="600" fill="#334155">Drop silenzioso</text>
-    <text x="140" y="308" text-anchor="middle" font-size="11" fill="#64748b">no log contenuto</text>
-  </g>
+  <line x1="460" y1="142" x2="460" y2="180" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
 
-  <line x1="450" y1="340" x2="450" y2="373" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <text x="465" y="360" font-size="11" font-style="italic" fill="#0f172a">No</text>
+  <!-- 5. Thread continuation (M036) -->
+  <rect x="280" y="180" width="360" height="78" rx="10" fill="url(#gThread)" stroke="#a855f7" stroke-width="1.5"/>
+  <text x="460" y="204" font-size="14" font-weight="600" text-anchor="middle" fill="#581c87">Thread continuation check (M036)</text>
+  <text x="460" y="223" font-size="11" text-anchor="middle" fill="#6b21a8">find_thread_root(In-Reply-To, References)</text>
+  <text x="460" y="240" font-size="11" text-anchor="middle" fill="#6b21a8">SE match → is_thread_continuation=True, eredita ticket_id</text>
+  <text x="460" y="253" font-size="11" font-style="italic" text-anchor="middle" fill="#7c3aed">No duplicate ticket sulle risposte</text>
 
-  <!-- 4. Resolve customer -->
-  <g filter="url(#shadow)">
-    <rect x="285" y="375" width="330" height="68" rx="10" fill="url(#gCustomer)" stroke="#06b6d4" stroke-width="1.5"/>
-    <text x="450" y="397" text-anchor="middle" font-weight="700" fill="#0e7490">Resolve customer</text>
-    <text x="450" y="415" text-anchor="middle" font-size="11" fill="#155e75">from_email / to_alias / domain → codcli</text>
-    <text x="450" y="432" text-anchor="middle" font-size="11" font-style="italic" fill="#0e7490">+ tipologia_servizio (STD/EXT/H24/NO) + in_service</text>
-  </g>
+  <line x1="460" y1="258" x2="460" y2="300" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
 
-  <!-- linea da customers feed alla resolve -->
-  <path d="M 820 260 Q 700 320 615 405" fill="none" stroke="#7c3aed" stroke-width="1.2" stroke-dasharray="3 3" marker-end="url(#arrow-violet)"/>
-  <text x="720" y="332" font-size="10" font-style="italic" fill="#7c3aed">lookup tabella locale</text>
+  <!-- 6. Resolve customer -->
+  <rect x="280" y="300" width="360" height="80" rx="10" fill="url(#gSync)" stroke="#0891b2" stroke-width="1.5"/>
+  <text x="460" y="324" font-size="14" font-weight="600" text-anchor="middle" fill="#164e63">Resolve customer (M028 tabella autoritativa)</text>
+  <text x="460" y="343" font-size="11" text-anchor="middle" fill="#155e75">from_address / to_alias / domain → codcli</text>
+  <text x="460" y="360" font-size="11" text-anchor="middle" fill="#155e75">contract_active, tipologia_servizio, in_service, has_exception_today</text>
+  <text x="460" y="374" font-size="10" font-style="italic" text-anchor="middle" fill="#0e7490">Alimentata da customer_sync (postgres/mssql/csv/json url, 24h)</text>
 
-  <line x1="450" y1="443" x2="450" y2="475" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <!-- side note: customer sync -->
+  <rect x="700" y="300" width="220" height="80" rx="10" fill="#ecfeff" stroke="#06b6d4" stroke-width="1" stroke-dasharray="4,2"/>
+  <text x="810" y="322" font-size="12" font-weight="600" text-anchor="middle" fill="#155e75">customer_sync (M028)</text>
+  <text x="810" y="340" font-size="10" text-anchor="middle" fill="#0e7490">/customer-sync/ UI</text>
+  <text x="810" y="354" font-size="10" text-anchor="middle" fill="#0e7490">Provider: postgres / mssql</text>
+  <text x="810" y="368" font-size="10" text-anchor="middle" fill="#0e7490">csv_file / json_url</text>
 
-  <!-- 5. Active rule sets -->
-  <g filter="url(#shadow)">
-    <rect x="245" y="478" width="410" height="92" rx="10" fill="url(#gSets)" stroke="#ca8a04" stroke-width="1.5"/>
-    <text x="450" y="500" text-anchor="middle" font-weight="700" fill="#713f12">Determina rule_sets attivi (M029)</text>
-    <text x="450" y="520" text-anchor="middle" font-size="11" fill="#854d0e">always_active=1 (set "globali") + set legato al profilo cliente</text>
-    <text x="265" y="544" font-size="11" font-family="ui-monospace,Menlo,monospace" fill="#713f12">STD → {globali, standard}</text>
-    <text x="450" y="544" text-anchor="middle" font-size="11" font-family="ui-monospace,Menlo,monospace" fill="#713f12">EXT → {globali, esteso}</text>
-    <text x="635" y="544" text-anchor="end" font-size="11" font-family="ui-monospace,Menlo,monospace" fill="#713f12">H24 → {globali, h24}</text>
-    <text x="265" y="562" font-size="11" font-family="ui-monospace,Menlo,monospace" fill="#713f12">NO → {globali, nessuno}</text>
-    <text x="635" y="562" text-anchor="end" font-size="11" font-family="ui-monospace,Menlo,monospace" fill="#713f12">sconosciuto → {globali}</text>
-  </g>
+  <line x1="460" y1="380" x2="460" y2="420" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
 
-  <line x1="450" y1="570" x2="450" y2="603" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <!-- 7. Domain shadow (M031) -->
+  <rect x="280" y="420" width="360" height="62" rx="10" fill="url(#gShadow)" stroke="#64748b" stroke-width="1.5"/>
+  <text x="460" y="445" font-size="14" font-weight="600" text-anchor="middle" fill="#0f172a">Domain shadow check (M031)</text>
+  <text x="460" y="464" font-size="11" text-anchor="middle" fill="#475569">SE domain in shadow → tutto l'evento in shadow</text>
 
-  <!-- 6. Rule Engine -->
-  <g filter="url(#shadow)">
-    <rect x="280" y="605" width="340" height="100" rx="10" fill="url(#gRules)" stroke="#6366f1" stroke-width="1.5"/>
-    <text x="450" y="628" text-anchor="middle" font-weight="700" fill="#3730a3">Rule Engine v2</text>
-    <text x="450" y="648" text-anchor="middle" font-size="11" fill="#4338ca">filtra regole con rule_set_id ∈ active_rule_sets</text>
-    <text x="450" y="665" text-anchor="middle" font-size="11" fill="#4338ca">+ ordina per scope_type, priority ASC</text>
-    <text x="450" y="682" text-anchor="middle" font-size="11" fill="#4338ca">+ valuta criteri AND (regex, in_service, has_exception_today, ...)</text>
-    <text x="450" y="698" text-anchor="middle" font-size="11" font-style="italic" fill="#4338ca">first match wins (o continue_after_match)</text>
-  </g>
+  <line x1="460" y1="482" x2="460" y2="520" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
 
-  <!-- arrow rule engine -> azioni -->
-  <line x1="450" y1="705" x2="450" y2="735" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <text x="465" y="724" font-size="11" font-style="italic" fill="#0f172a">azione</text>
+  <!-- 8. Rule Engine -->
+  <rect x="220" y="520" width="480" height="220" rx="12" fill="url(#gRules)" stroke="#4338ca" stroke-width="2"/>
+  <text x="460" y="546" font-size="16" font-weight="700" text-anchor="middle" fill="#312e81">Rule Engine v2 (gerarchia padre/figlio)</text>
+  <text x="460" y="568" font-size="11" text-anchor="middle" fill="#3730a3">Iter regole abilitate, ordine priority ASC, prima-match-wins</text>
 
-  <!-- 5 azioni: 5 box affiancati -->
-  <g filter="url(#shadow)">
-    <rect x="20" y="740" width="155" height="50" rx="8" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"/>
-    <text x="98" y="762" text-anchor="middle" font-weight="600" fill="#334155">ignore</text>
-    <text x="98" y="778" text-anchor="middle" font-size="11" fill="#64748b">drop, nessun forward</text>
-  </g>
+  <!-- match dimensions -->
+  <rect x="240" y="582" width="220" height="138" rx="6" fill="#ffffff" stroke="#6366f1"/>
+  <text x="350" y="600" font-size="12" font-weight="700" text-anchor="middle" fill="#312e81">Match criteri</text>
+  <text x="248" y="618" font-size="10" fill="#3730a3">match_from_regex / from_domain</text>
+  <text x="248" y="632" font-size="10" fill="#3730a3">match_to_regex / to_domain / to_group_id</text>
+  <text x="248" y="646" font-size="10" fill="#3730a3">match_subject_regex / body_regex</text>
+  <text x="248" y="660" font-size="10" fill="#3730a3">match_at_hours / match_in_service</text>
+  <text x="248" y="674" font-size="10" fill="#3730a3">match_contract_active / known_customer</text>
+  <text x="248" y="688" font-size="10" font-weight="600" fill="#1e1b4b">match_customer_groups (M035 ★)</text>
+  <text x="248" y="702" font-size="10" font-weight="600" fill="#7c3aed">match_is_thread_continuation (M036)</text>
+  <text x="248" y="716" font-size="10" fill="#3730a3">match_has_exception_today / match_tag</text>
 
-  <g filter="url(#shadow)">
-    <rect x="190" y="740" width="155" height="50" rx="8" fill="url(#gAction)" stroke="#16a34a" stroke-width="1.5"/>
-    <text x="268" y="762" text-anchor="middle" font-weight="600" fill="#14532d">forward</text>
-    <text x="268" y="778" text-anchor="middle" font-size="11" fill="#166534">inoltro al destinatario</text>
-  </g>
+  <!-- shadow cascade -->
+  <rect x="470" y="582" width="220" height="138" rx="6" fill="#ffffff" stroke="#64748b"/>
+  <text x="580" y="600" font-size="12" font-weight="700" text-anchor="middle" fill="#0f172a">Shadow cascata</text>
+  <text x="478" y="620" font-size="10" fill="#475569">M031 dominio in shadow → tutto</text>
+  <text x="478" y="636" font-size="10" fill="#475569">M030 recipient_group shadow →</text>
+  <text x="478" y="650" font-size="10" fill="#475569">    solo membri</text>
+  <text x="478" y="666" font-size="10" fill="#475569">M033 rule shadow → solo regola</text>
+  <text x="478" y="690" font-size="10" font-style="italic" fill="#334155">events_log.shadow_action +</text>
+  <text x="478" y="704" font-size="10" font-style="italic" fill="#334155">shadow_rule_id (audit)</text>
+  <text x="478" y="718" font-size="10" font-weight="600" fill="#0f172a">Action eseguita: default_delivery</text>
 
-  <g filter="url(#shadow)">
-    <rect x="360" y="740" width="180" height="50" rx="8" fill="url(#gAI)" stroke="#a855f7" stroke-width="1.5"/>
-    <text x="450" y="762" text-anchor="middle" font-weight="600" fill="#581c87">ai_classify</text>
-    <text x="450" y="778" text-anchor="middle" font-size="11" fill="#6b21a8">passa all'IA (Claude)</text>
-  </g>
+  <line x1="460" y1="740" x2="460" y2="780" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
 
-  <g filter="url(#shadow)">
-    <rect x="555" y="740" width="155" height="50" rx="8" fill="url(#gQuar)" stroke="#ef4444" stroke-width="1.5"/>
-    <text x="633" y="762" text-anchor="middle" font-weight="600" fill="#7f1d1d">quarantine</text>
-    <text x="633" y="778" text-anchor="middle" font-size="11" fill="#991b1b">in attesa di review</text>
-  </g>
+  <!-- 9. Action dispatcher -->
+  <rect x="220" y="780" width="720" height="140" rx="10" fill="url(#gAction)" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="580" y="804" font-size="14" font-weight="700" text-anchor="middle" fill="#14532d">Action dispatcher (output rule engine)</text>
 
-  <g filter="url(#shadow)">
-    <rect x="725" y="740" width="155" height="50" rx="8" fill="url(#gAction)" stroke="#16a34a" stroke-width="1.5"/>
-    <text x="803" y="762" text-anchor="middle" font-weight="600" fill="#14532d">create_ticket</text>
-    <text x="803" y="778" text-anchor="middle" font-size="11" fill="#166534">apre ticket gestionale</text>
-  </g>
+  <rect x="240" y="820" width="120" height="32" rx="6" fill="#ffffff" stroke="#15803d"/>
+  <text x="300" y="841" font-size="11" font-weight="600" text-anchor="middle" fill="#14532d">forward</text>
+  <rect x="370" y="820" width="120" height="32" rx="6" fill="#ffffff" stroke="#15803d"/>
+  <text x="430" y="841" font-size="11" font-weight="600" text-anchor="middle" fill="#14532d">redirect</text>
+  <rect x="500" y="820" width="120" height="32" rx="6" fill="#ffffff" stroke="#15803d"/>
+  <text x="560" y="841" font-size="11" font-weight="600" text-anchor="middle" fill="#14532d">auto_reply</text>
+  <rect x="630" y="820" width="140" height="32" rx="6" fill="#ffffff" stroke="#15803d"/>
+  <text x="700" y="841" font-size="11" font-weight="600" text-anchor="middle" fill="#14532d">create_ticket</text>
+  <rect x="780" y="820" width="140" height="32" rx="6" fill="#ffffff" stroke="#15803d"/>
+  <text x="850" y="841" font-size="11" font-weight="600" text-anchor="middle" fill="#14532d">authorized_ticket (H24)</text>
 
-  <g filter="url(#shadow)">
-    <rect x="895" y="740" width="170" height="50" rx="8" fill="url(#gAction)" stroke="#16a34a" stroke-width="1.5"/>
-    <text x="980" y="762" text-anchor="middle" font-weight="600" fill="#14532d">auto_reply</text>
-    <text x="980" y="778" text-anchor="middle" font-size="11" fill="#166534">risposta da template</text>
-  </g>
+  <rect x="240" y="860" width="120" height="32" rx="6" fill="#ffffff" stroke="#15803d"/>
+  <text x="300" y="881" font-size="11" font-weight="600" text-anchor="middle" fill="#14532d">quarantine</text>
+  <rect x="370" y="860" width="120" height="32" rx="6" fill="#ffffff" stroke="#15803d"/>
+  <text x="430" y="881" font-size="11" font-weight="600" text-anchor="middle" fill="#14532d">ai_classify</text>
+  <rect x="500" y="860" width="120" height="32" rx="6" fill="#ffffff" stroke="#15803d"/>
+  <text x="560" y="881" font-size="11" font-weight="600" text-anchor="middle" fill="#14532d">ignore / flag_only</text>
+  <rect x="630" y="860" width="290" height="32" rx="6" fill="#dcfce7" stroke="#15803d" stroke-dasharray="3,2"/>
+  <text x="775" y="881" font-size="11" font-style="italic" text-anchor="middle" fill="#166534">+ keep_original_delivery / also_deliver_to</text>
 
-  <!-- linee dispatcher -->
-  <path d="M 450 705 L 450 730 L 98 730 L 98 740" fill="none" stroke="#475569" stroke-width="1.2"/>
-  <path d="M 450 705 L 450 730 L 268 730 L 268 740" fill="none" stroke="#475569" stroke-width="1.2"/>
-  <path d="M 450 705 L 450 730 L 633 730 L 633 740" fill="none" stroke="#475569" stroke-width="1.2"/>
-  <path d="M 450 705 L 450 730 L 803 730 L 803 740" fill="none" stroke="#475569" stroke-width="1.2"/>
-  <path d="M 450 705 L 450 730 L 980 730 L 980 740" fill="none" stroke="#475569" stroke-width="1.2"/>
+  <text x="580" y="908" font-size="10" font-style="italic" text-anchor="middle" fill="#15803d">action_map ereditata: padre defaults + figlio override</text>
 
-  <!-- Branch IA -->
-  <line x1="450" y1="790" x2="450" y2="820" stroke="#a855f7" stroke-width="1.5" marker-end="url(#arrow-violet)"/>
+  <line x1="580" y1="920" x2="580" y2="960" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
 
-  <g filter="url(#shadow)">
-    <rect x="280" y="825" width="340" height="60" rx="10" fill="#fdf4ff" stroke="#a855f7" stroke-width="1.5" stroke-dasharray="4 3"/>
-    <text x="450" y="848" text-anchor="middle" font-weight="600" fill="#581c87">IA propone azione finale</text>
-    <text x="450" y="867" text-anchor="middle" font-size="11" fill="#6b21a8">classificazione + urgenza + sintesi → forward / ticket / drop</text>
-  </g>
+  <!-- 10. Persist event -->
+  <rect x="220" y="960" width="720" height="120" rx="10" fill="url(#gPersist)" stroke="#dc2626" stroke-width="1.5"/>
+  <text x="580" y="984" font-size="14" font-weight="700" text-anchor="middle" fill="#7f1d1d">Persist event in events_log + flush admin via API</text>
+  <text x="580" y="1006" font-size="11" text-anchor="middle" fill="#991b1b">action eseguita, ticket_id, audit completo</text>
+  <text x="580" y="1024" font-size="11" font-weight="600" text-anchor="middle" fill="#581c87">M036: in_reply_to, references_json, reply_to_event_uuid, thread_root_uuid</text>
+  <text x="580" y="1042" font-size="11" font-weight="600" text-anchor="middle" fill="#0f172a">M030/M031/M033: shadow_action, shadow_rule_id (se shadow)</text>
+  <text x="580" y="1062" font-size="10" font-style="italic" text-anchor="middle" fill="#7f1d1d">Aggregations errori (statiche + AI semantic clusters) attivate dopo</text>
 
-  <!-- 7. Persist event -->
-  <line x1="450" y1="885" x2="450" y2="918" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <!-- legend -->
+  <rect x="40" y="1110" width="1100" height="200" rx="10" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="60" y="1134" font-size="13" font-weight="700" fill="#0f172a">Legenda novità Migration 028-036</text>
 
-  <g filter="url(#shadow)">
-    <rect x="320" y="920" width="260" height="50" rx="10" fill="url(#gMail)" stroke="#3b82f6" stroke-width="1.5"/>
-    <text x="450" y="942" text-anchor="middle" font-weight="600" fill="#1e3a8a">Persist event + audit</text>
-    <text x="450" y="958" text-anchor="middle" font-size="11" fill="#475569">events table, body TTL, payload_metadata, chain</text>
-  </g>
+  <rect x="60" y="1148" width="14" height="14" fill="url(#gSync)" stroke="#0891b2"/>
+  <text x="82" y="1160" font-size="11" fill="#0f172a"><tspan font-weight="600">M028</tspan> — Tabella customers autoritativa, customer_sync configurabile (postgres/mssql/csv/json url, 24h)</text>
 
-  <!-- Legenda colori in basso a sinistra -->
-  <g transform="translate(20, 990)">
-    <rect x="0" y="0" width="500" height="80" rx="6" fill="#fff" stroke="#cbd5e1"/>
-    <text x="10" y="18" font-size="11" font-weight="700" fill="#0f172a">Legenda</text>
+  <rect x="60" y="1170" width="14" height="14" fill="url(#gThread)" stroke="#a855f7"/>
+  <text x="82" y="1182" font-size="11" fill="#0f172a"><tspan font-weight="600">M036</tspan> — Thread tracking RFC 2822: risposte non aprono nuovi ticket, regola seed priority=5 in `globali`</text>
 
-    <rect x="10" y="24" width="14" height="10" fill="url(#gCustomer)" stroke="#06b6d4"/>
-    <text x="30" y="33" font-size="10.5" fill="#334155">Resolve cliente (tabella locale)</text>
+  <rect x="60" y="1192" width="14" height="14" fill="url(#gShadow)" stroke="#64748b"/>
+  <text x="82" y="1204" font-size="11" fill="#0f172a"><tspan font-weight="600">M030/M031/M033</tspan> — Shadow mode in cascata: dominio → recipient_group → singola regola</text>
 
-    <rect x="200" y="24" width="14" height="10" fill="url(#gSets)" stroke="#ca8a04"/>
-    <text x="220" y="33" font-size="10.5" fill="#334155">Filtraggio per rule_set (M029)</text>
+  <rect x="60" y="1214" width="14" height="14" fill="#ffffff" stroke="#6366f1"/>
+  <text x="82" y="1226" font-size="11" fill="#0f172a"><tspan font-weight="600">M034</tspan> — Gruppi cliente self-contained: regole di membership auto-assegnano i clienti via campi del cliente</text>
 
-    <rect x="10" y="40" width="14" height="10" fill="url(#gRules)" stroke="#6366f1"/>
-    <text x="30" y="49" font-size="10.5" fill="#334155">Logica deterministica</text>
+  <rect x="60" y="1236" width="14" height="14" fill="url(#gRules)" stroke="#4338ca"/>
+  <text x="82" y="1248" font-size="11" fill="#0f172a"><tspan font-weight="600">M035 ★</tspan> — Filtro contratto/profilo cliente <tspan font-weight="700">solo</tspan> via match_customer_groups (no più active_rule_set_ids runtime)</text>
 
-    <rect x="200" y="40" width="14" height="10" fill="url(#gAI)" stroke="#a855f7"/>
-    <text x="220" y="49" font-size="10.5" fill="#334155">Logica IA (semantica)</text>
+  <rect x="60" y="1258" width="14" height="14" fill="#ffffff" stroke="#a855f7"/>
+  <text x="82" y="1270" font-size="11" fill="#0f172a"><tspan font-weight="600">M029</tspan> — Rule sets (globali/std/ext/h24) restano per organizzazione UI per profilo orario, NON gating runtime</text>
 
-    <rect x="10" y="56" width="14" height="10" fill="url(#gAction)" stroke="#16a34a"/>
-    <text x="30" y="65" font-size="10.5" fill="#334155">Azione di consegna</text>
-
-    <rect x="200" y="56" width="14" height="10" fill="url(#gSync)" stroke="#7c3aed" stroke-dasharray="2 2"/>
-    <text x="220" y="65" font-size="10.5" fill="#334155">Sync esterno (M028)</text>
-  </g>
-
-  <text x="1060" y="1068" text-anchor="end" font-size="10" font-style="italic" fill="#64748b">Ogni passaggio è registrato in Eventi + Activity Live</text>
+  <text x="60" y="1296" font-size="10" font-style="italic" fill="#475569">Doc: docs/manuale_utente/MANUALE_UTENTE.md, docs/guida_funzionamento.md, docs/rule_engine_v2.md</text>
 </svg>

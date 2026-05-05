@@ -10,13 +10,31 @@ self-contained.
 
 ## Stato
 
-**v1.0.0** — Production-ready (release iniziale completata).
+**v0.9.3-pre-prod** — Beta in pilota su `datia.it` (2026-05-05). Migrations
+applicate fino alla 036 (thread tracking RFC 2822 + form regole sincronizzati).
 
 ## Features principali
 
 - 🌳 **Rule Engine v2** con gerarchia padre/figlio (1 livello), priorità globale
   unica, ereditarietà action_map, validatori V001-V008, simulazione inline,
   wizard "Suggerisci gruppi", flatten verso listener, test parità (88 casi).
+  Filtro contratto/profilo cliente **solo via gruppi cliente** (M035).
+
+- 🧩 **Customer sync agnostico** (M028): tabella clienti autoritativa
+  alimentabile da postgres / mssql / csv / json url con mapping
+  configurabile. UI wizard 4-step + scheduler 24h + storico run.
+
+- 👥 **Gruppi cliente self-contained** (M034): regole di
+  auto-assegnamento basate sui campi del cliente. Eliminata dipendenza
+  dal manager esterno per la composizione dei gruppi.
+
+- 🌑 **Shadow mode in cascata** (M030/M031/M033): testa nuove
+  regole/gruppi/domini in produzione senza eseguire le azioni. Audit
+  completo permette di confrontare "cosa sarebbe successo".
+
+- 🔗 **Thread tracking RFC 2822** (M036): le risposte a una mail già
+  tracciata NON aprono un nuovo ticket. Il ticket_id viene ereditato dal
+  parent.
 
 - 🛡 **Privacy bypass GDPR**: liste indirizzi e domini esclusi dal rule engine
   con audit log. Pre-check nel listener prima del processing.
@@ -64,7 +82,7 @@ DOMARC_RELAY_BIND_HOST=127.0.0.1
 DOMARC_RELAY_BIND_PORT=5443
 DOMARC_RELAY_SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_hex(32))")
 DOMARC_RELAY_BOOTSTRAP_PASSWORD=changeme-on-first-login
-DOMARC_RELAY_CUSTOMER_SOURCE=yaml
+DOMARC_RELAY_CUSTOMER_SOURCE=local
 EOF
 chmod 600 /etc/domarc-smtp-relay-admin/secrets.env
 
@@ -102,8 +120,9 @@ admin/                       (questo repo)
 │   │   │                    # decisions, error_aggregator, rule_proposer
 │   │   ├── providers/       # base + claude + local_http (DGX Spark)
 │   │   └── prompts/         # template Jinja2 per ogni job IA
-│   ├── customer_sources/    # 4 adapter (yaml/sqlite/rest/stormshield)
-│   ├── migrations/          # 17 migrations SQL (sqlite + postgres parità)
+│   ├── customer_sources/    # 5 adapter (local/yaml/sqlite/rest/stormshield/postgres)
+│   ├── customer_sync/       # M028: provider postgres/mssql/csv/json + engine + scheduler
+│   ├── migrations/          # 36 migrations SQL (sqlite + postgres parità)
 │   ├── routes/              # blueprint per le 12 macroaree UI
 │   ├── rules/               # engine v2 (validators, flatten, evaluator)
 │   ├── storage/             # DAO astratto (sqlite + postgres impl)
@@ -136,7 +155,7 @@ Variabili d'ambiente principali (prefisso `DOMARC_RELAY_`):
 | `DOMARC_RELAY_SECRET_KEY` | (genera al primo avvio) | Flask session secret |
 | `DOMARC_RELAY_BIND_HOST` | `127.0.0.1` | bind host |
 | `DOMARC_RELAY_BIND_PORT` | `5443` | bind port |
-| `DOMARC_RELAY_CUSTOMER_SOURCE` | `yaml` | adapter customer (yaml/sqlite/rest/stormshield) |
+| `DOMARC_RELAY_CUSTOMER_SOURCE` | `local` | adapter customer (local/yaml/sqlite/rest/stormshield/postgres) |
 | `DOMARC_RELAY_BOOTSTRAP_PASSWORD` | (none) | password admin auto-creato al primo avvio |
 | `DOMARC_RELAY_MASTER_KEY_PATH` | `/var/lib/domarc-smtp-relay-admin/master.key` | path master key Fernet |
 | `DOMARC_RELAY_MANUAL_PATH` | `/var/lib/domarc-smtp-relay-admin/manual.md` | output manual auto-generato |

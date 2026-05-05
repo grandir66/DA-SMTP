@@ -828,4 +828,121 @@ Override automatico nel listener (`actions.py:do_auto_reply`): se `customer.cont
 
 ---
 
-*Ultimo aggiornamento: 2026-05-05 — Migration 022/025/026/027, refactor recipient groups in addresses-to, sort tabelle.*
+## 10. Novità 2026-05-05 (Migration 028-036)
+
+### 10.1 Customer sync agnostico (M028)
+
+La tabella `customers_pg_cache` è stata **rinominata** in `customers` ed è
+ora **autoritativa**: alimentata da provider configurabili dalla UI
+`/customer-sync/`.
+
+| Tabella | Scopo |
+|---|---|
+| `customer_sync_sources` | Sorgenti configurate (postgres / mssql / csv_file / json_url) |
+| `customer_sync_runs` | Storico run (n_fetched, n_inserted, n_updated, n_flagged_missing, error_message) |
+
+Provider in package `domarc_relay_admin/customer_sync/`:
+- `postgres.py` (parametrizzato; supporta sentinel `_use_legacy_pgconfig` per riusare PgConfig esistente da Integrations)
+- `mssql.py` (via `pyodbc`, richiede `msodbcsql18` su VM)
+- `csv_file.py` (file su filesystem, delimiter/encoding configurabili)
+- `json_url.py` (HTTP fetch + JSONPath per estrarre array record)
+
+Engine `engine.py` orchestra fetch → map → upsert → on_missing policy →
+audit. Policies: `flag` (default, contract_active=0), `delete`, `keep`.
+Schedule default 24h.
+
+UI:
+- Wizard 4-step (kind → config → test → mapping + schedule)
+- Test connessione + preview prime 10 righe
+- Trigger manuale (con flag `dry_run`)
+- Mapping editor con modalità Avanzata (JSON) / Semplice (dropdown)
+- "Scopri schema dalla sorgente" via `provider.describe_schema()`
+- Pannello riferimento campi target del modello cliente
+
+Backend runtime nuovo `customer_sources/local_source.py` legge dalla tabella
+`customers`. È il **default per nuove install**: gli adapter
+`stormshield`/`postgres`/`yaml`/`sqlite` restano per compat.
+
+### 10.2 Rule sets per profilo orario (M029, organizzazione UI)
+
+Tabella `rule_sets` (`globali`, `std_window`, `ext_window`, `h24_window`)
++ `rules.rule_set_id`. Container UI per organizzare le regole per profilo
+orario. **Dopo M035 NON è più gating runtime**.
+
+### 10.3 Shadow mode in cascata (M030/M031/M033)
+
+Le regole/gruppi/domini possono essere messi in **shadow mode**: il rule
+engine valuta tutto, registra `shadow_action` / `shadow_rule_id`
+nell'evento, ma esegue solo `default_delivery`.
+
+Cascata:
+1. **Domain shadow** (M031, `domain_routes.shadow_mode`): tutto l'evento.
+2. **Recipient group shadow** (M030, `recipient_groups.shadow_mode`): solo destinatari.
+3. **Rule shadow** (M033, `rules.shadow_mode`): solo quella regola.
+
+Use case: portare in produzione una nuova regola, osservare in shadow per
+N giorni, disattivare il flag quando si è sicuri.
+
+### 10.4 Gruppi cliente self-contained (M034)
+
+Tabella `customer_group_membership_rules` (`group_id`, `source_field`,
+`operator`, `value_json`, `priority`).
+
+Le regole di membership **auto-assegnano** i clienti ai gruppi in base
+ai campi del cliente (`contract_type`, `tipologia_servizio`, JSON
+custom). Re-evaluation periodica (5min) o on-customer-update via
+`recompute_group_memberships(group_id)`.
+
+Eliminata la dipendenza dal manager esterno per la composizione dei
+gruppi: i gruppi sono interamente gestiti dal sistema.
+
+### 10.5 Semplificazione runtime: filtro contratto solo per gruppo (M035)
+
+Prima: il listener calcolava `active_rule_set_ids` runtime in base al
+profilo orario del cliente, e filtrava le regole per `rule_set_id`.
+
+Dopo M035: il filtro contratto/tipo servizio si appoggia
+**esclusivamente** a `match_customer_groups`. I rule_sets restano per
+organizzazione UI.
+
+Vantaggio: una regola per "fascia oraria H24" si ottiene mettendo il
+`match_customer_groups` su un gruppo cliente che ha la membership rule
+"tipologia_servizio = H24". Più chiaro, niente magia runtime.
+
+### 10.6 Thread tracking RFC 2822 (M036) — no duplicate ticket
+
+Problema risolto: cliente H24 manda mail → ticket aperto → tecnico
+risponde → cliente replica → la risposta NON deve aprire un nuovo ticket.
+
+ALTER `events_log` ADD `in_reply_to`, `references_json`,
+`reply_to_event_uuid`, `thread_root_uuid`. ALTER `rules` ADD tristate
+`match_is_thread_continuation`.
+
+Pre-rule-engine, `pipeline.py` chiama `find_thread_root(in_reply_to,
+references)` di `relay/storage.py`. Se la mail risponde a un message_id
+già in `events_log`:
+- `is_thread_continuation = True`
+- L'evento eredita `ticket_id` dal parent
+- Match seed regola priority=5 in `globali` → `default_delivery`, NO ticket
+
+UI:
+- Lista eventi: badge 🔗 thread accanto all'azione
+- Dettaglio evento: card violetta con link al parent, thread root,
+  parent ticket, In-Reply-To
+- Form regola (orfana, gruppo, figlio): tristate
+  `match_is_thread_continuation`
+
+### 10.7 Form regole sincronizzati
+
+I 3 form regola (orfana, gruppo padre, figlio) ora hanno feature parity:
+recipient_groups, fasce orarie (`match_at_hours`), tag, gruppi cliente,
+shadow mode, thread continuation, forward target — tutti presenti
+ovunque servano.
+
+Etichette `match_in_service` rinominate "DENTRO orario operativo del
+cliente" / "FUORI orario operativo del cliente" (più chiare di "in
+servizio" / "fuori servizio").
+
+---
+
+*Ultimo aggiornamento: 2026-05-05 — Migration 028-036 (customer sync agnostico, rule_sets, shadow mode in cascata, gruppi cliente self-contained, semplificazione filtro contratto, thread tracking RFC 2822, form regole sincronizzati).*
