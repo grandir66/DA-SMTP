@@ -119,6 +119,64 @@ def _check_shadow_recipient_group(parsed: ParsedMessage,
     return None
 
 
+def _check_shadow_domain(parsed: ParsedMessage,
+                          storage: "Storage") -> dict[str, Any] | None:
+    """M031: ritorna info se il dominio del destinatario ha shadow_mode=1.
+    None altrimenti. Controlla primary_to_domain + domini di tutti gli altri
+    destinatari (basta che UNO sia in dominio shadow).
+    """
+    if not hasattr(storage, "find_shadow_domain"):
+        return None
+    domains: list[str] = []
+    if parsed.primary_to_domain:
+        domains.append(parsed.primary_to_domain.lower())
+    for to in (parsed.to_addresses or []):
+        if to and "@" in to:
+            d = to.rsplit("@", 1)[-1].strip().lower()
+            if d and d not in domains:
+                domains.append(d)
+    for d in domains:
+        info = storage.find_shadow_domain(d)
+        if info:
+            info = dict(info)
+            info["matched_domain"] = d
+            return info
+    return None
+
+
+def _check_shadow_rule(rule: dict[str, Any] | None) -> dict[str, Any] | None:
+    """M033: ritorna info se la regola vincente ha shadow_mode=1. None altrimenti.
+    La regola arriva gia' dal rule engine (rules_cache include shadow_mode).
+    """
+    if not rule or not rule.get("shadow_mode"):
+        return None
+    return {
+        "rule_id": int(rule.get("id", 0)),
+        "rule_name": rule.get("name"),
+        "shadow_note": rule.get("shadow_note"),
+    }
+
+
+def _check_shadow_cascata(parsed: ParsedMessage, storage: "Storage",
+                           winning_rule: dict[str, Any] | None
+                           ) -> tuple[str, dict[str, Any]] | None:
+    """Cascata di check shadow nell'ordine: dominio -> recipient_group -> regola.
+    Ritorna (origin, info) del PRIMO trigger trovato, None se nessuno scatta.
+
+      origin = "domain:<domain>" | "recipient_group:<code>" | "rule:<id>"
+    """
+    info = _check_shadow_domain(parsed, storage)
+    if info:
+        return (f"domain:{info.get('matched_domain') or info.get('domain')}", info)
+    info = _check_shadow_recipient_group(parsed, storage)
+    if info:
+        return (f"recipient_group:{info.get('code')}", info)
+    info = _check_shadow_rule(winning_rule)
+    if info:
+        return (f"rule:{info.get('rule_id')}", info)
+    return None
+
+
 def _resolve_active_rule_sets(storage: "Storage",
                                 profile_code: str | None) -> set[int] | None:
     """M029: ritorna l'insieme di rule_set_id attivi per la mail corrente.
@@ -360,35 +418,41 @@ def process(
              "priority": s.priority, "matched": s.matched, "reasons": s.reasons}
             for s in outcome.chain
         ]
-        # M030: shadow check (recipient_group). Se il destinatario e' in un
-        # gruppo shadow, blocca il dispatch reale e forza default_delivery,
-        # ma logga in payload_metadata cosa SAREBBE stato eseguito.
-        shadow_info = _check_shadow_recipient_group(parsed, storage)
+        # M030+M031+M033: cascata shadow (dominio -> recipient_group -> regola).
+        # Se uno qualsiasi e' in shadow, blocca il dispatch reale e forza
+        # default_delivery + log in payload_metadata di cosa SAREBBE stato fatto.
+        shadow_check = _check_shadow_cascata(parsed, storage, outcome.rule)
 
         if outcome.rule is None:
             action_taken, detail, queue_extra = _do_default_delivery(parsed, storage, "no_rule_match", event_uuid=pre_event_uuid)
             extra.update(queue_extra)
-            if shadow_info:
-                # Anche senza rule match logghiamo il flag per visibilita'.
+            if shadow_check:
+                origin, info = shadow_check
                 extra["shadow_mode"] = True
-                extra["shadow_origin"] = f"recipient_group:{shadow_info.get('code')}"
-                extra["shadow_matched_email"] = shadow_info.get("matched_email")
+                extra["shadow_origin"] = origin
+                if info.get("matched_email"):
+                    extra["shadow_matched_email"] = info["matched_email"]
+                if info.get("matched_domain"):
+                    extra["shadow_matched_domain"] = info["matched_domain"]
+                extra["shadow_note"] = info.get("shadow_note")
                 extra["would_have_executed"] = {"action": "default_delivery",
                                                 "reason": "no_rule_match"}
-        elif shadow_info:
+        elif shadow_check:
+            origin, info = shadow_check
             rule_id = int(outcome.rule["id"])
             action_name = str(outcome.rule.get("action", ""))
             action_map = outcome.rule.get("action_map") or {}
             logger.info(
-                "SHADOW MODE: rule_id=%s action=%s SOPPRESSA per gruppo %s "
-                "(destinatario %s)",
-                rule_id, action_name, shadow_info.get("code"),
-                shadow_info.get("matched_email"),
+                "SHADOW MODE: rule_id=%s action=%s SOPPRESSA - origine=%s",
+                rule_id, action_name, origin,
             )
             extra["shadow_mode"] = True
-            extra["shadow_origin"] = f"recipient_group:{shadow_info.get('code')}"
-            extra["shadow_matched_email"] = shadow_info.get("matched_email")
-            extra["shadow_note"] = shadow_info.get("shadow_note")
+            extra["shadow_origin"] = origin
+            if info.get("matched_email"):
+                extra["shadow_matched_email"] = info["matched_email"]
+            if info.get("matched_domain"):
+                extra["shadow_matched_domain"] = info["matched_domain"]
+            extra["shadow_note"] = info.get("shadow_note")
             extra["would_have_executed"] = {
                 "rule_id": rule_id,
                 "rule_name": outcome.rule.get("name"),

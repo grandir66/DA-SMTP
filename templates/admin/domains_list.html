@@ -12,7 +12,15 @@
     <tbody>
         {% for d in domains %}
         <tr>
-            <td class="mono"><a href="{{ url_for('domains.domain_form', domain_id=d.id) }}"><strong>{{ d.domain }}</strong></a></td>
+            <td class="mono">
+                <a href="{{ url_for('domains.domain_form', domain_id=d.id) }}"><strong>{{ d.domain }}</strong></a>
+                {% if d.shadow_mode %}
+                <span style="background:#fef3c7; color:#92400e; padding:0.05rem 0.4rem;
+                             border-radius:9px; font-size:0.7rem; font-weight:600;
+                             margin-left:0.4rem;"
+                      title="{{ d.shadow_note or 'Dominio in shadow' }}">🌒 SHADOW</span>
+                {% endif %}
+            </td>
             <td class="mono"><small>{{ d.smarthost_host or '— (default)' }}</small></td>
             <td>{{ d.smarthost_port }}</td>
             <td><code>{{ d.smarthost_tls }}</code></td>

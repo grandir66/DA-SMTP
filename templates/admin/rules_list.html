@@ -197,6 +197,11 @@
                             <span class="rule-id" title="ID regola">#{{ c.id }}</span>
                             <a href="{{ url_for('rules.child_form_view', group_id=g.id, child_id=c.id) }}"
                                {% if c.description %}title="{{ c.description }}"{% endif %}><strong>{{ c.name }}</strong></a>
+                            {% if c.shadow_mode %}
+                            <span style="background:#fef3c7; color:#92400e; padding:0.05rem 0.45rem;
+                                         border-radius:9px; font-size:0.7rem; font-weight:600;"
+                                  title="{{ c.shadow_note or 'Regola figlio in shadow' }}">🌒 SHADOW</span>
+                            {% endif %}
                             {% if c.description %}
                             <span class="rule-desc-pill" title="{{ c.description }}"
                                   style="display:inline-block; cursor:help; color:#2563eb; margin-left:0.3rem; font-size:0.78rem;">ⓘ</span>
@@ -257,6 +262,13 @@
                     <span class="rule-id" title="ID regola">#{{ r.id }}</span>
                     <a href="{{ url_for('rules.form_view', rule_id=r.id) }}"
                        {% if r.description %}title="{{ r.description }}"{% endif %}><strong>{{ r.name }}</strong></a>
+                    {% if r.shadow_mode %}
+                    <span style="background:#fef3c7; color:#92400e; padding:0.05rem 0.45rem;
+                                 border-radius:9px; font-size:0.7rem; font-weight:600;"
+                          title="{{ r.shadow_note or 'Regola in shadow: azione SOPPRESSA, mail consegnata al destinatario' }}">
+                        🌒 SHADOW
+                    </span>
+                    {% endif %}
                     {% if r.description %}
                     <span class="rule-desc-pill" title="{{ r.description }}"
                           style="display:inline-block; cursor:help; color:#2563eb; margin-left:0.3rem; font-size:0.78rem;">ⓘ</span>

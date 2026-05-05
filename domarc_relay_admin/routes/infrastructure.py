@@ -102,6 +102,9 @@ def domain_form(domain_id: int | None = None):
             "apply_rules": request.form.get("apply_rules") in ("on", "true", "1"),
             "enabled": request.form.get("enabled") in ("on", "true", "1"),
             "notes": request.form.get("notes"),
+            # M031: shadow mode per dominio
+            "shadow_mode": request.form.get("shadow_mode") in ("on", "true", "1"),
+            "shadow_note": request.form.get("shadow_note") or None,
         }
         try:
             new_id = _storage().upsert_domain_routing(data, tenant_id=_tid())

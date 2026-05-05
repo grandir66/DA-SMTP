@@ -20,6 +20,42 @@
     <div class="dr-form-row"><label>Stato</label>
         <div><label><input type="checkbox" name="enabled" {% if record.enabled or is_new %}checked{% endif %}> Attivo</label></div></div>
     <div class="dr-form-row"><label>Note</label><textarea name="notes">{{ record.notes or '' }}</textarea></div>
+</div>
+
+<!-- M031: Shadow mode dominio -->
+<div class="dr-section" style="background:#fffbeb; border:1px solid #f59e0b;">
+    <h3 style="margin:0 0 0.5rem; color:#92400e;"><i class="fas fa-moon"></i> Modalita' shadow (dominio)</h3>
+    <p class="dr-hint" style="margin:0 0 0.7rem; color:#78350f;">
+        Quando questo dominio e' in <strong>shadow mode</strong>, le mail dirette a
+        <em>qualsiasi</em> mailbox del dominio vengono valutate normalmente dal rule
+        engine (chain visibile in /events) ma <strong>nessuna azione viene eseguita</strong>:
+        la mail arriva al destinatario reale via default_delivery, niente auto-reply,
+        ticket, forward o redirect. In <code>payload_metadata.would_have_executed</code>
+        trovi cosa <em>sarebbe</em> stato fatto.
+    </p>
+    <p class="dr-hint" style="margin:0 0 0.7rem; color:#78350f;">
+        Caso d'uso: testare il cutover di un nuovo dominio (es. <code>domarc.it</code>)
+        al rule engine prima di andare in live. La cascata di shadow controlla nell'ordine
+        <strong>dominio</strong> → recipient_group → regola, primo trigger vince.
+    </p>
+    <div class="dr-form-row">
+        <label>Stato</label>
+        <div>
+            <label style="font-weight:normal;">
+                <input type="checkbox" name="shadow_mode" value="1"
+                       {% if record.shadow_mode %}checked{% endif %}>
+                🌒 Dominio in shadow (mail osservate, nessuna azione eseguita)
+            </label>
+        </div>
+    </div>
+    <div class="dr-form-row">
+        <label>Note shadow</label>
+        <textarea name="shadow_note" rows="2"
+                  placeholder="es. Test cutover domarc.it 2026-05-05">{{ record.shadow_note or '' }}</textarea>
+    </div>
+</div>
+
+<div class="dr-section" style="text-align:right;">
     <div style="text-align:right;">
         <a href="{{ url_for('domains.domains_list') }}" class="dr-btn">Annulla</a>
         <button class="dr-btn dr-btn-primary" style="width:auto;"><i class="fas fa-save"></i> Salva</button>

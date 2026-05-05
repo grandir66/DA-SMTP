@@ -44,28 +44,63 @@
 
 <div class="sd-grid">
     <div class="sd-card shadow">
-        <div class="label">Gruppi destinatari in shadow</div>
+        <div class="label">Domini in shadow (M031)</div>
+        <div class="big">{{ shadow_domains|length }}</div>
+        <a href="{{ url_for('domains.domains_list') }}" style="font-size:0.85rem;">Gestisci domini →</a>
+    </div>
+    <div class="sd-card shadow">
+        <div class="label">Gruppi destinatari in shadow (M030)</div>
         <div class="big">{{ shadow_groups|length }}</div>
-        <a href="{{ url_for('recipient_groups.list_view') }}" style="font-size:0.85rem;">
-            Gestisci gruppi →
-        </a>
+        <a href="{{ url_for('recipient_groups.list_view') }}" style="font-size:0.85rem;">Gestisci gruppi →</a>
     </div>
     <div class="sd-card shadow">
-        <div class="label">Eventi shadow ultime 24h</div>
+        <div class="label">Regole in shadow (M033)</div>
+        <div class="big">{{ shadow_rules|length }}</div>
+        <a href="{{ url_for('rules.list_view') }}" style="font-size:0.85rem;">Gestisci regole →</a>
+    </div>
+    <div class="sd-card shadow">
+        <div class="label">Eventi shadow 24h</div>
         <div class="big">{{ n_24h }}</div>
-        <a href="{{ url_for('events.list_view') }}?only_shadow=on&hours=24" style="font-size:0.85rem;">
-            Vedi eventi →
-        </a>
+        <a href="{{ url_for('events.list_view') }}?only_shadow=on&hours=24" style="font-size:0.85rem;">Vedi →</a>
     </div>
     <div class="sd-card shadow">
-        <div class="label">Eventi shadow ultimi 7gg</div>
+        <div class="label">Eventi shadow 7gg</div>
         <div class="big">{{ n_7d }}</div>
-        <a href="{{ url_for('events.list_view') }}?only_shadow=on&hours=168" style="font-size:0.85rem;">
-            Vedi eventi →
-        </a>
+        <a href="{{ url_for('events.list_view') }}?only_shadow=on&hours=168" style="font-size:0.85rem;">Vedi →</a>
     </div>
 </div>
 
+<!-- Domini in shadow (M031) -->
+<div class="sd-section">
+    <h3><i class="fas fa-globe"></i> Domini in shadow ({{ shadow_domains|length }})</h3>
+    {% if not shadow_domains %}
+    <p style="color:#64748b; margin:0.5rem 0;">
+        Nessun dominio in shadow. Apri un dominio in <a href="{{ url_for('domains.domains_list') }}">/domains</a>
+        e attiva la card "Modalità shadow" per testare un cutover senza side-effect.
+    </p>
+    {% else %}
+    {% for d in shadow_domains %}
+    <div class="sd-group">
+        <div class="name"><i class="fas fa-globe"></i> {{ d.domain }}</div>
+        <span class="members">{{ d.smarthost_host or '— smarthost default' }}</span>
+        {% if d.shadow_note %}
+        <span style="font-size:0.78rem; color:#78350f; font-style:italic; flex:2;"
+              title="{{ d.shadow_note }}">
+            "{{ d.shadow_note|truncate(80) }}"
+        </span>
+        {% endif %}
+        <span class="actions">
+            <a href="{{ url_for('domains.domain_form', domain_id=d.id) }}"
+               class="dr-btn" style="width:auto; padding:0.3rem 0.7rem;">
+                <i class="fas fa-pen-to-square"></i> Apri
+            </a>
+        </span>
+    </div>
+    {% endfor %}
+    {% endif %}
+</div>
+
+<!-- Gruppi destinatari in shadow (M030) -->
 <div class="sd-section">
     <h3><i class="fas fa-people-group"></i> Gruppi destinatari in shadow ({{ shadow_groups|length }})</h3>
     {% if not shadow_groups %}
@@ -93,6 +128,38 @@
         {% endif %}
         <span class="actions">
             <a href="{{ url_for('recipient_groups.detail_view', group_id=g.id) }}"
+               class="dr-btn" style="width:auto; padding:0.3rem 0.7rem;">
+                <i class="fas fa-pen-to-square"></i> Apri
+            </a>
+        </span>
+    </div>
+    {% endfor %}
+    {% endif %}
+</div>
+
+<!-- Regole in shadow (M033) -->
+<div class="sd-section">
+    <h3><i class="fas fa-filter"></i> Regole in shadow ({{ shadow_rules|length }})</h3>
+    {% if not shadow_rules %}
+    <p style="color:#64748b; margin:0.5rem 0;">
+        Nessuna regola in shadow. Apri una regola e attiva il flag
+        🌒 nella card Identificazione per testarla su mail reali senza
+        eseguire l'azione.
+    </p>
+    {% else %}
+    {% for r in shadow_rules %}
+    <div class="sd-group">
+        <div class="name">
+            <i class="fas fa-filter"></i> #{{ r.id }} {{ r.name }}
+            <code style="background:#fff; padding:0.1rem 0.4rem; border-radius:4px; font-size:0.75rem; margin-left:0.4rem;">{{ r.action }}</code>
+        </div>
+        <span class="members">priority {{ r.priority }}</span>
+        {% if r.shadow_note %}
+        <span style="font-size:0.78rem; color:#78350f; font-style:italic; flex:2;"
+              title="{{ r.shadow_note }}">"{{ r.shadow_note|truncate(80) }}"</span>
+        {% endif %}
+        <span class="actions">
+            <a href="{{ url_for('rules.form_view', rule_id=r.id) }}"
                class="dr-btn" style="width:auto; padding:0.3rem 0.7rem;">
                 <i class="fas fa-pen-to-square"></i> Apri
             </a>

@@ -200,6 +200,29 @@
                 <label>Stato</label>
                 <div><label style="font-weight:400;"><input type="checkbox" name="enabled" {% if record.enabled or is_new %}checked{% endif %}> Attiva</label></div>
             </div>
+            <div class="rf-row" style="background:#fffbeb; border-left:3px solid #f59e0b;
+                                       padding:0.5rem 0.7rem; border-radius:0 4px 4px 0;">
+                <label>🌒 Shadow<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
+                    Quando attivo, se questa regola e' la vincente del rule engine
+                    il dispatch viene FORZATO a default_delivery (la mail arriva al
+                    destinatario reale, niente auto-reply / ticket / forward).
+                    In <code>payload_metadata.would_have_executed</code> trovi cosa
+                    SAREBBE stato fatto. Tipico per validare una nuova regola su
+                    mail reali prima di metterla in live.
+                </span></span></label>
+                <div>
+                    <label style="font-weight:normal;">
+                        <input type="checkbox" name="shadow_mode" value="1"
+                               {% if record.shadow_mode %}checked{% endif %}>
+                        Regola in shadow (azione SOPPRESSA, mail comunque consegnata al destinatario)
+                    </label>
+                    <input type="text" name="shadow_note"
+                           value="{{ record.shadow_note or '' }}"
+                           placeholder="Note shadow (es. Test 2026-05-05, validare per 7gg)"
+                           style="width:100%; margin-top:0.3rem; font-size:0.85rem;">
+                </div>
+            </div>
+
             <div class="rf-row">
                 <label>Cascata<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
                     Se attivo, dopo il match continua a valutare le regole successive.

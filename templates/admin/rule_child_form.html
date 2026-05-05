@@ -117,6 +117,21 @@
                     <input type="checkbox" name="enabled" {% if record.enabled is not defined or record.enabled %}checked{% endif %}> Figlio attivo
                 </label>
             </div>
+            <div class="rc-row" style="background:#fffbeb; border-left:3px solid #f59e0b;
+                                       padding:0.4rem 0.6rem; border-radius:0 4px 4px 0;">
+                <label>🌒 Shadow</label>
+                <div>
+                    <label style="font-weight:normal;">
+                        <input type="checkbox" name="shadow_mode" value="1"
+                               {% if record.shadow_mode %}checked{% endif %}>
+                        Regola figlio in shadow (azione SOPPRESSA)
+                    </label>
+                    <input type="text" name="shadow_note"
+                           value="{{ record.shadow_note or '' }}"
+                           placeholder="Note shadow (opzionale)"
+                           style="width:100%; margin-top:0.25rem; font-size:0.82rem;">
+                </div>
+            </div>
             <div class="rc-row">
                 <label>Continue in group</label>
                 <div>

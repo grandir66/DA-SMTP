@@ -203,6 +203,9 @@ def rules_active():
             "continue_after_match": bool(r.get("continue_after_match")),
             # M029: rule_set_id per filtraggio runtime nel listener
             "rule_set_id": r.get("rule_set_id"),
+            # M033: shadow mode per regola singola
+            "shadow_mode": bool(r.get("shadow_mode")),
+            "shadow_note": r.get("shadow_note"),
         }
         # Metadata opzionali per audit (ignorati dal listener legacy).
         if r.get("_source_group_id"):
@@ -931,6 +934,9 @@ def domain_routing_active():
                 "apply_rules": bool(d.get("apply_rules", True)),
                 "enabled": bool(d["enabled"]),
                 "notes": d.get("notes"),
+                # M031: shadow mode dominio
+                "shadow_mode": bool(d.get("shadow_mode")),
+                "shadow_note": d.get("shadow_note"),
             } for d in rows if d.get("enabled")
         ],
     }), 200

@@ -889,6 +889,9 @@ def _parse_form(form) -> dict:
         "action_map": action_map if action_map else None,
         "severity": form.get("severity"),
         "continue_after_match": (form.get("continue_after_match") or "").lower() in ("on", "true", "1"),
+        # M033: shadow per regola singola
+        "shadow_mode": (form.get("shadow_mode") or "").lower() in ("on", "true", "1"),
+        "shadow_note": form.get("shadow_note") or None,
     }
 
 

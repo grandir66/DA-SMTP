@@ -28,6 +28,8 @@ def _tid() -> int:
 def dashboard():
     storage = _storage()
     shadow_groups = storage.list_shadow_recipient_groups(tenant_id=_tid())
+    shadow_domains = storage.list_shadow_domains(tenant_id=_tid())
+    shadow_rules = storage.list_shadow_rules(tenant_id=_tid())
 
     # Conta eventi shadow ultime 24h e 7gg
     n_24h = 0
@@ -68,6 +70,8 @@ def dashboard():
     return render_template(
         "admin/shadow_dashboard.html",
         shadow_groups=shadow_groups,
+        shadow_domains=shadow_domains,
+        shadow_rules=shadow_rules,
         n_24h=n_24h,
         n_7d=n_7d,
         actions_24h=actions_24h_sorted,

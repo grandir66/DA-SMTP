@@ -374,6 +374,12 @@ class Storage:
                 # M030: shadow mode su recipient_groups
                 ("recipient_groups_cache", "shadow_mode", "ALTER TABLE recipient_groups_cache ADD COLUMN shadow_mode INTEGER NOT NULL DEFAULT 0"),
                 ("recipient_groups_cache", "shadow_note", "ALTER TABLE recipient_groups_cache ADD COLUMN shadow_note TEXT"),
+                # M031: shadow mode su domain_routing
+                ("domain_routing_cache", "shadow_mode", "ALTER TABLE domain_routing_cache ADD COLUMN shadow_mode INTEGER NOT NULL DEFAULT 0"),
+                ("domain_routing_cache", "shadow_note", "ALTER TABLE domain_routing_cache ADD COLUMN shadow_note TEXT"),
+                # M033: shadow mode su rules (singola regola)
+                ("rules_cache", "shadow_mode", "ALTER TABLE rules_cache ADD COLUMN shadow_mode INTEGER NOT NULL DEFAULT 0"),
+                ("rules_cache", "shadow_note", "ALTER TABLE rules_cache ADD COLUMN shadow_note TEXT"),
             ):
                 try:
                     conn.execute(ddl)
@@ -663,6 +669,14 @@ class Storage:
                     conn.execute(
                         "UPDATE rules_cache SET rule_set_id = ? WHERE id = ?",
                         (int(rsid), int(r["id"])),
+                    )
+                # M033: shadow_mode + shadow_note per regola singola
+                if r.get("shadow_mode") or r.get("shadow_note"):
+                    conn.execute(
+                        "UPDATE rules_cache SET shadow_mode = ?, shadow_note = ? "
+                        "WHERE id = ?",
+                        (1 if r.get("shadow_mode") else 0,
+                         r.get("shadow_note"), int(r["id"])),
                     )
             self._set_sync_meta(conn, "rules", synced)
         return len(rules)
@@ -1262,6 +1276,7 @@ class Storage:
     # ------------------------------------------------------------------ domain_routing_cache
 
     def replace_domain_routing(self, domains: list[dict[str, Any]]) -> int:
+        """M031: include shadow_mode + shadow_note se presenti."""
         synced = _now_iso()
         with self.transaction() as conn:
             conn.execute("DELETE FROM domain_routing_cache;")
@@ -1269,8 +1284,9 @@ class Storage:
                 conn.execute(
                     """INSERT INTO domain_routing_cache
                            (domain, smarthost, smarthost_port, smarthost_tls,
-                            enabled, apply_rules, notes, synced_at)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                            enabled, apply_rules, notes, synced_at,
+                            shadow_mode, shadow_note)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (
                         str(d["domain"]).lower(),
                         d["smarthost"],
@@ -1280,6 +1296,8 @@ class Storage:
                         1 if d.get("apply_rules", True) else 0,
                         d.get("notes"),
                         synced,
+                        1 if d.get("shadow_mode") else 0,
+                        d.get("shadow_note"),
                     ),
                 )
             self._set_sync_meta(conn, "domain_routing", synced)
@@ -1291,6 +1309,21 @@ class Storage:
                 "SELECT * FROM domain_routing_cache WHERE domain = ? AND enabled = 1",
                 (domain.lower(),),
             ).fetchone()
+
+    def find_shadow_domain(self, domain: str) -> dict[str, Any] | None:
+        """M031: ritorna info se il dominio ha shadow_mode=1 + enabled=1.
+        None altrimenti.
+        """
+        d = (domain or "").strip().lower()
+        if not d:
+            return None
+        with self._connect() as conn:
+            row = conn.execute(
+                """SELECT domain, shadow_note FROM domain_routing_cache
+                    WHERE domain = ? AND enabled = 1 AND shadow_mode = 1""",
+                (d,),
+            ).fetchone()
+            return dict(row) if row else None
 
     def list_accepted_domains(self) -> list[str]:
         with self._connect() as conn:

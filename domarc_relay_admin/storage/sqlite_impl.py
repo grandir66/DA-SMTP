@@ -421,6 +421,7 @@ class SqliteStorage(Storage):
                           parent_id = ?, is_group = ?, group_label = ?,
                           exclusive_match = ?, continue_in_group = ?, exit_group_continue = ?,
                           rule_set_id = ?,
+                          shadow_mode = ?, shadow_note = ?,
                           updated_at = datetime('now')
                        WHERE id = ?""",
                     (
@@ -457,6 +458,8 @@ class SqliteStorage(Storage):
                         1 if data.get("continue_in_group") else 0,
                         1 if data.get("exit_group_continue") else 0,
                         int(data["rule_set_id"]) if data.get("rule_set_id") else None,
+                        1 if data.get("shadow_mode") else 0,
+                        data.get("shadow_note") or None,
                         int(rid),
                     ),
                 )
@@ -473,13 +476,13 @@ class SqliteStorage(Storage):
                         continue_after_match, created_by,
                         parent_id, is_group, group_label,
                         exclusive_match, continue_in_group, exit_group_continue,
-                        rule_set_id)
+                        rule_set_id, shadow_mode, shadow_note)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                            ?, ?, ?,
                            ?, ?, ?,
                            ?, ?,
                            ?, ?, ?, ?, ?, ?,
-                           ?)""",
+                           ?, ?, ?)""",
                 (
                     int(tenant_id),
                     (data.get("name") or "").strip(),
@@ -518,6 +521,9 @@ class SqliteStorage(Storage):
                     # M029: rule_set_id (default = set 'globali' se non valorizzato)
                     int(data["rule_set_id"]) if data.get("rule_set_id")
                     else self._default_rule_set_id(tenant_id),
+                    # M033: shadow_mode + shadow_note
+                    1 if data.get("shadow_mode") else 0,
+                    data.get("shadow_note") or None,
                 ),
             )
             return int(cur.lastrowid or 0)
@@ -1623,6 +1629,7 @@ class SqliteStorage(Storage):
                     """UPDATE domain_routing SET
                           domain = ?, smarthost_host = ?, smarthost_port = ?,
                           smarthost_tls = ?, apply_rules = ?, enabled = ?, notes = ?,
+                          shadow_mode = ?, shadow_note = ?,
                           updated_at = datetime('now')
                        WHERE id = ?""",
                     (domain, data.get("smarthost_host"),
@@ -1630,25 +1637,53 @@ class SqliteStorage(Storage):
                      data.get("smarthost_tls") or "opportunistic",
                      1 if data.get("apply_rules", True) else 0,
                      1 if data.get("enabled", True) else 0,
-                     data.get("notes"), int(did)),
+                     data.get("notes"),
+                     1 if data.get("shadow_mode") else 0,
+                     data.get("shadow_note"),
+                     int(did)),
                 )
                 return int(did)
             cur = conn.execute(
                 """INSERT INTO domain_routing (tenant_id, domain, smarthost_host,
-                       smarthost_port, smarthost_tls, apply_rules, enabled, notes)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                       smarthost_port, smarthost_tls, apply_rules, enabled, notes,
+                       shadow_mode, shadow_note)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (int(tenant_id), domain, data.get("smarthost_host"),
                  int(data.get("smarthost_port") or 25),
                  data.get("smarthost_tls") or "opportunistic",
                  1 if data.get("apply_rules", True) else 0,
                  1 if data.get("enabled", True) else 0,
-                 data.get("notes")),
+                 data.get("notes"),
+                 1 if data.get("shadow_mode") else 0,
+                 data.get("shadow_note")),
             )
             return int(cur.lastrowid or 0)
 
     def delete_domain_routing(self, domain_id: int) -> None:
         with self.transaction() as conn:
             conn.execute("DELETE FROM domain_routing WHERE id = ?", (domain_id,))
+
+    def list_shadow_domains(self, *, tenant_id: int = 1) -> list[dict[str, Any]]:
+        """M031: domini con shadow_mode=1 enabled=1 (per dashboard /shadow)."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                """SELECT * FROM domain_routing
+                    WHERE tenant_id = ? AND enabled = 1 AND shadow_mode = 1
+                    ORDER BY domain""",
+                (int(tenant_id),),
+            ).fetchall()
+            return [dict(r) for r in rows]
+
+    def list_shadow_rules(self, *, tenant_id: int = 1) -> list[dict[str, Any]]:
+        """M033: regole con shadow_mode=1 enabled=1 (per dashboard /shadow)."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                """SELECT * FROM rules
+                    WHERE tenant_id = ? AND enabled = 1 AND shadow_mode = 1
+                    ORDER BY priority, id""",
+                (int(tenant_id),),
+            ).fetchall()
+            return [_decode_rule(r) for r in rows]
 
     # ========================================================== ADDRESSES ===
 
