@@ -3,6 +3,7 @@
 
 {% block extra_head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/rule_form.css') }}">
+<script src="{{ url_for('static', filename='js/rule_form_modes.js') }}" defer></script>
 {% endblock %}
 
 {% block content %}
@@ -47,6 +48,18 @@
     </div>
 </section>
 
+{# ====================== Toggle Modalità Base/Avanzata ===================== #}
+<div class="rf-mode-toggle-bar">
+    <div class="rf-mode-label"><i class="fas fa-sliders"></i> Modalità:</div>
+    <div class="rf-mode-radios">
+        <label class="rf-mode-radio active" data-mode="base"><input type="radio" name="rf_mode" value="base" checked> Base</label>
+        <label class="rf-mode-radio" data-mode="advanced"><input type="radio" name="rf_mode" value="advanced"> Avanzata</label>
+    </div>
+    <div class="rf-mode-summary" id="rf-mode-summary">
+        Solo i campi essenziali (gruppi cliente, gruppi destinatari, contenuto, orario, azione e parametri principali).
+    </div>
+</div>
+
 <form method="post" class="rf-form-wrap">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="action" id="action-input" value="{{ record.action or 'auto_reply' }}">
@@ -64,30 +77,26 @@
             <div class="rf-row">
                 <label>Nome <span style="color:#dc2626;">*</span></label>
                 <input type="text" name="name" value="{{ record.name or '' }}" required
-                       placeholder="es. Auto-reply out_of_hours">
+                       placeholder="es. Auto-reply out_of_hours"
+                       oninput="rfLiveValidate(this, 'name')">
             </div>
             <div class="rf-row">
                 <label>Descrizione</label>
                 <textarea name="description" rows="2"
-                          placeholder="Note operative su questo figlio: perché esiste, da quando, chi lo gestisce. Visibile in lista e flatten preview.">{{ record.description or '' }}</textarea>
+                          placeholder="Note operative su questo figlio: perché esiste, da quando, chi lo gestisce.">{{ record.description or '' }}</textarea>
             </div>
             <div class="rf-row">
                 <label>Priority globale <span style="color:#dc2626;">*</span></label>
                 <div>
-                    <input type="number" name="priority" min="1" max="999999"
+                    <input type="number" name="priority" id="priority" min="1" max="999999"
                            value="{{ record.priority or (parent.priority + 10) }}" required>
-                    <div class="rf-help">Deve essere <strong>&gt; <code>{{ parent.priority }}</code></strong> (priority del padre). Suggerito gap di 10 fra figli per inserimenti futuri.</div>
-                </div>
-            </div>
-            {# Scope: greyed (ereditato dal padre, non editabile dal figlio) #}
-            <div class="rf-row rf-disabled" title="Lo scope del figlio è ereditato dal gruppo padre.">
-                <label>Scope</label>
-                <div>
-                    <div class="rf-row-pair">
-                        <select disabled><option>{{ parent.scope_type or 'global' }}</option></select>
-                        <input type="text" disabled value="{{ parent.scope_ref or '' }}">
+                    <div class="rf-priority-presets">
+                        {% set base_p = parent.priority %}
+                        <button type="button" onclick="rfSetPriority({{ base_p + 10 }}, this)">↑ +10 ({{ base_p + 10 }})</button>
+                        <button type="button" onclick="rfSetPriority({{ base_p + 50 }}, this)">+50 ({{ base_p + 50 }})</button>
+                        <button type="button" onclick="rfSetPriority({{ base_p + 100 }}, this)">+100 ({{ base_p + 100 }})</button>
                     </div>
-                    <div class="rf-disabled-note">Ereditato dal gruppo padre <code>{{ parent.group_label }}</code>.</div>
+                    <div class="rf-help">Deve essere <strong>&gt; <code>{{ parent.priority }}</code></strong> (priority del padre). Suggerito gap ≥10 fra figli.</div>
                 </div>
             </div>
             <div class="rf-row">
@@ -97,8 +106,53 @@
                     Figlio attivo
                 </label>
             </div>
-            {# exclusive_match: greyed (proprietà del gruppo padre, non del figlio) #}
-            <div class="rf-row rf-disabled" title="Esclusività è una proprietà del gruppo padre, non del singolo figlio.">
+            <div class="rf-row rf-row-shadow">
+                <label>🌒 Shadow mode</label>
+                <div>
+                    <label style="font-weight:normal;">
+                        <input type="checkbox" name="shadow_mode" value="1" {% if record.shadow_mode %}checked{% endif %}>
+                        Regola figlio in shadow (azione SOPPRESSA)
+                    </label>
+                </div>
+            </div>
+            <div class="rf-row rf-advanced-only">
+                <label>Note shadow</label>
+                <input type="text" name="shadow_note" value="{{ record.shadow_note or '' }}"
+                       placeholder="Note shadow (opzionale)">
+            </div>
+            {# Specifico figlio: continue_in_group / exit_group_continue — Advanced #}
+            <div class="rf-row rf-advanced-only">
+                <label>Continue in group</label>
+                <div>
+                    <label style="font-weight:normal;">
+                        <input type="checkbox" name="continue_in_group" {% if record.continue_in_group %}checked{% endif %}>
+                        Dopo match, valuta anche i fratelli successivi
+                    </label>
+                    <div class="rf-help">Default OFF (STOP dopo il match). Per eseguire più azioni in cascata nel gruppo.</div>
+                </div>
+            </div>
+            <div class="rf-row rf-advanced-only">
+                <label>Exit group + continue</label>
+                <div>
+                    <label style="font-weight:normal;">
+                        <input type="checkbox" name="exit_group_continue" {% if record.exit_group_continue %}checked{% endif %}>
+                        Continua nei fratelli e propaga ai top-level successivi
+                    </label>
+                </div>
+            </div>
+            {# Scope: greyed (ereditato dal padre, non editabile dal figlio) — Advanced #}
+            <div class="rf-row rf-disabled rf-advanced-only" title="Lo scope del figlio è ereditato dal gruppo padre.">
+                <label>Scope</label>
+                <div>
+                    <div class="rf-row-pair">
+                        <select disabled><option>{{ parent.scope_type or 'global' }}</option></select>
+                        <input type="text" disabled value="{{ parent.scope_ref or '' }}">
+                    </div>
+                    <div class="rf-disabled-note">Ereditato dal gruppo padre <code>{{ parent.group_label }}</code>.</div>
+                </div>
+            </div>
+            {# exclusive_match: greyed (proprietà del gruppo padre, non del figlio) — Advanced #}
+            <div class="rf-row rf-disabled rf-advanced-only" title="Esclusività è una proprietà del gruppo padre, non del singolo figlio.">
                 <label>Esclusivo del gruppo</label>
                 <div>
                     <label style="font-weight:normal;"><input type="checkbox" disabled
@@ -107,41 +161,8 @@
                     <div class="rf-disabled-note">Configurato sul gruppo padre. Attualmente: <strong>{{ 'ON' if parent.exclusive_match else 'OFF' }}</strong>.</div>
                 </div>
             </div>
-            <div class="rf-row rf-row-shadow">
-                <label>🌒 Shadow mode</label>
-                <div>
-                    <label style="font-weight:normal;">
-                        <input type="checkbox" name="shadow_mode" value="1" {% if record.shadow_mode %}checked{% endif %}>
-                        Regola figlio in shadow (azione SOPPRESSA)
-                    </label>
-                    <input type="text" name="shadow_note" value="{{ record.shadow_note or '' }}"
-                           placeholder="Note shadow (opzionale)"
-                           style="width:100%; margin-top:0.3rem; font-size:0.83rem;">
-                </div>
-            </div>
-            {# Specifico figlio: continue_in_group / exit_group_continue #}
-            <div class="rf-row">
-                <label>Continue in group</label>
-                <div>
-                    <label style="font-weight:normal;">
-                        <input type="checkbox" name="continue_in_group" {% if record.continue_in_group %}checked{% endif %}>
-                        Dopo match, valuta anche i fratelli successivi
-                    </label>
-                    <div class="rf-help">Default OFF (STOP dopo il match). Tipico per eseguire più azioni in cascata nel gruppo (es. auto_reply + create_ticket).</div>
-                </div>
-            </div>
-            <div class="rf-row">
-                <label>Exit group + continue</label>
-                <div>
-                    <label style="font-weight:normal;">
-                        <input type="checkbox" name="exit_group_continue" {% if record.exit_group_continue %}checked{% endif %}>
-                        Continua nei fratelli e propaga ai top-level successivi
-                    </label>
-                    <div class="rf-help">Si comporta come <code>continue_in_group</code> e forza l'ultimo figlio a propagare al top-level (utile per "esci dal blocco").</div>
-                </div>
-            </div>
-            {# continue_after_match: greyed (solo orfana) #}
-            <div class="rf-row rf-disabled" title="Non applicabile a un figlio: usa continue_in_group sopra.">
+            {# continue_after_match: greyed (solo orfana) — Advanced #}
+            <div class="rf-row rf-disabled rf-advanced-only" title="Non applicabile a un figlio: usa continue_in_group sopra.">
                 <label>Continue after match</label>
                 <div>
                     <label style="font-weight:normal;"><input type="checkbox" disabled> Dopo il match, valuta comunque le regole successive</label>
@@ -149,6 +170,7 @@
                 </div>
             </div>
         </div>
+        <div class="rf-section-advanced-hint">+ <span>5</span> opzioni avanzate (shadow note, flow del gruppo, scope, esclusivo padre). <a onclick="rfSetMode('advanced')">Mostra avanzate ▾</a></div>
     </div>
 
     {# ===================================================================== #}
@@ -162,55 +184,10 @@
         </h3>
         <div class="rf-section-body">
 
-            {# ----- Sub-blocco: MITTENTE ----- #}
-            <div class="rf-subblock">
-                <div class="rf-subblock-head"><i class="fas fa-paper-plane"></i> Mittente</div>
-                <div class="rf-row">
-                    <label>From dominio</label>
-                    <input type="text" name="match_from_domain" value="{{ record.match_from_domain or '' }}"
-                           placeholder="vuoto = eredita dal padre">
-                </div>
-                <div class="rf-row">
-                    <label>From regex</label>
-                    <input type="text" name="match_from_regex" value="{{ record.match_from_regex or '' }}">
-                </div>
-            </div>
-
-            {# ----- Sub-blocco: DESTINATARI ----- #}
-            <div class="rf-subblock">
-                <div class="rf-subblock-head"><i class="fas fa-inbox"></i> Destinatari</div>
-                <div class="rf-row">
-                    <label>To dominio</label>
-                    <input type="text" name="match_to_domain" value="{{ record.match_to_domain or '' }}"
-                           placeholder="vuoto = eredita dal padre">
-                </div>
-                <div class="rf-row">
-                    <label>To regex <small>(mutex con gruppo)</small></label>
-                    <div>
-                        <input type="text" name="match_to_regex" value="{{ record.match_to_regex or '' }}">
-                        <div class="rf-help">Mutex con "Gruppo destinatari" sotto.</div>
-                    </div>
-                </div>
-                <div class="rf-row">
-                    <label>Gruppo destinatari (M027)</label>
-                    <div>
-                        <select name="match_to_group_id">
-                            <option value="">— nessuno (qualsiasi destinatario) —</option>
-                            {% for rg in (recipient_groups or []) %}
-                                <option value="{{ rg.id }}" {% if record.match_to_group_id == rg.id %}selected{% endif %}>
-                                    {{ rg.name }} ({{ rg.member_count or 0 }} membri)
-                                </option>
-                            {% endfor %}
-                        </select>
-                        <div class="rf-help">Scatta solo se uno dei destinatari è membro del gruppo. Deve essere uguale al padre se il padre lo specifica (V006).</div>
-                    </div>
-                </div>
-            </div>
-
-            {# ----- Sub-blocco: GRUPPI CLIENTI (M035) ----- #}
+            {# Filtro principale Base: Gruppi clienti #}
             <div class="rf-customer-groups-block">
                 <div class="rf-cg-head">
-                    <i class="fas fa-users"></i> Gruppi clienti (M035) — filtro per contratto/segmento
+                    <i class="fas fa-users"></i> Gruppi clienti — override del padre (vuoto = eredita)
                 </div>
                 {% set selected_groups = (record.match_customer_groups or '').split(',') | map('trim') | list %}
                 <select name="match_customer_groups" multiple>
@@ -223,20 +200,30 @@
                     {% endfor %}
                 </select>
                 <div class="rf-cg-help">
-                    Override del filtro padre. <strong>Vuoto = eredita dal padre</strong>. Se sia padre che figlio specificano gruppi, l'intersezione deve essere non vuota (V006). Logica OR all'interno del campo.
+                    Vuoto = eredita dal padre. Se sia padre che figlio specificano gruppi, l'intersezione deve essere non vuota (V006). Logica OR.
                 </div>
             </div>
 
-            {# ----- Sub-blocco: FORWARD TARGET (override dal padre) ----- #}
-            <div class="rf-subblock">
-                <div class="rf-subblock-head"><i class="fas fa-share"></i> Forward target (override del padre)</div>
-                <div class="rf-row">
-                    <label>Forward to (lista email)</label>
-                    <input type="text" name="forward_to_emails" value="{{ record.forward_to_emails or '' }}"
-                           placeholder="reperibile@studio.it; sostituto@studio.it">
+            {# Gruppo destinatari (Base) #}
+            <div class="rf-row">
+                <label>Gruppo destinatari (M027)</label>
+                <div>
+                    <select name="match_to_group_id">
+                        <option value="">— qualsiasi destinatario —</option>
+                        {% for rg in (recipient_groups or []) %}
+                            <option value="{{ rg.id }}" {% if record.match_to_group_id == rg.id %}selected{% endif %}>
+                                {{ rg.name }} ({{ rg.member_count or 0 }} membri)
+                            </option>
+                        {% endfor %}
+                    </select>
+                    <div class="rf-help">Vuoto = qualsiasi (o eredita dal padre se padre lo specifica).</div>
                 </div>
-                <div class="rf-row">
-                    <label>Forward to gruppo</label>
+            </div>
+
+            {# Forward target gruppo Base #}
+            <div class="rf-row">
+                <label>Forward al gruppo</label>
+                <div>
                     <select name="forward_to_group_id">
                         <option value="">— nessun gruppo —</option>
                         {% for rg in (recipient_groups or []) %}
@@ -245,9 +232,53 @@
                             </option>
                         {% endfor %}
                     </select>
+                    <div class="rf-help">Override del padre se compilato.</div>
+                </div>
+            </div>
+
+            {# Filtri puntuali (Advanced) #}
+            <div class="rf-subblock rf-advanced-only">
+                <div class="rf-subblock-head"><i class="fas fa-paper-plane"></i> Mittente puntuale (eccezioni — AND col padre)</div>
+                <div class="rf-row">
+                    <label>From dominio</label>
+                    <input type="text" name="match_from_domain" value="{{ record.match_from_domain or '' }}"
+                           placeholder="vuoto = eredita dal padre">
+                </div>
+                <div class="rf-row">
+                    <label>From regex</label>
+                    <input type="text" name="match_from_regex" value="{{ record.match_from_regex or '' }}"
+                           oninput="rfLiveValidate(this, 'regex')">
+                </div>
+            </div>
+
+            <div class="rf-subblock rf-advanced-only">
+                <div class="rf-subblock-head"><i class="fas fa-envelope-open"></i> Destinatario puntuale (eccezioni)</div>
+                <div class="rf-row">
+                    <label>To dominio</label>
+                    <input type="text" name="match_to_domain" value="{{ record.match_to_domain or '' }}"
+                           placeholder="vuoto = eredita dal padre">
+                </div>
+                <div class="rf-row">
+                    <label>To regex <small>(mutex con gruppo)</small></label>
+                    <div>
+                        <input type="text" name="match_to_regex" value="{{ record.match_to_regex or '' }}"
+                               oninput="rfLiveValidate(this, 'regex')">
+                        <div class="rf-help">Mutex con il gruppo destinatari sopra.</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="rf-subblock rf-advanced-only">
+                <div class="rf-subblock-head"><i class="fas fa-share"></i> Forward lista email (eccezione)</div>
+                <div class="rf-row">
+                    <label>Forward to (lista email)</label>
+                    <input type="text" name="forward_to_emails" value="{{ record.forward_to_emails or '' }}"
+                           placeholder="reperibile@studio.it; sostituto@studio.it">
+                    <div class="rf-help">Eccezione: preferire il "Forward al gruppo" sopra.</div>
                 </div>
             </div>
         </div>
+        <div class="rf-section-advanced-hint">+ <span>5</span> filtri puntuali avanzati (from_*, to_*, forward lista). <a onclick="rfSetMode('advanced')">Mostra avanzate ▾</a></div>
     </div>
 
     {# ===================================================================== #}
@@ -263,19 +294,22 @@
             <div class="rf-row">
                 <label>Subject regex</label>
                 <input type="text" name="match_subject_regex" value="{{ record.match_subject_regex or '' }}"
-                       placeholder="(?i)urgente|critico">
+                       placeholder="(?i)urgente|critico"
+                       oninput="rfLiveValidate(this, 'regex')">
             </div>
             <div class="rf-row">
                 <label>Body regex</label>
                 <input type="text" name="match_body_regex" value="{{ record.match_body_regex or '' }}"
-                       placeholder="(?i)\b(urgent|critical)\b">
+                       placeholder="(?i)\b(urgent|critical)\b"
+                       oninput="rfLiveValidate(this, 'regex')">
             </div>
-            <div class="rf-row">
+            <div class="rf-row rf-advanced-only">
                 <label>Tag custom</label>
                 <input type="text" name="match_tag" value="{{ record.match_tag or '' }}"
                        placeholder="es. spam, priority">
             </div>
         </div>
+        <div class="rf-section-advanced-hint">+ <span>1</span> opzione avanzata (tag custom). <a onclick="rfSetMode('advanced')">Mostra avanzate ▾</a></div>
     </div>
 
     {# ===================================================================== #}
@@ -327,7 +361,7 @@
                         <option value="false" {% if record.match_known_customer==0 %}selected{% endif %}>solo non censito</option>
                     </select>
                 </div>
-                <div class="rf-row">
+                <div class="rf-row rf-advanced-only">
                     <label>Eccezione oggi</label>
                     <select name="match_has_exception_today">
                         <option value="" {% if record.match_has_exception_today is none %}selected{% endif %}>indifferente</option>
@@ -337,7 +371,7 @@
                 </div>
             </div>
 
-            <div class="rf-row rf-row-thread">
+            <div class="rf-row rf-row-thread rf-advanced-only">
                 <label>🔗 Risposta a thread (M036)</label>
                 <div>
                     <select name="match_is_thread_continuation">
@@ -345,10 +379,11 @@
                         <option value="true" {% if record.match_is_thread_continuation==1 %}selected{% endif %}>solo continuazioni di thread tracciato</option>
                         <option value="false" {% if record.match_is_thread_continuation==0 %}selected{% endif %}>solo prime mail (no risposte)</option>
                     </select>
-                    <div class="rf-help">RFC 2822 In-Reply-To/References: la mail è una risposta a un evento già processato.</div>
+                    <div class="rf-help">Già gestita da regola seed priority=5 nel set globali; tocca solo per casi particolari.</div>
                 </div>
             </div>
         </div>
+        <div class="rf-section-advanced-hint">+ <span>2</span> opzioni avanzate (eccezione oggi, thread). <a onclick="rfSetMode('advanced')">Mostra avanzate ▾</a></div>
     </div>
 
     {# ===================================================================== #}
@@ -414,7 +449,7 @@
                         <option value="to_alias" {% if record.action_map and record.action_map.reply_mode=='to_alias' %}selected{% endif %}>to_alias</option>
                     </select>
                 </div>
-                <div class="rf-row">
+                <div class="rf-row rf-advanced-only">
                     <label>Quote original</label>
                     <label style="font-weight:normal;">
                         <input type="checkbox" name="action_map_reply_quote_original"
@@ -422,7 +457,7 @@
                         Cita la mail originale nella risposta
                     </label>
                 </div>
-                <div class="rf-row">
+                <div class="rf-row rf-advanced-only">
                     <label>Attach original</label>
                     <label style="font-weight:normal;">
                         <input type="checkbox" name="action_map_reply_attach_original"
@@ -450,7 +485,7 @@
                         <option value="CRITICA" {% if record.action_map and record.action_map.urgenza=='CRITICA' %}selected{% endif %}>CRITICA</option>
                     </select>
                 </div>
-                <div class="rf-row">
+                <div class="rf-row rf-advanced-only">
                     <label>Addetto gestione</label>
                     <input type="text" name="action_map_addetto_gestione"
                            value="{{ record.action_map.addetto_gestione if record.action_map else '' }}">
@@ -614,6 +649,25 @@
 {% endfor -%}
 }</div>
         </div>
+    </div>
+
+    {# ============= MINI SIMULATORE INLINE (opzione E) ============== #}
+    <div class="rf-mini-sim">
+        <h4><i class="fas fa-vial"></i> Test rapido inline — verifica subject contro la regola</h4>
+        <textarea oninput="rfSimulateInline(this)"
+                  placeholder="Incolla qui il subject di una mail di esempio per vedere se matcha la regola corrente..."></textarea>
+        <div class="rf-sim-result" id="rf-sim-result"></div>
+    </div>
+
+    {# ============= ANTEPRIMA IMPATTO (opzione D) ============== #}
+    <div class="rf-impact-preview">
+        <h4><i class="fas fa-chart-line"></i> Anteprima impatto</h4>
+        <p style="margin:0 0 8px; font-size:13px; color:#475569;">
+            Calcola quante mail degli ultimi 7 giorni avrebbero matchato i filtri di questa regola figlio.
+            Utile per capire se la regola è troppo larga/stretta prima di abilitarla.
+        </p>
+        <button type="button" onclick="rfPreviewImpact(this)">Calcola impatto stimato</button>
+        <div class="rf-impact-result" id="rf-impact-result"></div>
     </div>
 
     <div class="rf-footer">

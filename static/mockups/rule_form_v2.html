@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<title>Mockup form regola v2 — Base/Avanzata</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="stylesheet" href="../css/admin.css">
+<link rel="stylesheet" href="../css/rule_form.css">
+<style>
+/* === Header demo (solo per il mockup) === */
+.demo-banner {
+    background: linear-gradient(90deg, #1e3a8a, #0f766e);
+    color: #fff; padding: 12px 20px; margin: 0 0 16px;
+    border-radius: 0 0 8px 8px;
+    font-family: -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif;
+}
+.demo-banner h1 { margin: 0; font-size: 18px; font-weight: 600; }
+.demo-banner p { margin: 4px 0 0; font-size: 13px; opacity: 0.9; }
+.demo-banner .demo-tag {
+    display: inline-block; background: rgba(255,255,255,0.2);
+    padding: 2px 8px; border-radius: 12px; font-size: 11px; margin-left: 6px;
+}
+
+/* === Toggle modalità === */
+.rf-mode-toggle-bar {
+    background: #fff; border: 2px solid #1e3a8a; border-radius: 10px;
+    padding: 12px 16px; margin: 0 0 16px;
+    display: flex; align-items: center; gap: 16px;
+    max-width: 1100px;
+}
+.rf-mode-toggle-bar > .rf-mode-label {
+    font-weight: 600; color: #1e3a8a; font-size: 14px;
+}
+.rf-mode-toggle-bar > .rf-mode-radios {
+    display: flex; gap: 6px;
+    background: #f1f5f9; border-radius: 6px; padding: 3px;
+}
+.rf-mode-toggle-bar .rf-mode-radio {
+    padding: 6px 16px; border-radius: 4px; cursor: pointer;
+    font-size: 13px; font-weight: 600; color: #475569;
+    transition: all 0.15s;
+}
+.rf-mode-toggle-bar .rf-mode-radio.active {
+    background: #1e3a8a; color: #fff;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.15);
+}
+.rf-mode-toggle-bar .rf-mode-radio input { display: none; }
+.rf-mode-toggle-bar .rf-mode-summary {
+    color: #64748b; font-size: 12px; margin-left: auto;
+}
+
+/* === Display rule per Base/Avanzata === */
+body { font-family: -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif; background: #f8fafc; padding: 16px; margin: 0; }
+body.mode-base .rf-advanced-only { display: none !important; }
+body.mode-advanced .rf-advanced-only { display: block !important; }
+body.mode-advanced .rf-advanced-only.rf-row { display: grid !important; }
+
+/* Contatore "+ N opzioni avanzate" sotto ogni sezione */
+.rf-section-advanced-hint {
+    text-align: center; padding: 8px 16px;
+    background: #f1f5f9; color: #475569; font-size: 12px;
+    border-top: 1px dashed #cbd5e1;
+}
+.rf-section-advanced-hint a {
+    color: #1e3a8a; font-weight: 600; cursor: pointer;
+    text-decoration: none;
+}
+body.mode-advanced .rf-section-advanced-hint { display: none; }
+
+/* Highlight campi advanced dentro al body avanzata */
+body.mode-advanced .rf-row.rf-advanced-only,
+body.mode-advanced .rf-subblock.rf-advanced-only,
+body.mode-advanced .rf-customer-groups-block.rf-advanced-only {
+    background: #fefce8;
+    border-left: 3px solid #eab308;
+    padding-left: 8px;
+    margin-left: -10px;
+}
+
+/* === Preset priority === */
+.rf-priority-presets {
+    display: flex; gap: 4px; margin-top: 5px; flex-wrap: wrap;
+}
+.rf-priority-presets button {
+    background: #e0e7ff; color: #3730a3; border: 1px solid #c7d2fe;
+    padding: 3px 8px; border-radius: 4px; font-size: 11px;
+    cursor: pointer; user-select: none;
+}
+.rf-priority-presets button:hover { background: #c7d2fe; }
+.rf-priority-presets button.applied { background: #6366f1; color: #fff; border-color: #6366f1; }
+
+/* === Validazione live mock === */
+.rf-row.rf-validating input,
+.rf-row.rf-validating textarea {
+    border-color: #f59e0b !important;
+    background: #fffbeb;
+}
+.rf-row.rf-valid input,
+.rf-row.rf-valid textarea {
+    border-color: #10b981 !important;
+}
+.rf-row.rf-invalid input,
+.rf-row.rf-invalid textarea {
+    border-color: #dc2626 !important;
+    background: #fef2f2;
+}
+.rf-validation-msg {
+    font-size: 11px; margin-top: 3px;
+}
+.rf-validation-msg.valid { color: #047857; }
+.rf-validation-msg.invalid { color: #b91c1c; }
+.rf-validation-msg.validating { color: #92400e; }
+
+/* === Mini simulatore inline === */
+.rf-mini-sim {
+    background: #f0fdf4; border: 2px solid #86efac;
+    border-radius: 8px; padding: 14px 16px; margin-top: 16px;
+}
+.rf-mini-sim h4 {
+    margin: 0 0 8px; font-size: 14px; color: #166534;
+    display: flex; align-items: center; gap: 6px;
+}
+.rf-mini-sim textarea {
+    width: 100%; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 4px;
+    font-size: 12px; font-family: ui-monospace, Menlo, monospace; min-height: 60px;
+}
+.rf-mini-sim .sim-result {
+    margin-top: 10px; padding: 8px 12px; border-radius: 6px;
+    font-size: 13px; display: none;
+}
+.rf-mini-sim .sim-result.match {
+    background: #dcfce7; color: #14532d; border-left: 3px solid #15803d;
+    display: block;
+}
+.rf-mini-sim .sim-result.no-match {
+    background: #fee2e2; color: #7f1d1d; border-left: 3px solid #dc2626;
+    display: block;
+}
+
+/* === Anteprima impatto === */
+.rf-impact-preview {
+    background: #eff6ff; border: 1px solid #93c5fd;
+    border-radius: 8px; padding: 14px 16px; margin-top: 12px;
+}
+.rf-impact-preview h4 {
+    margin: 0 0 8px; font-size: 14px; color: #1e3a8a;
+    display: flex; align-items: center; gap: 6px;
+}
+.rf-impact-preview button {
+    background: #3b82f6; color: #fff; border: none;
+    padding: 6px 14px; border-radius: 5px; font-size: 13px; cursor: pointer;
+}
+.rf-impact-preview .impact-result {
+    margin-top: 10px; font-size: 13px; color: #1e3a8a;
+    display: none;
+}
+.rf-impact-preview .impact-result strong {
+    color: #1e3a8a; font-size: 18px;
+}
+
+/* === Mockup-only: toggle preview tipo regola === */
+.demo-form-type-switch {
+    position: fixed; top: 16px; right: 16px;
+    background: #fff; border: 1px solid #cbd5e1; border-radius: 8px;
+    padding: 8px 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    font-size: 12px; z-index: 100;
+}
+.demo-form-type-switch select {
+    border: 1px solid #cbd5e1; padding: 4px 6px; border-radius: 4px; font-size: 12px;
+}
+</style>
+</head>
+<body class="mode-base">
+
+<div class="demo-banner">
+    <h1>🎨 Mockup form regola v2 — Base / Avanzata <span class="demo-tag">Mockup statico, non funzionale</span></h1>
+    <p>Toggle in alto cambia modalità Base/Avanzata. I campi avanzati (sfondo giallo in Avanzata) sono nascosti in Base. Il selettore in alto a destra cambia il tipo di regola simulato.</p>
+</div>
+
+<!-- Selettore tipo regola (solo per il mockup) -->
+<div class="demo-form-type-switch">
+    📋 Tipo regola:
+    <select id="form-type" onchange="changeFormType()">
+        <option value="orphan">Orfana</option>
+        <option value="group">Gruppo padre</option>
+        <option value="child">Figlio del gruppo</option>
+    </select>
+</div>
+
+<!-- Banner padre solo per figlio -->
+<div id="parent-banner" class="rf-inherited-banner" style="max-width:1100px; display:none;">
+    <h4><i class="fas fa-link"></i> Ereditato dal gruppo padre <code>Fuori orario contratto</code></h4>
+    <div class="rf-inh-fields">
+        <span><strong>customer_groups:</strong> <code>contract_h24</code></span>
+        <span><strong>in_service:</strong> <code>FUORI orario operativo</code></span>
+        <span><strong>to_group:</strong> <code>tecnici_h24 (5 membri)</code></span>
+    </div>
+    <div style="margin-top:6px; font-size:12px; color:#3730a3;">
+        I match_* del figlio sono in AND con quelli del padre.
+    </div>
+</div>
+
+<!-- ============================ Toggle modalità ============================ -->
+<div class="rf-mode-toggle-bar">
+    <div class="rf-mode-label">Modalità:</div>
+    <div class="rf-mode-radios">
+        <label class="rf-mode-radio active" data-mode="base"><input type="radio" name="mode" value="base" checked> Base</label>
+        <label class="rf-mode-radio" data-mode="advanced"><input type="radio" name="mode" value="advanced"> Avanzata</label>
+    </div>
+    <div class="rf-mode-summary" id="mode-summary">
+        Solo i campi essenziali (gruppi cliente, gruppi destinatari, contenuto, orario, azione).
+    </div>
+</div>
+
+<!-- ====================================================================== -->
+<!--  FORM (mockup, non submittabile)                                        -->
+<!-- ====================================================================== -->
+<form class="rf-form-wrap" onsubmit="event.preventDefault(); alert('Mockup: il form non è submittabile.');">
+
+    <!-- ============================ SEZIONE 1 ============================ -->
+    <div class="rf-section">
+        <h3 class="rf-section-head">
+            <span class="rf-section-num">1</span>
+            <i class="fas fa-id-card"></i> Identificazione e stato
+            <span class="rf-section-sub">chi è la regola, priorità, attivazione</span>
+        </h3>
+        <div class="rf-section-body">
+
+            <!-- BASE -->
+            <div class="rf-row">
+                <label>Nome <span style="color:#dc2626;">*</span></label>
+                <input type="text" value="Auto-reply H24 fuori orario" oninput="liveValidate(this, 1)">
+            </div>
+            <div class="rf-row">
+                <label>Descrizione</label>
+                <textarea rows="2" placeholder="Note operative">Mail H24 fuori orario operativo del cliente: auto-reply con codice mailto + ticket urgente quando rientra il codice nel subject.</textarea>
+            </div>
+            <div class="rf-row">
+                <label>Priority <span style="color:#dc2626;">*</span></label>
+                <div>
+                    <input type="number" id="priority" value="200" min="1" max="999999" style="width:120px;">
+                    <div class="rf-priority-presets">
+                        <button type="button" onclick="setPriority(10, this)">⚡ Critica (10)</button>
+                        <button type="button" onclick="setPriority(200, this)" class="applied">📋 Standard (200)</button>
+                        <button type="button" onclick="setPriority(500, this)">🐢 Bassa (500)</button>
+                        <button type="button" onclick="setPriority(900, this)">🪤 Catch-all (900)</button>
+                    </div>
+                    <div class="rf-help">Più basso = valutata prima. Range 1..999999.</div>
+                </div>
+            </div>
+            <div class="rf-row">
+                <label>Stato</label>
+                <label style="font-weight:normal;">
+                    <input type="checkbox" checked> Regola attiva
+                </label>
+            </div>
+            <div class="rf-row rf-row-shadow">
+                <label>🌒 Shadow mode</label>
+                <div>
+                    <label style="font-weight:normal;">
+                        <input type="checkbox"> In shadow (azione SOPPRESSA, mail consegnata al destinatario)
+                    </label>
+                </div>
+            </div>
+
+            <!-- AVANZATA -->
+            <div class="rf-row rf-advanced-only">
+                <label>Note shadow</label>
+                <input type="text" placeholder="es. Test 2026-05-05, validare 7gg">
+            </div>
+            <div class="rf-row rf-advanced-only">
+                <label>Scope</label>
+                <div>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+                        <select>
+                            <option selected>global</option>
+                            <option>mailbox</option>
+                            <option>sector_pack</option>
+                        </select>
+                        <input type="text" placeholder="riferimento (id mailbox o settore)">
+                    </div>
+                    <div class="rf-help">Default <code>global</code>. Cambia solo per pack settoriali.</div>
+                </div>
+            </div>
+            <div class="rf-row rf-advanced-only">
+                <label>Severity</label>
+                <select style="width:200px;">
+                    <option value="">— default —</option>
+                    <option>debug</option><option>info</option><option>notice</option>
+                    <option>warn</option><option>error</option><option>critical</option>
+                </select>
+            </div>
+            <div class="rf-row rf-advanced-only orphan-only">
+                <label>Continue after match</label>
+                <label style="font-weight:normal;">
+                    <input type="checkbox"> Dopo il match, valuta anche le regole successive
+                </label>
+            </div>
+            <div class="rf-row rf-advanced-only group-only">
+                <label>Esclusivo del gruppo</label>
+                <label style="font-weight:normal;">
+                    <input type="checkbox" checked> Blocca i top-level successivi se un figlio matcha
+                </label>
+            </div>
+            <div class="rf-row rf-advanced-only child-only">
+                <label>Continue in group</label>
+                <label style="font-weight:normal;">
+                    <input type="checkbox"> Dopo match, valuta anche i fratelli successivi
+                </label>
+            </div>
+            <div class="rf-row rf-advanced-only child-only">
+                <label>Exit group + continue</label>
+                <label style="font-weight:normal;">
+                    <input type="checkbox"> Continua nei fratelli e propaga ai top-level
+                </label>
+            </div>
+            <div class="rf-row rf-advanced-only" style="opacity:0.7;">
+                <label>Set di regole <span style="color:#94a3b8; font-size:11px;">(legacy)</span></label>
+                <div>
+                    <select>
+                        <option selected>🌐 globali</option>
+                        <option>std_window</option>
+                        <option>ext_window</option>
+                        <option>h24_window</option>
+                    </select>
+                    <div class="rf-help" style="color:#94a3b8;">Post-M035 il filtro contratto è via Gruppi clienti. Questo è solo organizzazione UI.</div>
+                </div>
+            </div>
+        </div>
+        <div class="rf-section-advanced-hint">+ <span class="adv-count">5</span> opzioni avanzate (scope, severity, continue, set legacy, note shadow). <a onclick="setMode('advanced')">Mostra avanzate ▾</a></div>
+    </div>
+
+    <!-- ============================ SEZIONE 2 ============================ -->
+    <div class="rf-section">
+        <h3 class="rf-section-head">
+            <span class="rf-section-num">2</span>
+            <i class="fas fa-route"></i> Origine, destinatari e forward
+            <span class="rf-section-sub">filtri di chi e per chi — gruppi sono il default</span>
+        </h3>
+        <div class="rf-section-body">
+
+            <!-- BASE: Gruppi clienti -->
+            <div class="rf-customer-groups-block">
+                <div class="rf-cg-head">
+                    <i class="fas fa-users"></i> Gruppi clienti — filtro principale per contratto/segmento
+                </div>
+                <select multiple style="min-height:140px;">
+                    <option>🏛️ contract_standard — Clienti con contratto standard (87 membri)</option>
+                    <option>🏛️ contract_extended — Clienti con contratto esteso (24 membri)</option>
+                    <option selected>🏛️ contract_h24 — Clienti con contratto H24 (8 membri)</option>
+                    <option>🏛️ contract_inactive — Clienti senza contratto attivo (12 membri)</option>
+                    <option>🏛️ vip — Clienti VIP (override) (3 membri)</option>
+                    <option>🏛️ secondary — Clienti secondari (5 membri)</option>
+                    <option>🏛️ do_not_follow — Da non gestire (2 membri)</option>
+                    <option>contract_active — Clienti con contratto attivo qualsiasi (119 membri)</option>
+                </select>
+                <div class="rf-cg-help">
+                    <strong>Ctrl/Cmd</strong> per multipla (logica OR). Vuoto = tutti i clienti.
+                    Gruppi 🏛️ auto-popolati via <a href="#">Mappatura gruppi (M034)</a>.
+                </div>
+            </div>
+
+            <!-- BASE: Gruppo destinatari -->
+            <div class="rf-row">
+                <label>Gruppo destinatari</label>
+                <div>
+                    <select style="font-size:14px;">
+                        <option value="">— qualsiasi destinatario —</option>
+                        <option selected>tecnici_h24 (5 membri)</option>
+                        <option>assistenza_std (12 membri)</option>
+                        <option>commerciale (4 membri)</option>
+                    </select>
+                    <div class="rf-help">Scatta solo se uno dei destinatari è membro del gruppo. <a href="#">Gestisci gruppi destinatari</a>.</div>
+                </div>
+            </div>
+
+            <!-- BASE: Forward target gruppo -->
+            <div class="rf-row" id="forward-group-row" style="display:none;">
+                <label>Forward al gruppo</label>
+                <select>
+                    <option value="">— nessuno —</option>
+                    <option selected>reperibili_h24 (3 membri)</option>
+                </select>
+            </div>
+
+            <!-- AVANZATA: filtri puntuali -->
+            <div class="rf-subblock rf-advanced-only">
+                <div class="rf-subblock-head"><i class="fas fa-paper-plane"></i> Filtri puntuali mittente (eccezioni)</div>
+                <div class="rf-row">
+                    <label>From dominio</label>
+                    <input type="text" placeholder="es. cliente.com">
+                </div>
+                <div class="rf-row">
+                    <label>From regex</label>
+                    <input type="text" placeholder="(?i)^supporto@" oninput="liveValidate(this, 'regex')">
+                </div>
+                <div class="rf-row">
+                    <label>Cliente noto <span style="color:#94a3b8; font-size:11px;">(deriva dal gruppo)</span></label>
+                    <select>
+                        <option>indifferente</option>
+                        <option>solo censito</option>
+                        <option>solo non censito</option>
+                    </select>
+                </div>
+                <div class="rf-row">
+                    <label>Contratto attivo <span style="color:#94a3b8; font-size:11px;">(deriva dal gruppo)</span></label>
+                    <select>
+                        <option>indifferente</option>
+                        <option>solo con contratto</option>
+                        <option>solo senza contratto</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="rf-subblock rf-advanced-only">
+                <div class="rf-subblock-head"><i class="fas fa-inbox"></i> Filtri puntuali destinatario (eccezioni)</div>
+                <div class="rf-row">
+                    <label>To dominio</label>
+                    <input type="text" placeholder="es. domarc.it">
+                </div>
+                <div class="rf-row">
+                    <label>To regex <small>(mutex con gruppo destinatari)</small></label>
+                    <input type="text" placeholder="(?i)^h24@" oninput="liveValidate(this, 'regex')">
+                </div>
+                <div class="rf-row">
+                    <label>Forward to (lista email)</label>
+                    <input type="text" placeholder="reperibile@studio.it; sostituto@studio.it">
+                    <div class="rf-help">Eccezione: preferire il gruppo destinatari sopra.</div>
+                </div>
+            </div>
+
+        </div>
+        <div class="rf-section-advanced-hint">+ <span class="adv-count">7</span> filtri puntuali (from_*, to_*, contract/known derivati). <a onclick="setMode('advanced')">Mostra avanzate ▾</a></div>
+    </div>
+
+    <!-- ============================ SEZIONE 3 ============================ -->
+    <div class="rf-section">
+        <h3 class="rf-section-head">
+            <span class="rf-section-num">3</span>
+            <i class="fas fa-file-alt"></i> Contenuto del messaggio
+            <span class="rf-section-sub">subject, body e tag header</span>
+        </h3>
+        <div class="rf-section-body">
+
+            <!-- BASE -->
+            <div class="rf-row">
+                <label>Subject regex</label>
+                <div>
+                    <div style="display:flex; gap:6px;">
+                        <input type="text" placeholder="(?i)urgente|critico" value="(?i)\b(urgent|critical)\b" oninput="liveValidate(this, 'regex')">
+                        <button type="button" class="dr-btn" style="width:auto;"><i class="fas fa-vial"></i> Test</button>
+                    </div>
+                    <div class="rf-validation-msg valid">✓ Regex valida</div>
+                </div>
+            </div>
+            <div class="rf-row">
+                <label>Body regex</label>
+                <div>
+                    <div style="display:flex; gap:6px;">
+                        <input type="text" placeholder="(?i)\b(urgent|critical)\b" oninput="liveValidate(this, 'regex')">
+                        <button type="button" class="dr-btn" style="width:auto;"><i class="fas fa-vial"></i> Test</button>
+                    </div>
+                    <div class="rf-help">Match sul body testuale (troncato a 16 KB).</div>
+                </div>
+            </div>
+
+            <!-- AVANZATA -->
+            <div class="rf-row rf-advanced-only">
+                <label>Tag custom</label>
+                <input type="text" placeholder="es. spam, priority">
+                <div class="rf-help">Match su header X-Tag o equivalente.</div>
+            </div>
+
+        </div>
+        <div class="rf-section-advanced-hint">+ <span class="adv-count">1</span> opzione avanzata (tag custom). <a onclick="setMode('advanced')">Mostra avanzate ▾</a></div>
+    </div>
+
+    <!-- ============================ SEZIONE 4 ============================ -->
+    <div class="rf-section">
+        <h3 class="rf-section-head">
+            <span class="rf-section-num">4</span>
+            <i class="fas fa-clock"></i> Contesto cliente e orario
+            <span class="rf-section-sub">finestra oraria del cliente, override slot</span>
+        </h3>
+        <div class="rf-section-body">
+
+            <!-- BASE -->
+            <div class="rf-row">
+                <label>Stato servizio</label>
+                <div>
+                    <select style="font-size:14px;">
+                        <option>indifferente</option>
+                        <option>solo DENTRO orario operativo del cliente</option>
+                        <option selected>solo FUORI orario operativo del cliente</option>
+                    </select>
+                    <div class="rf-help">Calcolato dal profilo cliente (STD/EXT/H24/NO). Rispetta automaticamente STD ⊂ EXT ⊂ H24.</div>
+                </div>
+            </div>
+            <div class="rf-row">
+                <label>Override slot orario</label>
+                <div>
+                    <input type="text" placeholder="es. 22:00-06:00 oppure mon=00:00-08:00;sat=*">
+                    <div style="display:flex; gap:4px; margin-top:5px; flex-wrap:wrap;">
+                        <span style="font-size:11px; color:#64748b;">Preset:</span>
+                        <button type="button" class="rf-priority-presets" style="background:#e0e7ff; color:#3730a3; border:1px solid #c7d2fe; padding:2px 8px; border-radius:4px; font-size:11px; cursor:pointer;">STD</button>
+                        <button type="button" style="background:#e0e7ff; color:#3730a3; border:1px solid #c7d2fe; padding:2px 8px; border-radius:4px; font-size:11px; cursor:pointer;">EXT</button>
+                        <button type="button" style="background:#e0e7ff; color:#3730a3; border:1px solid #c7d2fe; padding:2px 8px; border-radius:4px; font-size:11px; cursor:pointer;">H24</button>
+                        <button type="button" style="background:#fee2e2; color:#991b1b; border:1px solid #fecaca; padding:2px 8px; border-radius:4px; font-size:11px; cursor:pointer;">✕ Vuoto</button>
+                    </div>
+                    <div class="rf-help">Vuoto = usa profilo cliente. Click preset per copiare schedule del profilo.</div>
+                </div>
+            </div>
+
+            <!-- AVANZATA -->
+            <div class="rf-row rf-advanced-only">
+                <label>Eccezione oggi</label>
+                <select>
+                    <option>indifferente</option>
+                    <option>solo se eccezione oraria attiva oggi</option>
+                    <option>solo senza eccezione oggi</option>
+                </select>
+                <div class="rf-help">Es. festività, chiusure, orari speciali.</div>
+            </div>
+            <div class="rf-row rf-advanced-only rf-row-thread">
+                <label>🔗 Risposta a thread (M036)</label>
+                <div>
+                    <select>
+                        <option>indifferente</option>
+                        <option>solo continuazioni di thread tracciato</option>
+                        <option>solo prime mail (no risposte)</option>
+                    </select>
+                    <div class="rf-help">Già gestito da regola seed priority=5 in <code>globali</code>. Tocca solo per casi particolari.</div>
+                </div>
+            </div>
+
+        </div>
+        <div class="rf-section-advanced-hint">+ <span class="adv-count">2</span> opzioni avanzate (eccezione oggi, thread). <a onclick="setMode('advanced')">Mostra avanzate ▾</a></div>
+    </div>
+
+    <!-- ============================ SEZIONE 5 ============================ -->
+    <div class="rf-section">
+        <h3 class="rf-section-head">
+            <span class="rf-section-num">5</span>
+            <i class="fas fa-bolt"></i> Azione e flusso
+            <span class="rf-section-sub">cosa fare quando matcha</span>
+        </h3>
+        <div class="rf-section-body">
+
+            <!-- BASE: action selector -->
+            <div class="rf-action-grid">
+                <div class="rf-action-card" onclick="selectAction(this, 'auto_reply')">
+                    <i class="fas fa-reply"></i><div class="rf-action-name">Auto-reply</div>
+                </div>
+                <div class="rf-action-card selected" onclick="selectAction(this, 'create_ticket')">
+                    <i class="fas fa-ticket"></i><div class="rf-action-name">Crea ticket</div>
+                </div>
+                <div class="rf-action-card" onclick="selectAction(this, 'forward')">
+                    <i class="fas fa-share"></i><div class="rf-action-name">Forward</div>
+                </div>
+                <div class="rf-action-card" onclick="selectAction(this, 'redirect')">
+                    <i class="fas fa-arrow-right-arrow-left"></i><div class="rf-action-name">Redirect</div>
+                </div>
+                <div class="rf-action-card" onclick="selectAction(this, 'quarantine')">
+                    <i class="fas fa-shield-virus"></i><div class="rf-action-name">Quarantena</div>
+                </div>
+                <div class="rf-action-card" onclick="selectAction(this, 'flag_only')">
+                    <i class="fas fa-flag"></i><div class="rf-action-name">Flag only</div>
+                </div>
+                <div class="rf-action-card" onclick="selectAction(this, 'ignore')">
+                    <i class="fas fa-ban"></i><div class="rf-action-name">Ignora</div>
+                </div>
+                <div class="rf-action-card" onclick="selectAction(this, 'ai_classify')">
+                    <i class="fas fa-robot"></i><div class="rf-action-name">IA classifica</div>
+                </div>
+            </div>
+
+            <!-- BASE: parametri ticket (action selezionata) -->
+            <div class="rf-action-fields active" id="action-create-ticket">
+                <div class="rf-row">
+                    <label>Settore ticket</label>
+                    <input type="text" value="assistenza" placeholder="settore">
+                </div>
+                <div class="rf-row">
+                    <label>Urgenza</label>
+                    <select>
+                        <option>BASSA</option>
+                        <option>NORMALE</option>
+                        <option selected>ALTA</option>
+                        <option>CRITICA</option>
+                    </select>
+                </div>
+                <div class="rf-row">
+                    <label>Recapita all'originale</label>
+                    <label style="font-weight:normal;">
+                        <input type="checkbox" checked> Manda anche al destinatario originale (CC)
+                    </label>
+                </div>
+            </div>
+
+            <!-- AVANZATA: delivery extra -->
+            <div class="rf-row rf-advanced-only">
+                <label>Also deliver to</label>
+                <input type="text" placeholder="ticket@domarc.it, archivio@domarc.it">
+                <div class="rf-help">Lista CSV di destinatari aggiuntivi (CC esplicito).</div>
+            </div>
+            <div class="rf-row rf-advanced-only">
+                <label>Apply rules su CC</label>
+                <label style="font-weight:normal;">
+                    <input type="checkbox"> Forza riapplicazione regole sul recapito CC (anti-loop OFF di default)
+                </label>
+            </div>
+
+        </div>
+        <div class="rf-section-advanced-hint">+ <span class="adv-count">2</span> opzioni avanzate (delivery extra, anti-loop). <a onclick="setMode('advanced')">Mostra avanzate ▾</a></div>
+    </div>
+
+    <!-- ============================ MINI SIMULATORE INLINE (E) ============================ -->
+    <div class="rf-mini-sim">
+        <h4><i class="fas fa-vial"></i> Test rapido inline (E) — verifica subject contro la regola</h4>
+        <textarea placeholder="Incolla qui il subject di una mail di esempio..." oninput="simulateInline(this)">[Cliente Bianchi] Errore CRITICAL: il server H24 non risponde da 15 minuti</textarea>
+        <div class="sim-result match">
+            ✓ <strong>Matcha questa regola</strong> — subject contiene "critical" (case-insensitive). L'azione <code>create_ticket</code> verrebbe eseguita.
+        </div>
+    </div>
+
+    <!-- ============================ ANTEPRIMA IMPATTO (D) ============================ -->
+    <div class="rf-impact-preview">
+        <h4><i class="fas fa-chart-line"></i> Anteprima impatto (D) — quante mail degli ultimi 7gg avrebbero matchato</h4>
+        <button type="button" onclick="showImpact()">Calcola impatto stimato</button>
+        <div class="impact-result" id="impact-result">
+            <strong>23 eventi</strong> degli ultimi 7 giorni avrebbero matchato questa regola (sui 1812 totali processati).
+            <ul style="margin:6px 0 0; font-size:12px;">
+                <li>Domini coinvolti: <code>cliente-h24-1.it</code> (12), <code>cliente-h24-2.it</code> (8), <code>cliente-h24-3.it</code> (3)</li>
+                <li>17 in orario, 6 fuori orario (questa regola li avrebbe gestiti tutti via Gruppi clienti = h24)</li>
+                <li>Subject più frequenti: "errore CRITICAL", "server non risponde", "alert urgent"</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- ============================ FOOTER ============================ -->
+    <div class="rf-footer">
+        <button type="submit" class="dr-btn dr-btn-primary" style="width:auto;">
+            <i class="fas fa-save"></i> Salva regola
+        </button>
+        <a href="#" class="dr-btn" style="width:auto;">Annulla</a>
+        <span style="margin-left:auto; font-size:12px; color:#64748b;">
+            Mockup statico — non submittabile
+        </span>
+    </div>
+
+</form>
+
+
+<script>
+// === Toggle modalità ===
+function setMode(mode) {
+    document.body.classList.toggle('mode-base', mode === 'base');
+    document.body.classList.toggle('mode-advanced', mode === 'advanced');
+    document.querySelectorAll('.rf-mode-radio').forEach(r => r.classList.toggle('active', r.dataset.mode === mode));
+    document.querySelectorAll('input[name="mode"]').forEach(r => r.checked = r.value === mode);
+    document.getElementById('mode-summary').textContent = mode === 'base'
+        ? 'Solo i campi essenziali (gruppi cliente, gruppi destinatari, contenuto, orario, azione).'
+        : 'Tutti i campi visibili — incluse eccezioni puntuali (from/to regex), tristate derivati, flag flow, scope, severity.';
+    try { localStorage.setItem('rf-mode', mode); } catch(e) {}
+}
+document.querySelectorAll('.rf-mode-radio').forEach(r => r.addEventListener('click', () => setMode(r.dataset.mode)));
+try {
+    const saved = localStorage.getItem('rf-mode');
+    if (saved === 'advanced') setMode('advanced');
+} catch(e) {}
+
+// === Toggle tipo regola (orphan / group / child) ===
+function changeFormType() {
+    const type = document.getElementById('form-type').value;
+    document.getElementById('parent-banner').style.display = (type === 'child') ? 'block' : 'none';
+    document.querySelectorAll('.orphan-only').forEach(el => el.style.display = (type === 'orphan' && document.body.classList.contains('mode-advanced')) ? '' : 'none');
+    document.querySelectorAll('.group-only').forEach(el => el.style.display = (type === 'group' && document.body.classList.contains('mode-advanced')) ? '' : 'none');
+    document.querySelectorAll('.child-only').forEach(el => el.style.display = (type === 'child' && document.body.classList.contains('mode-advanced')) ? '' : 'none');
+}
+// Re-applica i filtri tipo quando cambia mode
+document.querySelectorAll('input[name="mode"]').forEach(r => r.addEventListener('change', () => setTimeout(changeFormType, 50)));
+// Inizializza
+changeFormType();
+
+// === Preset priority ===
+function setPriority(val, btn) {
+    document.getElementById('priority').value = val;
+    document.querySelectorAll('.rf-priority-presets button').forEach(b => b.classList.remove('applied'));
+    btn.classList.add('applied');
+}
+
+// === Action selector ===
+function selectAction(card, code) {
+    document.querySelectorAll('.rf-action-card').forEach(c => c.classList.remove('selected'));
+    card.classList.add('selected');
+    document.getElementById('forward-group-row').style.display = (code === 'forward') ? 'grid' : 'none';
+    // (Mockup: mostra solo i parametri create_ticket per semplicità)
+}
+
+// === Validazione live mock ===
+function liveValidate(input, kind) {
+    const row = input.closest('.rf-row');
+    if (!row) return;
+    row.classList.remove('rf-valid', 'rf-invalid', 'rf-validating');
+    let msg = row.querySelector('.rf-validation-msg');
+    if (!msg) {
+        msg = document.createElement('div');
+        msg.className = 'rf-validation-msg';
+        input.closest('div').appendChild(msg);
+    }
+    msg.classList.remove('valid', 'invalid', 'validating');
+
+    const val = input.value.trim();
+    if (!val) { msg.textContent = ''; return; }
+
+    if (kind === 'regex') {
+        // Mock: valida la regex con try
+        try {
+            new RegExp(val);
+            row.classList.add('rf-valid');
+            msg.classList.add('valid');
+            msg.textContent = '✓ Regex valida';
+        } catch(e) {
+            row.classList.add('rf-invalid');
+            msg.classList.add('invalid');
+            msg.textContent = '✗ Regex invalida: ' + e.message;
+        }
+    } else {
+        if (val.length >= 3) {
+            row.classList.add('rf-valid');
+            msg.classList.add('valid');
+            msg.textContent = '✓ OK';
+        } else {
+            row.classList.add('rf-invalid');
+            msg.classList.add('invalid');
+            msg.textContent = 'Almeno 3 caratteri';
+        }
+    }
+}
+
+// === Mini simulatore ===
+function simulateInline(textarea) {
+    const result = textarea.parentElement.querySelector('.sim-result');
+    const subject = textarea.value || '';
+    // Mock: simula match contro regex (?i)\b(urgent|critical)\b
+    const matches = /(urgent|critical)/i.test(subject);
+    result.classList.remove('match', 'no-match');
+    if (matches) {
+        result.classList.add('match');
+        result.innerHTML = '✓ <strong>Matcha questa regola</strong> — subject contiene la parola chiave. Azione <code>create_ticket</code> eseguita.';
+    } else {
+        result.classList.add('no-match');
+        result.innerHTML = '✗ <strong>Non matcha</strong> — il subject non contiene <code>urgent</code> o <code>critical</code>.';
+    }
+}
+
+// === Anteprima impatto mock ===
+function showImpact() {
+    document.getElementById('impact-result').style.display = 'block';
+}
+</script>
+
+</body>
+</html>

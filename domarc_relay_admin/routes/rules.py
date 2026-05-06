@@ -598,6 +598,138 @@ def test_regex():
     })
 
 
+@rules_bp.route("/rules/preview-impact", methods=["POST"])
+@login_required(role="operator")
+def preview_impact():
+    """Anteprima impatto regola in compilazione (opzione D del refactor UI v2).
+
+    Riceve i match_* del form via POST, scansiona events_log degli ultimi
+    7 giorni e ritorna conteggio + sample di eventi che SAREBBERO matchati.
+    Implementazione semplice: filtra eventi solo sui campi text/regex più
+    rilevanti (from_domain, from_regex, to_regex/domain, subject_regex,
+    body_regex, customer_groups, in_service). Non valuta tristate complessi
+    o thread (sono raramente decisivi e richiederebbero re-evaluation
+    completa del rule engine).
+    """
+    storage = _storage()
+
+    # Match criteria dal form
+    m_from_domain = (request.form.get("match_from_domain") or "").strip().lower()
+    m_from_regex = (request.form.get("match_from_regex") or "").strip()
+    m_to_domain = (request.form.get("match_to_domain") or "").strip().lower()
+    m_to_regex = (request.form.get("match_to_regex") or "").strip()
+    m_subject_regex = (request.form.get("match_subject_regex") or "").strip()
+    m_body_regex = (request.form.get("match_body_regex") or "").strip()
+    m_in_service = request.form.get("match_in_service") or ""
+    m_customer_groups = [g.strip() for g in request.form.getlist("match_customer_groups") if g.strip()]
+
+    # Compila regex preventivamente per non riprovarci ad ogni iterazione
+    def _compile(p):
+        if not p:
+            return None
+        try:
+            return re.compile(p, re.IGNORECASE)
+        except re.error:
+            return False  # sentinel: regex invalida
+
+    re_from = _compile(m_from_regex)
+    re_to = _compile(m_to_regex)
+    re_subject = _compile(m_subject_regex)
+    re_body = _compile(m_body_regex)
+
+    # Verifica che tutte le regex compilate siano valide
+    for name, val in [("match_from_regex", re_from), ("match_to_regex", re_to),
+                      ("match_subject_regex", re_subject), ("match_body_regex", re_body)]:
+        if val is False:
+            return jsonify({"error": f"{name} non compilabile"})
+
+    # Scansione eventi: ultimi 7 giorni, page_size capped per performance
+    events, _total = storage.list_events(
+        tenant_id=_tid(), hours=168, page=1, page_size=2000,
+    )
+    total_events = len(events)
+    matched: list[dict] = []
+    samples: list[dict] = []
+    domains_count: dict[str, int] = {}
+
+    # Pre-fetch members dei gruppi cliente selezionati per match O(1)
+    cg_members: set[str] = set()
+    if m_customer_groups:
+        try:
+            for gcode in m_customer_groups:
+                grp = storage.get_customer_group_by_code(gcode, tenant_id=_tid())
+                if grp:
+                    members = storage.list_group_members(grp["id"]) or []
+                    for m in members:
+                        cg_members.add(str(m.get("codcli") or "").strip())
+        except (NotImplementedError, AttributeError):
+            cg_members = set()  # fallback: gruppi cliente non valutabili
+
+    for evt in events:
+        # match_from_domain
+        if m_from_domain:
+            from_addr = (evt.get("from_address") or "").lower()
+            if "@" not in from_addr or from_addr.split("@", 1)[1] != m_from_domain:
+                continue
+        # match_from_regex
+        if re_from and not re_from.search(evt.get("from_address") or ""):
+            continue
+        # match_to_domain
+        if m_to_domain:
+            to_addr = (evt.get("to_address") or "").lower()
+            if "@" not in to_addr or to_addr.split("@", 1)[1] != m_to_domain:
+                continue
+        # match_to_regex
+        if re_to and not re_to.search(evt.get("to_address") or ""):
+            continue
+        # match_subject_regex
+        if re_subject and not re_subject.search(evt.get("subject") or ""):
+            continue
+        # match_body_regex (su body_text se disponibile)
+        if re_body:
+            body = evt.get("body_text") or ""
+            if not re_body.search(body):
+                continue
+        # match_in_service
+        if m_in_service in ("true", "false"):
+            evt_in_service = evt.get("in_service")
+            want = m_in_service == "true"
+            if evt_in_service is None or bool(evt_in_service) != want:
+                continue
+        # match_customer_groups: controlla codcli risolto dell'evento
+        if cg_members:
+            evt_codcli = str(evt.get("codcli") or "").strip()
+            if not evt_codcli or evt_codcli not in cg_members:
+                continue
+
+        matched.append(evt)
+        # Estrai dominio mittente per breakdown
+        fa = (evt.get("from_address") or "").lower()
+        if "@" in fa:
+            dom = fa.split("@", 1)[1]
+            domains_count[dom] = domains_count.get(dom, 0) + 1
+
+    # Top 5 domini + 5 sample eventi (più recenti)
+    top_domains = sorted(domains_count.items(), key=lambda x: -x[1])[:5]
+    samples = [
+        {
+            "created_at": e.get("created_at"),
+            "from_address": e.get("from_address"),
+            "to_address": e.get("to_address"),
+            "subject": e.get("subject"),
+        }
+        for e in matched[:5]
+    ]
+
+    return jsonify({
+        "total_events_window": total_events,
+        "matched_count": len(matched),
+        "window_hours": 168,
+        "samples": samples,
+        "top_domains": [{"domain": d, "count": c} for d, c in top_domains],
+    })
+
+
 @rules_bp.route("/rules/groups/new", methods=["GET", "POST"])
 @rules_bp.route("/rules/groups/<int:group_id>", methods=["GET", "POST"])
 @login_required(role="operator")

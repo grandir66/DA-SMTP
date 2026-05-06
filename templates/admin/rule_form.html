@@ -3,6 +3,7 @@
 
 {% block extra_head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/rule_form.css') }}">
+<script src="{{ url_for('static', filename='js/rule_form_modes.js') }}" defer></script>
 <style>
     /* Layout vertical full-width — coerente con form gruppo/figlio (M035 refactor 2026-05-05) */
     .rf-grid { display:flex; flex-direction:column; gap:0.9rem; max-width:1100px; }
@@ -98,62 +99,23 @@
     </div>
     {% endif %}
 
-    {% if is_new and not from_event_id %}
-    <details style="margin-top:0.7rem; background:#f0fdf4; border-left:3px solid #10b981; padding:0.7rem 0.9rem; border-radius:0 5px 5px 0; font-size:0.85rem;">
-        <summary style="cursor:pointer; font-weight:600; color:#065f46;">
-            <i class="fas fa-lightbulb"></i> Ricetta rapida — combinazioni cliente × orario (M035)
-        </summary>
-        <table style="margin:0.6rem 0 0; width:100%; font-size:0.85rem; border-collapse:collapse;">
-            <thead>
-                <tr style="background:#fff; color:#065f46;">
-                    <th style="text-align:left; padding:0.4rem 0.6rem; border-bottom:2px solid #15803d;">Caso d'uso</th>
-                    <th style="text-align:left; padding:0.4rem 0.6rem; border-bottom:2px solid #15803d;">Set</th>
-                    <th style="text-align:left; padding:0.4rem 0.6rem; border-bottom:2px solid #15803d;">Gruppo cliente</th>
-                    <th style="text-align:left; padding:0.4rem 0.6rem; border-bottom:2px solid #15803d;">Stato servizio</th>
-                </tr>
-            </thead>
-            <tbody style="color:#065f46;">
-                <tr><td style="padding:0.3rem 0.6rem;">Cliente <strong>STD in orario</strong></td>
-                    <td style="padding:0.3rem 0.6rem;"><code>globali</code></td>
-                    <td style="padding:0.3rem 0.6rem;"><code>contract_standard</code></td>
-                    <td style="padding:0.3rem 0.6rem;"><code>Solo in servizio</code></td></tr>
-                <tr style="background:#fff;"><td style="padding:0.3rem 0.6rem;">Cliente <strong>STD fuori orario</strong></td>
-                    <td style="padding:0.3rem 0.6rem;"><code>globali</code></td>
-                    <td style="padding:0.3rem 0.6rem;"><code>contract_standard</code></td>
-                    <td style="padding:0.3rem 0.6rem;"><code>Solo fuori servizio</code></td></tr>
-                <tr><td style="padding:0.3rem 0.6rem;">Cliente <strong>EXT fuori orario</strong></td>
-                    <td style="padding:0.3rem 0.6rem;"><code>globali</code></td>
-                    <td style="padding:0.3rem 0.6rem;"><code>contract_extended</code></td>
-                    <td style="padding:0.3rem 0.6rem;"><code>Solo fuori servizio</code></td></tr>
-                <tr style="background:#fff;"><td style="padding:0.3rem 0.6rem;">Cliente <strong>H24 sempre</strong></td>
-                    <td style="padding:0.3rem 0.6rem;"><code>globali</code></td>
-                    <td style="padding:0.3rem 0.6rem;"><code>contract_h24</code></td>
-                    <td style="padding:0.3rem 0.6rem;"><code>indifferente</code></td></tr>
-                <tr><td style="padding:0.3rem 0.6rem;">Cliente <strong>VIP</strong> (override)</td>
-                    <td style="padding:0.3rem 0.6rem;"><code>globali</code></td>
-                    <td style="padding:0.3rem 0.6rem;"><code>vip</code></td>
-                    <td style="padding:0.3rem 0.6rem;"><code>indifferente</code></td></tr>
-                <tr style="background:#fff;"><td style="padding:0.3rem 0.6rem;">Senza contratto</td>
-                    <td style="padding:0.3rem 0.6rem;"><code>globali</code></td>
-                    <td style="padding:0.3rem 0.6rem;"><code>contract_inactive</code></td>
-                    <td style="padding:0.3rem 0.6rem;"><code>indifferente</code></td></tr>
-                <tr><td style="padding:0.3rem 0.6rem;">Allarmi automatici (es. CloudTIK)</td>
-                    <td style="padding:0.3rem 0.6rem;"><code>globali</code></td>
-                    <td style="padding:0.3rem 0.6rem;"><em>nessuno</em></td>
-                    <td style="padding:0.3rem 0.6rem;"><code>indifferente</code></td></tr>
-            </tbody>
-        </table>
-        <p style="margin:0.6rem 0 0; color:#065f46; font-size:0.82rem;">
-            <strong>Dove trovi i campi nel form:</strong>
-            "Set" → card <em>Identificazione</em> · "Gruppo cliente" → card
-            <em>Criteri di match → Origine mittente → Gruppi clienti</em> ·
-            "Stato servizio" → card <em>Criteri di match → Orario e calendario</em>
-            (clicca <a href="#orario-section" onclick="document.querySelector('#orario-section').scrollIntoView({behavior:'smooth',block:'center'}); return false;">qui</a>
-            per saltare alla sezione orario).
-        </p>
-    </details>
-    {% endif %}
+    {# Banner ricetta M035 rimosso: la modalità Base/Avanzata fornisce la stessa
+       semplificazione in modo più diretto. La logica "scegli un gruppo cliente
+       built-in (contract_standard / contract_h24 / vip / ecc.)" è ora il
+       default visibile della Sezione 2. #}
 </section>
+
+{# ====================== Toggle Modalità Base/Avanzata ===================== #}
+<div class="rf-mode-toggle-bar">
+    <div class="rf-mode-label"><i class="fas fa-sliders"></i> Modalità:</div>
+    <div class="rf-mode-radios">
+        <label class="rf-mode-radio active" data-mode="base"><input type="radio" name="rf_mode" value="base" checked> Base</label>
+        <label class="rf-mode-radio" data-mode="advanced"><input type="radio" name="rf_mode" value="advanced"> Avanzata</label>
+    </div>
+    <div class="rf-mode-summary" id="rf-mode-summary">
+        Solo i campi essenziali (gruppi cliente, gruppi destinatari, contenuto, orario, azione).
+    </div>
+</div>
 
 <form method="post" action="">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -191,20 +153,9 @@
         </h3>
         <div class="rf-body">
             {% if rule_sets %}
-            <!-- M035: Banner pattern semplificato -->
-            <div style="background:linear-gradient(90deg,#ecfdf5,#eff6ff);
-                        border:1px solid #15803d; border-radius:6px;
-                        padding:0.7rem 0.9rem; margin-bottom:1rem;
-                        font-size:0.85rem; color:#0f172a;">
-                <strong><i class="fas fa-wand-magic-sparkles"></i> Pattern semplificato (M035):</strong>
-                la regola va in <strong>"Sempre attive"</strong> di default. Per filtrare per
-                <em>tipo di contratto</em> usa il selettore <strong>Gruppi clienti</strong>
-                qui sotto (gruppi built-in <code>contract_standard</code>, <code>contract_extended</code>,
-                <code>contract_h24</code>, <code>contract_inactive</code> popolati automaticamente
-                via <a href="{{ url_for('group_mapping.list_view') }}" target="_blank">Mappatura gruppi</a>).
-                I set per profilo orario sono deprecati.
-            </div>
-            <div class="rf-row">
+            {# Banner M035 rimosso: la mode Base/Avanzata implementa già la semplificazione. #}
+            {# rule_set_id spostato in Avanzata: post-M035 il filtro contratto è via Gruppi clienti. #}
+            <div class="rf-row rf-advanced-only">
                 <label>Set di regole *<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
                     Organizzazione logica della regola. <strong>Globali</strong> e' il default
                     consigliato. Set custom per organizzare la libreria. Per filtrare per
@@ -298,7 +249,11 @@
                     Etichetta breve della regola (max 200 char). Visibile in elenco
                     e nei log. Esempio: <code>Auto-reply H24 (preso in carico)</code>.
                 </span></span></label>
-                <input type="text" name="name" required maxlength="200" value="{{ record.name or '' }}">
+                <div>
+                    <input type="text" name="name" required maxlength="200"
+                           value="{{ record.name or '' }}"
+                           oninput="rfLiveValidate(this, 'name')">
+                </div>
             </div>
             <div class="rf-row">
                 <label>Descrizione<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
@@ -315,23 +270,27 @@
                     5-50 H24/critiche, 100-500 contratti, 999 catch-all.
                 </span></span></label>
                 <div>
-                    <input type="number" name="priority" min="1" max="999" value="{{ record.priority or 100 }}" style="width:120px;">
-                    <div class="help">Numero più basso = valutata prima.</div>
+                    <input type="number" name="priority" id="priority" min="1" max="999999" value="{{ record.priority or 200 }}" style="width:120px;">
+                    <div class="rf-priority-presets">
+                        <button type="button" onclick="rfSetPriority(10, this)">⚡ Critica (10)</button>
+                        <button type="button" onclick="rfSetPriority(200, this)">📋 Standard (200)</button>
+                        <button type="button" onclick="rfSetPriority(500, this)">🐢 Bassa (500)</button>
+                        <button type="button" onclick="rfSetPriority(900, this)">🪤 Catch-all (900)</button>
+                    </div>
+                    <div class="help">Click su un preset per riempire il campo. Range 1..999999.</div>
                 </div>
             </div>
             <div class="rf-row">
                 <label>Stato</label>
                 <div><label style="font-weight:400;"><input type="checkbox" name="enabled" {% if record.enabled or is_new %}checked{% endif %}> Attiva</label></div>
             </div>
-            <div class="rf-row" style="background:#fffbeb; border-left:3px solid #f59e0b;
-                                       padding:0.5rem 0.7rem; border-radius:0 4px 4px 0;">
+            <div class="rf-row rf-row-shadow">
                 <label>🌒 Shadow<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
                     Quando attivo, se questa regola e' la vincente del rule engine
                     il dispatch viene FORZATO a default_delivery (la mail arriva al
                     destinatario reale, niente auto-reply / ticket / forward).
-                    In <code>payload_metadata.would_have_executed</code> trovi cosa
-                    SAREBBE stato fatto. Tipico per validare una nuova regola su
-                    mail reali prima di metterla in live.
+                    Tipico per validare una nuova regola su mail reali prima
+                    di metterla in live.
                 </span></span></label>
                 <div>
                     <label style="font-weight:normal;">
@@ -339,22 +298,23 @@
                                {% if record.shadow_mode %}checked{% endif %}>
                         Regola in shadow (azione SOPPRESSA, mail comunque consegnata al destinatario)
                     </label>
-                    <input type="text" name="shadow_note"
-                           value="{{ record.shadow_note or '' }}"
-                           placeholder="Note shadow (es. Test 2026-05-05, validare per 7gg)"
-                           style="width:100%; margin-top:0.3rem; font-size:0.85rem;">
                 </div>
             </div>
+            <div class="rf-row rf-advanced-only">
+                <label>Note shadow</label>
+                <input type="text" name="shadow_note"
+                       value="{{ record.shadow_note or '' }}"
+                       placeholder="es. Test 2026-05-05, validare per 7gg">
+            </div>
 
-            <div class="rf-row">
+            <div class="rf-row rf-advanced-only">
                 <label>Cascata<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
                     Se attivo, dopo il match continua a valutare le regole successive.
                     Default OFF: prima regola che matcha vince.
                 </span></span></label>
                 <div><label style="font-weight:400;"><input type="checkbox" name="continue_after_match" {% if record.continue_after_match %}checked{% endif %}> Continua a valutare regole successive</label></div>
             </div>
-            {# Scope unificato dentro Identificazione (era card separata) #}
-            <div class="rf-row">
+            <div class="rf-row rf-advanced-only">
                 <label>Scope<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
                     <strong>Globale</strong>: tutte le mail.
                     <strong>Mailbox specifica</strong>: solo per scope_ref.
@@ -369,25 +329,25 @@
                         </select>
                         <input type="text" name="scope_ref" value="{{ record.scope_ref or '' }}" placeholder="riferimento (id mailbox o settore)">
                     </div>
-                    <div class="help">Vuoto se scope = global.</div>
+                    <div class="help">Vuoto se scope = global. 99% dei casi usa "global".</div>
                 </div>
             </div>
-            {# Campi non applicabili a un'orfana — mostrati greyed per parità con form gruppo/figlio #}
-            <div class="rf-row rf-disabled" title="Non applicabile a una regola orfana — usato solo nei gruppi padre">
+            {# Campi non applicabili a un'orfana — mostrati greyed solo in Avanzata per parità con form gruppo/figlio #}
+            <div class="rf-row rf-disabled rf-advanced-only" title="Non applicabile a una regola orfana — usato solo nei gruppi padre">
                 <label>Esclusivo del gruppo</label>
                 <div>
                     <label style="font-weight:normal;"><input type="checkbox" disabled> Blocca i top-level successivi se un figlio matcha</label>
                     <div class="rf-disabled-note">Solo per gruppi padre.</div>
                 </div>
             </div>
-            <div class="rf-row rf-disabled" title="Non applicabile a una regola orfana — solo per figli del gruppo">
+            <div class="rf-row rf-disabled rf-advanced-only" title="Non applicabile a una regola orfana — solo per figli del gruppo">
                 <label>Continue in group</label>
                 <div>
                     <label style="font-weight:normal;"><input type="checkbox" disabled> Dopo match, valuta anche i fratelli successivi</label>
                     <div class="rf-disabled-note">Solo per figli del gruppo.</div>
                 </div>
             </div>
-            <div class="rf-row rf-disabled" title="Non applicabile a una regola orfana — solo per figli del gruppo">
+            <div class="rf-row rf-disabled rf-advanced-only" title="Non applicabile a una regola orfana — solo per figli del gruppo">
                 <label>Exit group + continue</label>
                 <div>
                     <label style="font-weight:normal;"><input type="checkbox" disabled> Continua nei fratelli e propaga ai top-level</label>
@@ -395,6 +355,7 @@
                 </div>
             </div>
         </div>
+        <div class="rf-section-advanced-hint">+ <span>5</span> opzioni avanzate (set legacy, scope, shadow note, cascata, flag flow). <a onclick="rfSetMode('advanced')">Mostra avanzate ▾</a></div>
     </div>
 
     {# ===================================================================== #}
@@ -410,206 +371,102 @@
         </h3>
         <div class="rf-body">
 
-            {# 2.1 MITTENTE + ANAGRAFICA CLIENTE === #}
-            <div class="rf-subcard">
-                <div class="rf-subcard-header">
-                    <span class="rf-subcard-icon"><i class="fas fa-paper-plane"></i></span>
-                    Mittente + anagrafica cliente
-                    <span class="rf-subcard-stats">
-                        Filtra per <em>chi ha mandato</em> la mail e per <em>stato del cliente</em>
-                    </span>
+            {# Filtro principale Base: Gruppi clienti (M035) — sempre visibile #}
+            <div class="rf-customer-groups-block">
+                <div class="rf-cg-head">
+                    <i class="fas fa-users"></i> Gruppi clienti — filtro principale per contratto/segmento
                 </div>
-                <div class="rf-subcard-body">
-                    <div class="rf-row">
-                        <label>From dominio<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
-                            Confronto esatto sul <strong>dominio del mittente</strong>
-                            (case-insensitive). Es: <code>cloudtik.it</code>.
-                        </span></span></label>
-                        <div>
-                            <input type="text" name="match_from_domain" id="match_from_domain"
-                                   list="known_domains_list"
-                                   value="{{ record.match_from_domain or '' }}"
-                                   placeholder="es. cliente.com" maxlength="255"
-                                   style="text-transform:lowercase;"
-                                   oninput="lookupDomain()">
-                            <datalist id="known_domains_list">
-                                {% for d in known_domains %}
-                                <option value="{{ d }}"></option>
-                                {% endfor %}
-                            </datalist>
-                            <div class="help">Autocomplete dai {{ known_domains|length }} domini noti.</div>
-                            <div id="domain_lookup_result" style="margin-top:0.4rem; font-size:0.85rem;"></div>
-                        </div>
+                {% set selected_groups = (record.match_customer_groups or '').split(',') | map('trim') | list %}
+                <select name="match_customer_groups" multiple>
+                    {% for g in (customer_groups or []) %}
+                    <option value="{{ g.code }}"
+                            {% if g.code in selected_groups %}selected{% endif %}
+                            {% if g.is_system %}style="background:#f0f9ff; font-weight:600;"{% endif %}>
+                        {% if g.is_system %}🏛️ {% endif %}{{ g.code }} — {{ g.name }} ({{ g.member_count }} membri){% if g.is_system %} [auto]{% endif %}
+                    </option>
+                    {% else %}
+                    <option disabled>Nessun gruppo definito</option>
+                    {% endfor %}
+                </select>
+                <div class="rf-cg-help">
+                    <strong>Ctrl/Cmd</strong> per selezione multipla (logica OR). Vuoto = tutti i clienti.
+                    Gruppi 🏛️ <strong>built-in</strong> auto-popolati via
+                    <a href="{{ url_for('group_mapping.list_view') }}" target="_blank">Mappatura gruppi (M034)</a>:
+                    <code>contract_standard</code>, <code>contract_extended</code>, <code>contract_h24</code>,
+                    <code>contract_inactive</code>, <code>vip</code>, <code>secondary</code>, <code>do_not_follow</code>.
+                    <a href="{{ url_for('customer_groups.list_view') }}">Gestisci gruppi clienti</a>.
+                </div>
+            </div>
+
+            {# 2.1 MITTENTE + ANAGRAFICA — solo Avanzata: filtri puntuali (eccezioni) #}
+            <div class="rf-subblock rf-advanced-only">
+                <div class="rf-subblock-head"><i class="fas fa-paper-plane"></i> Mittente puntuale (eccezioni)</div>
+                <div class="rf-row">
+                    <label>From dominio</label>
+                    <div>
+                        <input type="text" name="match_from_domain" id="match_from_domain"
+                               list="known_domains_list"
+                               value="{{ record.match_from_domain or '' }}"
+                               placeholder="es. cliente.com" maxlength="255"
+                               style="text-transform:lowercase;"
+                               oninput="lookupDomain()">
+                        <datalist id="known_domains_list">
+                            {% for d in known_domains %}
+                            <option value="{{ d }}"></option>
+                            {% endfor %}
+                        </datalist>
+                        <div class="help">Autocomplete dai {{ known_domains|length }} domini noti. Eccezione: preferire i Gruppi clienti sopra.</div>
+                        <div id="domain_lookup_result" style="margin-top:0.4rem; font-size:0.85rem;"></div>
                     </div>
-                    <div class="rf-row">
-                        <label>From regex<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
-                            Regex sul <strong>From</strong> completo. AND con "From dominio".
-                            Es: <code>(?i)^noreply@cliente\.com$</code>.
-                        </span></span></label>
-                        <div>
-                            <div class="inline-test">
-                                <input type="text" id="match_from_regex" name="match_from_regex" value="{{ record.match_from_regex or '' }}" placeholder="(?i)^noreply@cliente\.com$">
-                                <button type="button" class="dr-btn" style="width:auto;" onclick="testRegex('match_from_regex','tr_from')"><i class="fas fa-vial"></i> Test</button>
-                            </div>
-                            <div id="tr_from" class="test-result"></div>
-                            <div class="help">Per match solo dominio preferisci "From dominio" (più veloce).</div>
+                </div>
+                <div class="rf-row">
+                    <label>From regex</label>
+                    <div>
+                        <div class="inline-test">
+                            <input type="text" id="match_from_regex" name="match_from_regex"
+                                   value="{{ record.match_from_regex or '' }}"
+                                   placeholder="(?i)^noreply@cliente\.com$"
+                                   oninput="rfLiveValidate(this, 'regex')">
+                            <button type="button" class="dr-btn" style="width:auto;" onclick="testRegex('match_from_regex','tr_from')"><i class="fas fa-vial"></i> Test</button>
                         </div>
+                        <div id="tr_from" class="test-result"></div>
                     </div>
-                    <div style="margin: 0.6rem 0; padding: 0.5rem 0.7rem; background: #fce7f3;
-                                border-left: 3px solid #ec4899; border-radius: 0 4px 4px 0;
-                                font-size: 0.78rem; color: #9d174d;">
-                        <i class="fas fa-id-card"></i> <strong>Anagrafica del mittente</strong>:
-                        i campi sotto filtrano per attributi del cliente del mittente
-                        (codcli, contratto, gruppi). Tutti AND tra loro e con i campi from_*.
+                </div>
+                <div class="rf-row">
+                    <label>Cliente noto <small style="color:#94a3b8;">(deriva dal gruppo)</small></label>
+                    <div>
+                        <select name="match_known_customer">
+                            <option value="">Indifferente</option>
+                            <option value="true"  {% if record.match_known_customer == 1 or record.match_known_customer is sameas true %}selected{% endif %}>Solo se mittente è in client_domains</option>
+                            <option value="false" {% if record.match_known_customer == 0 or record.match_known_customer is sameas false %}selected{% endif %}>Solo se mittente NON è censito</option>
+                        </select>
+                        <div class="help">Tipicamente derivato dal Gruppo clienti scelto sopra.</div>
                     </div>
-                    <div class="rf-row">
-                        <label>Cliente noto<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
-                            <strong>Indifferente</strong>: ignora.
-                            <strong>Sì</strong>: matcha solo se mittente collegato a un codcli
-                            del DB clienti.
-                            <strong>No</strong>: solo mittenti sconosciuti
-                            (utile per regole catch-all su mittenti non censiti).
-                        </span></span></label>
-                        <div>
-                            <select name="match_known_customer">
-                                <option value="">Indifferente</option>
-                                <option value="true"  {% if record.match_known_customer == 1 or record.match_known_customer is sameas true %}selected{% endif %}>Solo se mittente è in <code>client_domains</code></option>
-                                <option value="false" {% if record.match_known_customer == 0 or record.match_known_customer is sameas false %}selected{% endif %}>Solo se mittente NON è censito</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="rf-row">
-                        <label>Contratto<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
-                            <strong>Attivo</strong>: solo clienti con contratto attivo.
-                            <strong>Non attivo</strong>: clienti censiti ma senza contratto
-                            (template <code>always_billable_no_contract</code> override automatico).
-                        </span></span></label>
-                        <div>
-                            <select name="match_contract_active">
-                                <option value="">Indifferente</option>
-                                <option value="true"  {% if record.match_contract_active == 1 or record.match_contract_active is sameas true %}selected{% endif %}>Solo CON contratto attivo</option>
-                                <option value="false" {% if record.match_contract_active == 0 or record.match_contract_active is sameas false %}selected{% endif %}>Solo SENZA contratto attivo (ma censito)</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="rf-row">
-                        <label>Risposta a thread<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
-                            <strong>M036</strong>: la mail e' una continuazione di thread gia'
-                            tracciato (RFC 2822 In-Reply-To/References matchano un evento esistente).
-                            <br><br>
-                            <strong>Solo continuazioni</strong>: utile per evitare ticket duplicati
-                            quando un cliente risponde nel thread di un ticket aperto.
-                            <strong>Solo prime mail</strong>: solo se NON e' una risposta.
-                            <br><br>
-                            E' gia' attiva una regola seed "Thread continuation -> default_delivery"
-                            a priority=5 nel set globali che intercetta tutte le risposte e fa solo
-                            consegna senza side-effect.
-                        </span></span></label>
-                        <div>
-                            <select name="match_is_thread_continuation">
-                                <option value="">Indifferente</option>
-                                <option value="true"  {% if record.match_is_thread_continuation == 1 or record.match_is_thread_continuation is sameas true %}selected{% endif %}>Solo CONTINUAZIONI di thread (risposte)</option>
-                                <option value="false" {% if record.match_is_thread_continuation == 0 or record.match_is_thread_continuation is sameas false %}selected{% endif %}>Solo PRIME mail (no risposte)</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="rf-row">
-                        <label>Gruppi clienti<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
-                            Selezione multipla. La regola scatta se il <strong>cliente del mittente</strong>
-                            appartiene ad almeno uno dei gruppi selezionati (logica OR).
-                            <br><br>
-                            Tieni Ctrl/Cmd per selezione multipla.
-                        </span></span></label>
-                        <div>
-                            <!-- M035: Banner pattern unificato -->
-                            <div style="margin-bottom:0.5rem; padding:0.55rem 0.8rem;
-                                        background:#ecfdf5; border-left:3px solid #15803d;
-                                        border-radius:0 4px 4px 0; font-size:0.82rem; color:#0f172a;">
-                                <i class="fas fa-bullseye" style="color:#15803d;"></i>
-                                <strong>Filtro per cliente — UNICO meccanismo:</strong> seleziona qui
-                                uno o piu' gruppi cliente. La regola scatta se il cliente del mittente
-                                appartiene ad almeno uno dei gruppi (logica OR).
-                                <br><br>
-                                <strong>Gruppi built-in</strong> (auto-popolati al sync via
-                                <a href="{{ url_for('group_mapping.list_view') }}" target="_blank">Mappatura gruppi</a>):
-                                <code>contract_standard</code>, <code>contract_extended</code>,
-                                <code>contract_h24</code>, <code>contract_active</code>,
-                                <code>contract_inactive</code>, <code>vip</code>, <code>secondary</code>,
-                                <code>do_not_follow</code>.
-                                <br>
-                                <strong>Override gestionale</strong>: aggiungi manualmente un cliente STD
-                                al gruppo <code>vip</code> (o <code>contract_h24</code>) per dargli
-                                trattamento custom. Membership manuale prevale sempre.
-                            </div>
-                            {% set selected_groups = (record.match_customer_groups or '').split(',') | map('trim') | list %}
-                            <select name="match_customer_groups" multiple
-                                    style="width:100%; min-height:120px; font-family:ui-monospace, monospace; font-size:0.85rem;">
-                                {% for g in (customer_groups or []) %}
-                                <option value="{{ g.code }}"
-                                        {% if g.code in selected_groups %}selected{% endif %}
-                                        {% if g.is_system %}style="background:#f0f9ff; font-weight:600;"{% endif %}>
-                                    {% if g.is_system %}⚙ {% endif %}{{ g.code }} — {{ g.name }} ({{ g.member_count }} membri){% if g.is_system %} [auto]{% endif %}
-                                </option>
-                                {% else %}
-                                <option disabled>Nessun gruppo definito</option>
-                                {% endfor %}
-                            </select>
-                            <div class="help">
-                                <a href="{{ url_for('customer_groups.list_view') }}">Gestisci gruppi clienti</a>.
-                                Logica OR: la regola scatta se cliente è in almeno uno dei gruppi.
-                            </div>
-                        </div>
+                </div>
+                <div class="rf-row">
+                    <label>Contratto attivo <small style="color:#94a3b8;">(deriva dal gruppo)</small></label>
+                    <div>
+                        <select name="match_contract_active">
+                            <option value="">Indifferente</option>
+                            <option value="true"  {% if record.match_contract_active == 1 or record.match_contract_active is sameas true %}selected{% endif %}>Solo CON contratto attivo</option>
+                            <option value="false" {% if record.match_contract_active == 0 or record.match_contract_active is sameas false %}selected{% endif %}>Solo SENZA contratto attivo</option>
+                        </select>
+                        <div class="help">Tipicamente derivato dal gruppo (es. <code>contract_active</code> o <code>contract_inactive</code>).</div>
                     </div>
                 </div>
             </div>
 
-            {# 2.2 DESTINATARI === #}
-            <div class="rf-subcard">
-                <div class="rf-subcard-header">
-                    <span class="rf-subcard-icon" style="background:#fef3c7; color:#92400e;"><i class="fas fa-envelope-open"></i></span>
-                    Destinatari
-                    <span class="rf-subcard-stats">
-                        Filtra per <em>a chi è destinata</em> la mail
-                    </span>
-                </div>
-                <div class="rf-subcard-body">
-                    <div class="rf-row">
-                        <label>To dominio<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
-                            Confronto esatto sul dominio del <strong>destinatario primario</strong>.
-                            Es: <code>datia.it</code>.
-                        </span></span></label>
-                        <input type="text" name="match_to_domain" value="{{ record.match_to_domain or '' }}" placeholder="es. domarc.it">
-                    </div>
-
-                    <div class="rf-mutex-note">
-                        <i class="fas fa-circle-info"></i>
-                        I due campi sotto sono <strong>mutuamente esclusivi</strong>: usa <em>regex</em>
-                        per pattern singoli (es. <code>^h24@</code>) o <em>gruppo destinatari</em>
-                        per liste di indirizzi predefiniti. Se valorizzi uno, l'altro viene grigiato.
-                    </div>
-
-                    <div class="rf-row" id="row_to_regex">
-                        <label>To regex<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
-                            Regex sul <strong>destinatario primario</strong>.
-                            Es: <code>(?i)^h24@(datia|domarc)\.it$</code>.
-                        </span></span></label>
-                        <div>
-                            <div class="inline-test">
-                                <input type="text" id="match_to_regex" name="match_to_regex"
-                                       value="{{ record.match_to_regex or '' }}" placeholder="(?i)^supporto@"
-                                       oninput="updateMutexTo()">
-                                <button type="button" class="dr-btn" style="width:auto;" onclick="testRegex('match_to_regex','tr_to')"><i class="fas fa-vial"></i> Test</button>
-                            </div>
-                            <div id="tr_to" class="test-result"></div>
-                        </div>
-                    </div>
-                    <div class="rf-row" id="row_to_group_id">
-                        <label>To gruppo destinatari<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
-                            La regola scatta se uno dei destinatari è membro del gruppo selezionato.
-                            <a href="{{ url_for('recipient_groups.list_view') }}">Gestisci gruppi</a>.
-                        </span></span></label>
+            {# 2.2 DESTINATARI: gruppo destinatari sempre Base, dominio/regex puntuali Advanced === #}
+            <div class="rf-subblock">
+                <div class="rf-subblock-head"><i class="fas fa-inbox"></i> Destinatari</div>
+                <div class="rf-row" id="row_to_group_id">
+                    <label>Gruppo destinatari<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
+                        La regola scatta se uno dei destinatari è membro del gruppo selezionato.
+                        <a href="{{ url_for('recipient_groups.list_view') }}">Gestisci gruppi</a>.
+                    </span></span></label>
+                    <div>
                         <select name="match_to_group_id" id="match_to_group_id" onchange="updateMutexTo()">
-                            <option value="">— nessuno —</option>
+                            <option value="">— qualsiasi destinatario —</option>
                             {% for rg in (recipient_groups or []) %}
                             <option value="{{ rg.id }}"
                                 {% if record.match_to_group_id == rg.id %}selected{% endif %}>
@@ -617,11 +474,35 @@
                             </option>
                             {% endfor %}
                         </select>
+                        <div class="help"><a href="{{ url_for('recipient_groups.list_view') }}" target="_blank">Gestisci gruppi destinatari</a>.</div>
+                    </div>
+                </div>
+            </div>
+
+            {# Filtri puntuali destinatario (Advanced) #}
+            <div class="rf-subblock rf-advanced-only">
+                <div class="rf-subblock-head"><i class="fas fa-envelope-open"></i> Destinatario puntuale (eccezioni)</div>
+                <div class="rf-row">
+                    <label>To dominio</label>
+                    <input type="text" name="match_to_domain" value="{{ record.match_to_domain or '' }}" placeholder="es. domarc.it">
+                </div>
+                <div class="rf-row" id="row_to_regex">
+                    <label>To regex <small>(mutex con gruppo)</small></label>
+                    <div>
+                        <div class="inline-test">
+                            <input type="text" id="match_to_regex" name="match_to_regex"
+                                   value="{{ record.match_to_regex or '' }}" placeholder="(?i)^supporto@"
+                                   oninput="updateMutexTo(); rfLiveValidate(this, 'regex')">
+                            <button type="button" class="dr-btn" style="width:auto;" onclick="testRegex('match_to_regex','tr_to')"><i class="fas fa-vial"></i> Test</button>
+                        </div>
+                        <div id="tr_to" class="test-result"></div>
+                        <div class="help">Mutex con il gruppo destinatari sopra: usa l'una o l'altro.</div>
                     </div>
                 </div>
             </div>
 
         </div>
+        <div class="rf-section-advanced-hint">+ <span>7</span> filtri puntuali avanzati (from_*, to_*, contract/known, mittente). <a onclick="rfSetMode('advanced')">Mostra avanzate ▾</a></div>
     </div>
 
     {# ===================================================================== #}
@@ -643,7 +524,10 @@
                         </span></span></label>
                         <div>
                             <div class="inline-test">
-                                <input type="text" id="match_subject_regex" name="match_subject_regex" value="{{ record.match_subject_regex or '' }}" placeholder="(?i)urgente|critico">
+                                <input type="text" id="match_subject_regex" name="match_subject_regex"
+                                       value="{{ record.match_subject_regex or '' }}"
+                                       placeholder="(?i)urgente|critico"
+                                       oninput="rfLiveValidate(this, 'regex')">
                                 <button type="button" class="dr-btn" style="width:auto;" onclick="testRegex('match_subject_regex','tr_subject')"><i class="fas fa-vial"></i> Test</button>
                             </div>
                             <div id="tr_subject" class="test-result"></div>
@@ -656,13 +540,16 @@
                         </span></span></label>
                         <div>
                             <div class="inline-test">
-                                <input type="text" id="match_body_regex" name="match_body_regex" value="{{ record.match_body_regex or '' }}" placeholder="opzionale, body troncato a 16 KB">
+                                <input type="text" id="match_body_regex" name="match_body_regex"
+                                       value="{{ record.match_body_regex or '' }}"
+                                       placeholder="opzionale, body troncato a 16 KB"
+                                       oninput="rfLiveValidate(this, 'regex')">
                                 <button type="button" class="dr-btn" style="width:auto;" onclick="testRegex('match_body_regex','tr_body')"><i class="fas fa-vial"></i> Test</button>
                             </div>
                             <div id="tr_body" class="test-result"></div>
                         </div>
                     </div>
-                    <div class="rf-row">
+                    <div class="rf-row rf-advanced-only">
                         <label>Match tag<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
                             Tag esplicito sulla mail (header X-Tag o assegnato dal parser).
                         </span></span></label>
@@ -672,6 +559,7 @@
             </div>
 
         </div>
+        <div class="rf-section-advanced-hint">+ <span>1</span> opzione avanzata (tag custom). <a onclick="rfSetMode('advanced')">Mostra avanzate ▾</a></div>
     </div>
 
     {# ===================================================================== #}
@@ -719,7 +607,7 @@
                             </div>
                         </div>
                     </div>
-                    <div class="rf-row">
+                    <div class="rf-row rf-advanced-only">
                         <label>Eccezione oggi<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
                             Cliente del mittente con override calendario oggi (festività locale,
                             ponte, chiusura aziendale, apertura straordinaria).
@@ -730,6 +618,20 @@
                                 <option value="">Indifferente</option>
                                 <option value="true"  {% if record.match_has_exception_today == 1 or record.match_has_exception_today is sameas true %}selected{% endif %}>Solo se cliente ha eccezione oggi</option>
                                 <option value="false" {% if record.match_has_exception_today == 0 or record.match_has_exception_today is sameas false %}selected{% endif %}>Solo se nessuna eccezione</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="rf-row rf-row-thread rf-advanced-only">
+                        <label>🔗 Risposta a thread (M036)<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
+                            <strong>M036</strong>: la mail e' una continuazione di thread gia'
+                            tracciato (RFC 2822 In-Reply-To/References matchano un evento esistente).
+                            Già gestita da regola seed priority=5 nel set globali; tocca solo per casi particolari.
+                        </span></span></label>
+                        <div>
+                            <select name="match_is_thread_continuation">
+                                <option value="">Indifferente</option>
+                                <option value="true"  {% if record.match_is_thread_continuation == 1 or record.match_is_thread_continuation is sameas true %}selected{% endif %}>Solo CONTINUAZIONI di thread (risposte)</option>
+                                <option value="false" {% if record.match_is_thread_continuation == 0 or record.match_is_thread_continuation is sameas false %}selected{% endif %}>Solo PRIME mail (no risposte)</option>
                             </select>
                         </div>
                     </div>
@@ -784,6 +686,7 @@
             </div>
 
         </div>
+        <div class="rf-section-advanced-hint">+ <span>2</span> opzioni avanzate (eccezione oggi, thread continuation). <a onclick="rfSetMode('advanced')">Mostra avanzate ▾</a></div>
     </div>
 
     {# ===================================================================== #}
@@ -928,16 +831,6 @@
                     usa <em>lista email</em> per indirizzi specifici o <em>gruppo destinatari</em>
                     per liste predefinite. Lascia entrambi vuoti per usare gli rcpt originali della mail.
                 </div>
-                <div class="rf-row" id="row_fwd_emails">
-                    <label>Lista email<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
-                        Lista indirizzi separati da <code>;</code> o <code>,</code>.
-                        Es: <code>assistenza-h24@datia.it; backup@altro.com</code>.
-                    </span></span></label>
-                    <textarea name="forward_to_emails" id="forward_to_emails" rows="2"
-                              placeholder="assistenza-h24@datia.it; backup@altro.com"
-                              style="font-family:ui-monospace,monospace; font-size:0.85rem;"
-                              oninput="updateMutexForward()">{{ record.forward_to_emails or '' }}</textarea>
-                </div>
                 <div class="rf-row" id="row_fwd_group_id">
                     <label>Gruppo destinatari<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
                         Il listener espande i membri del gruppo al momento dell'invio.
@@ -951,6 +844,16 @@
                         </option>
                         {% endfor %}
                     </select>
+                </div>
+                <div class="rf-row rf-advanced-only" id="row_fwd_emails">
+                    <label>Lista email <small>(eccezione)</small><span class="rf-tip">ⓘ<span class="rf-tip-balloon">
+                        Lista indirizzi separati da <code>;</code> o <code>,</code>.
+                        Mutex con il gruppo destinatari sopra. Preferire il gruppo per riusabilità.
+                    </span></span></label>
+                    <textarea name="forward_to_emails" id="forward_to_emails" rows="2"
+                              placeholder="assistenza-h24@datia.it; backup@altro.com"
+                              style="font-family:ui-monospace,monospace; font-size:0.85rem;"
+                              oninput="updateMutexForward()">{{ record.forward_to_emails or '' }}</textarea>
                 </div>
             </div>
 
@@ -1091,7 +994,7 @@
                         <div class="help">Quando attivo, la mail va sia all'azione che al destinatario reale.</div>
                     </div>
                 </div>
-                <div class="rf-row">
+                <div class="rf-row rf-advanced-only">
                     <label>Copia a (Cc)</label>
                     <div>
                         <input type="text" name="action_map_also_deliver_to"
@@ -1100,7 +1003,7 @@
                         <div class="help">Lista CSV di destinatari aggiuntivi (Cc).</div>
                     </div>
                 </div>
-                <div class="rf-row">
+                <div class="rf-row rf-advanced-only">
                     <label>Bypass regole</label>
                     <div>
                         <label style="font-weight:400;">
@@ -1112,7 +1015,7 @@
                 </div>
             </div>
 
-            <div class="rf-row">
+            <div class="rf-row rf-advanced-only">
                 <label>Severity</label>
                 <select name="severity">
                     <option value="">— default —</option>
@@ -1122,6 +1025,26 @@
                 </select>
             </div>
         </div>
+        <div class="rf-section-advanced-hint">+ <span>3</span> opzioni avanzate (forward lista, delivery CC, severity, bypass). <a onclick="rfSetMode('advanced')">Mostra avanzate ▾</a></div>
+    </div>
+
+    {# ============= MINI SIMULATORE INLINE (opzione E) ============== #}
+    <div class="rf-mini-sim">
+        <h4><i class="fas fa-vial"></i> Test rapido inline — verifica subject contro la regola</h4>
+        <textarea oninput="rfSimulateInline(this)"
+                  placeholder="Incolla qui il subject di una mail di esempio per vedere se matcha la regola corrente..."></textarea>
+        <div class="rf-sim-result" id="rf-sim-result"></div>
+    </div>
+
+    {# ============= ANTEPRIMA IMPATTO (opzione D) ============== #}
+    <div class="rf-impact-preview">
+        <h4><i class="fas fa-chart-line"></i> Anteprima impatto</h4>
+        <p style="margin:0 0 8px; font-size:13px; color:#475569;">
+            Calcola quante mail degli ultimi 7 giorni avrebbero matchato i filtri di questa regola.
+            Utile per capire se la regola è troppo larga/stretta prima di abilitarla.
+        </p>
+        <button type="button" onclick="rfPreviewImpact(this)">Calcola impatto stimato</button>
+        <div class="rf-impact-result" id="rf-impact-result"></div>
     </div>
 </div>
 

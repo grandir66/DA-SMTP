@@ -317,6 +317,265 @@
 }
 .rf-action-fields.active { display: block; }
 
+/* ===================================== Toggle Modalità Base/Avanzata */
+/* Implementa l'opzione UX condivisa nei 3 form regola: toggle in cima
+ * che nasconde i campi avanzati quando si è in Base. Stato persistito
+ * in localStorage. */
+
+.rf-mode-toggle-bar {
+    background: #fff;
+    border: 2px solid #1e3a8a;
+    border-radius: 10px;
+    padding: 11px 16px;
+    margin: 0 0 14px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    max-width: 1100px;
+}
+
+.rf-mode-toggle-bar .rf-mode-label {
+    font-weight: 600;
+    color: #1e3a8a;
+    font-size: 14px;
+}
+
+.rf-mode-toggle-bar .rf-mode-radios {
+    display: flex;
+    gap: 4px;
+    background: #f1f5f9;
+    border-radius: 6px;
+    padding: 3px;
+}
+
+.rf-mode-toggle-bar .rf-mode-radio {
+    padding: 6px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    color: #475569;
+    transition: all 0.15s;
+}
+
+.rf-mode-toggle-bar .rf-mode-radio.active {
+    background: #1e3a8a;
+    color: #fff;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+}
+
+.rf-mode-toggle-bar .rf-mode-radio input { display: none; }
+
+.rf-mode-toggle-bar .rf-mode-summary {
+    color: #64748b;
+    font-size: 12px;
+    margin-left: auto;
+    text-align: right;
+    line-height: 1.3;
+}
+
+/* Display rules: queste classi sono switchate dal JS sul body */
+body.rf-mode-base .rf-advanced-only { display: none !important; }
+body.rf-mode-advanced .rf-advanced-only { display: block !important; }
+body.rf-mode-advanced .rf-advanced-only.rf-row { display: grid !important; }
+
+/* In modalità Avanzata, evidenzia i campi avanzati con bordo giallo */
+body.rf-mode-advanced .rf-row.rf-advanced-only,
+body.rf-mode-advanced .rf-subblock.rf-advanced-only {
+    background: #fefce8;
+    border-left: 3px solid #eab308;
+    padding-left: 8px;
+    margin-left: -10px;
+}
+
+/* Hint "+ N opzioni avanzate" sotto ogni sezione, visibile solo in Base */
+.rf-section-advanced-hint {
+    text-align: center;
+    padding: 7px 16px;
+    background: #f1f5f9;
+    color: #475569;
+    font-size: 12px;
+    border-top: 1px dashed #cbd5e1;
+}
+
+.rf-section-advanced-hint a {
+    color: #1e3a8a;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    margin-left: 4px;
+}
+
+body.rf-mode-advanced .rf-section-advanced-hint { display: none; }
+
+/* ===================================== Preset priority (opzione B) */
+
+.rf-priority-presets {
+    display: flex;
+    gap: 4px;
+    margin-top: 5px;
+    flex-wrap: wrap;
+}
+
+.rf-priority-presets button {
+    background: #e0e7ff;
+    color: #3730a3;
+    border: 1px solid #c7d2fe;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    cursor: pointer;
+    user-select: none;
+    font-family: inherit;
+}
+
+.rf-priority-presets button:hover { background: #c7d2fe; }
+
+.rf-priority-presets button.applied {
+    background: #6366f1;
+    color: #fff;
+    border-color: #6366f1;
+}
+
+/* ===================================== Validazione live (opzione C) */
+
+.rf-row.rf-validating input,
+.rf-row.rf-validating textarea {
+    border-color: #f59e0b !important;
+    background: #fffbeb;
+}
+
+.rf-row.rf-valid input,
+.rf-row.rf-valid textarea {
+    border-color: #10b981 !important;
+}
+
+.rf-row.rf-invalid input,
+.rf-row.rf-invalid textarea {
+    border-color: #dc2626 !important;
+    background: #fef2f2;
+}
+
+.rf-validation-msg {
+    font-size: 11px;
+    margin-top: 3px;
+    line-height: 1.3;
+}
+
+.rf-validation-msg.valid { color: #047857; }
+.rf-validation-msg.invalid { color: #b91c1c; }
+.rf-validation-msg.validating { color: #92400e; }
+
+/* ===================================== Mini simulatore inline (opzione E) */
+
+.rf-mini-sim {
+    background: #f0fdf4;
+    border: 2px solid #86efac;
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin-top: 14px;
+}
+
+.rf-mini-sim h4 {
+    margin: 0 0 8px;
+    font-size: 14px;
+    color: #166534;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.rf-mini-sim textarea {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    font-size: 12px;
+    font-family: ui-monospace, Menlo, monospace;
+    min-height: 60px;
+}
+
+.rf-mini-sim .rf-sim-result {
+    margin-top: 10px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    display: none;
+}
+
+.rf-mini-sim .rf-sim-result.match {
+    background: #dcfce7;
+    color: #14532d;
+    border-left: 3px solid #15803d;
+    display: block;
+}
+
+.rf-mini-sim .rf-sim-result.no-match {
+    background: #fee2e2;
+    color: #7f1d1d;
+    border-left: 3px solid #dc2626;
+    display: block;
+}
+
+/* ===================================== Anteprima impatto (opzione D) */
+
+.rf-impact-preview {
+    background: #eff6ff;
+    border: 1px solid #93c5fd;
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin-top: 12px;
+}
+
+.rf-impact-preview h4 {
+    margin: 0 0 8px;
+    font-size: 14px;
+    color: #1e3a8a;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.rf-impact-preview button {
+    background: #3b82f6;
+    color: #fff;
+    border: none;
+    padding: 6px 14px;
+    border-radius: 5px;
+    font-size: 13px;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.rf-impact-preview button:hover { background: #2563eb; }
+.rf-impact-preview button:disabled {
+    background: #94a3b8;
+    cursor: not-allowed;
+}
+
+.rf-impact-preview .rf-impact-result {
+    margin-top: 10px;
+    font-size: 13px;
+    color: #1e3a8a;
+    display: none;
+    line-height: 1.5;
+}
+
+.rf-impact-preview .rf-impact-result.shown { display: block; }
+
+.rf-impact-preview .rf-impact-result strong.rf-impact-num {
+    color: #1e3a8a;
+    font-size: 18px;
+    display: inline-block;
+    margin-right: 6px;
+}
+
+.rf-impact-preview .rf-impact-result ul {
+    margin: 6px 0 0;
+    padding-left: 18px;
+    font-size: 12px;
+}
+
 /* ============================================= Anteprima action_map merge */
 
 .rf-effective-map {
