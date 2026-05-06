@@ -2938,8 +2938,19 @@ class SqliteStorage(Storage):
             rules = [r for r in rules
                      if r.get("source_id") is None
                      or (source_id is not None and r["source_id"] == source_id)]
+        # Flag globale del record: contract_active in forma normalizzata.
+        # Necessario per le rules con require_contract_active=1 (es. le rules
+        # che derivano "contract_standard/extended/h24" dalla tipologia_servizio
+        # devono escludere le anagrafiche con contract_active=0 — clienti senza
+        # contratto attivo non sono "veri" clienti standard).
+        ca_value = record.get("contract_active")
+        rec_is_active = bool(self._gmr_evaluate_match(ca_value, "truthy", None))
+
         matched: set[int] = set()
         for rule in rules:
+            # AND condizionale: la rule richiede contract_active=1 per matchare
+            if rule.get("require_contract_active") and not rec_is_active:
+                continue
             field = rule["source_field"]
             value = record.get(field)
             if self._gmr_evaluate_match(value, rule["match_type"],
