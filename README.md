@@ -10,15 +10,24 @@ self-contained.
 
 ## Stato
 
-**v0.9.3-pre-prod** — Beta in pilota su `datia.it` (2026-05-05). Migrations
+**v0.9.4-pre-prod** — Beta in pilota su `datia.it` (2026-05-06). Migrations
 applicate fino alla 036 (thread tracking RFC 2822 + form regole sincronizzati).
+UX dei form regola v3: toggle Modalità Base/Avanzata + validazione live +
+anteprima impatto + mini-simulatore inline + V001-V008 finalmente wired.
 
 ## Features principali
 
 - 🌳 **Rule Engine v2** con gerarchia padre/figlio (1 livello), priorità globale
-  unica, ereditarietà action_map, validatori V001-V008, simulazione inline,
-  wizard "Suggerisci gruppi", flatten verso listener, test parità (88 casi).
-  Filtro contratto/profilo cliente **solo via gruppi cliente** (M035).
+  unica, ereditarietà action_map, validatori V001-V008/V_PRI_RANGE wired,
+  simulazione inline, wizard "Suggerisci gruppi", flatten verso listener,
+  test parità (88 casi). Filtro contratto/profilo cliente **solo via gruppi
+  cliente** (M035).
+
+- 🎚 **Form regole UX v3** con toggle Modalità **Base / Avanzata** sui 3 form
+  (orfana / gruppo padre / figlio): in Base solo i campi essenziali (gruppi
+  cliente + gruppi destinatari + contenuto + orario + azione), Avanzata
+  sblocca i campi puntuali. Preset priority, validazione live regex,
+  mini-simulatore inline, anteprima impatto su events_log ultimi 7gg.
 
 - 🧩 **Customer sync agnostico** (M028): tabella clienti autoritativa
   alimentabile da postgres / mssql / csv / json url con mapping

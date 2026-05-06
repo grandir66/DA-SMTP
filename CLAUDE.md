@@ -518,6 +518,51 @@ solo quella regola. Audit completo in `events_log.shadow_action` /
 
 ---
 
-*Ultimo aggiornamento: 2026-05-05 — M028-M036 completate (customer sync
-agnostico, gruppi self-contained, shadow mode in cascata, thread
-tracking RFC 2822, semplificazione rule engine, sync form regole).*
+## Form regole UX v3 (2026-05-06): Toggle Modalità Base/Avanzata
+
+I 3 form regola (orfana / gruppo padre / figlio) hanno **toggle
+globale Base/Avanzata** in cima, persistito in `localStorage`.
+Filosofia: in Base solo i campi essenziali per il caso d'uso normale
+(gestione per gruppo cliente); il singolo cliente è eccezione.
+
+### Stack UI
+
+| File | Cosa |
+|---|---|
+| `static/css/rule_form.css` | Classi condivise: `.rf-section` numerate, `.rf-base-only`, `.rf-advanced-only`, `.rf-mode-toggle-bar`, `.rf-priority-presets`, `.rf-mini-sim`, `.rf-impact-preview` |
+| `static/js/rule_form_modes.js` | `rfSetMode` (persiste localStorage), `rfSetPriority`, `rfLiveValidate` (regex client-side), `rfSimulateInline`, `rfPreviewImpact` (POST `/rules/preview-impact`) |
+| `templates/admin/rule_form.html` (orfana) | 5 sezioni + mini-sim + impact in fondo |
+| `templates/admin/rule_group_form.html` | 5 sezioni, no mini-sim/impact (gruppo non agisce) |
+| `templates/admin/rule_child_form.html` | 5 sezioni + mini-sim + impact, banner "ereditato dal padre" in cima |
+| `static/mockups/rule_form_v2.html` | Mockup statico di riferimento (raggiungibile in browser) |
+
+### Backend endpoint nuovo
+
+- `POST /rules/preview-impact` (`routes/rules.py:preview_impact`) —
+  riceve match_* del form, scansiona events_log ultimi 7gg (cap 2000),
+  ritorna conteggio + sample + top domini. Valuta in Python:
+  from_domain (split @), regex compilate, in_service tristate,
+  customer_groups tramite `list_group_members`.
+
+### Validazione regola — V001-V008 finalmente wired
+
+`validate_rule()` di `rules/validators.py` era definito ma mai
+chiamato. Ora wired nei 3 route handler via helper
+`_run_full_validators()` in `routes/rules.py`. Errori bloccano save
+con flash; warnings (W004, W_PRI_GAP) flushed come info.
+
+`upsert_rule` aggiunge:
+- check "almeno un match_*" esteso a M018/M027/M035/M036
+  (`match_customer_groups`, `match_to_group_id`, tristate, ecc.)
+- `re.compile()` su tutti i regex prima del salvataggio
+- mutex `match_to_regex`/`match_to_group_id` e `forward_to_emails`/
+  `forward_to_group_id`
+- range priority 1..999_999 (V007 hard server-side)
+
+`validators.MATCH_FIELDS_*` esteso e `_matches_compatible` gestisce
+ora `match_to_group_id` (uguaglianza) e `match_customer_groups`
+(intersezione CSV non vuota).
+
+---
+
+*Ultimo aggiornamento: 2026-05-06 — Form regole UX v3 (toggle Base/Avanzata + validazione live + anteprima impatto + mini-simulatore + 5 sezioni semantiche identiche).*

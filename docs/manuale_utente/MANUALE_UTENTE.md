@@ -1,7 +1,15 @@
 # Domarc SMTP Relay — Manuale Utente
 
-> **Versione:** 0.9.3 (Beta) · **Aggiornato:** 2026-05-05
+> **Versione:** 0.9.4 (Beta) · **Aggiornato:** 2026-05-06
 > **Pubblico:** operatori e amministratori che gestiscono regole di smistamento mail, IA, autorizzazioni H24 e configurazioni di servizio.
+
+> **Novità 0.9.4** (Form regole UX v3, 2026-05-06):
+> - **Toggle Modalità Base/Avanzata** sui 3 form regola (orfana/gruppo padre/figlio): in Base solo i campi essenziali, in Avanzata tutto.
+> - **Preset priority** (4 button accanto al campo): Critica/Standard/Bassa/Catch-all.
+> - **Validazione live**: feedback verde/rosso inline mentre digiti regex e nome.
+> - **Mini-simulatore inline**: textarea per subject di prova, vede subito se matcha.
+> - **Anteprima impatto**: bottone che mostra "quante mail degli ultimi 7gg avrebbero matchato".
+> - **V001-V008 finalmente attivi**: errori di validazione (regex spezzata, mutex, priority fuori range) bloccano il save con messaggio chiaro.
 
 > **Novità 0.9.3** (Migration 028-036):
 > - **Customer sync agnostico** (M028): la tabella clienti è autoritativa, alimentabile da postgres / mssql / csv / json url con mapping configurabile. Non sei più legato a un manager esterno specifico.
@@ -229,6 +237,47 @@ Una regola è composta da:
 
 ![Form regola con match e forward gruppi](img/25_rule_form_new.png)
 
+I 3 form regola (orfana, gruppo padre, figlio) hanno **stessa struttura
+a 5 sezioni numerate** + **toggle Modalità Base/Avanzata** in cima.
+
+#### Le 5 sezioni
+
+1. **📌 Identificazione e stato** — nome, descrizione, priorità (con
+   preset Critica/Standard/Bassa/Catch-all), enabled, shadow mode
+2. **📨 Origine, destinatari e forward** — il filtro principale è
+   **Gruppi clienti** (M035, card gialla); poi gruppo destinatari +
+   forward al gruppo. In Avanzata: from/to puntuali, lista forward
+3. **✉️ Contenuto del messaggio** — subject regex + body regex (con
+   validazione live verde/rosso mentre digiti)
+4. **🕐 Contesto cliente e orario** — Stato servizio (DENTRO/FUORI),
+   override slot orario (con preset profili STD/EXT/H24)
+5. **⚙️ Azione e flusso** — selettore action (8 opzioni) + parametri
+   specifici dell'azione scelta + delivery extra
+
+#### Modalità Base vs Avanzata
+
+Il toggle in cima al form (default **Base**) nasconde i campi che servono
+raramente. In Base ~12 campi visibili; in Avanzata ~28. La scelta del
+toggle è persistita nel browser (localStorage).
+
+In Base la **gestione si fa per gruppo**: scegli un gruppo cliente
+(`contract_h24`, `vip`, ecc. — auto-popolati via Mappatura M034) +
+gruppo destinatari + subject + orario + azione. Singolo cliente o
+singolo destinatario sono eccezioni e vivono in Avanzata.
+
+Sotto ogni sezione in modalità Base trovi un hint "+ N opzioni
+avanzate ▾" che switcha rapidamente alla modalità completa.
+
+#### Funzioni interattive nuove (2026-05-06)
+
+- **Mini-simulatore inline** in fondo (orfana e figlio): textarea per
+  un subject di prova, mostra ✓/✗ live se matcha
+- **Anteprima impatto**: bottone che chiede "X eventi degli ultimi 7gg
+  avrebbero matchato" + sample + top domini → utile per validare la
+  regola prima di abilitarla
+- **Validazione live** sui campi regex e nome (debounce 350ms)
+- **Preset priority** (4 button) e **preset orari** (dai profili)
+
 Tutti i campi hanno **balloon contestuali** (icona ⓘ a destra dell'etichetta) che si aprono **a destra** con descrizione dettagliata + esempio. Leggili sempre prima di compilare.
 
 #### Esempio pratico — "Tecnici no fuori orario → catchall H24"
@@ -246,12 +295,22 @@ Tutti i campi hanno **balloon contestuali** (icona ⓘ a destra dell'etichetta) 
 
 ### 4.3 Validazione e tooltip
 
-Il sistema rifiuta in salvataggio:
-- regex sintatticamente invalide (V001)
-- almeno un `match_*` deve essere valorizzato (orfani senza criteri sono catch-all pericolosi — V003)
+Il sistema rifiuta in salvataggio (V001-V008/V_PRI_RANGE finalmente
+attivi dal 2026-05-06):
+- regex sintatticamente invalide (`re.compile()` server-side, oltre alla validazione live client-side)
+- regola senza alcun match_* valorizzato (anche `match_customer_groups` o `match_to_group_id` da soli sono accettati, prima erano ignorati)
 - gruppi (`is_group=1`) senza match condivisi (V004)
+- priorità fuori range 1..999_999 (V007)
 - priorità duplicata nello stesso scope (UNIQUE constraint)
-- `match_to_regex` + `match_to_group_id` insieme
+- `match_to_regex` + `match_to_group_id` insieme (mutex M027)
+- `forward_to_emails` + `forward_to_group_id` insieme (mutex M027)
+- figlio con priority ≤ del padre o ≥ del prossimo top-level (V_PRI_RANGE)
+- figlio con `match_customer_groups` disgiunti dal padre (V006: padre `h24_customers` + figlio `std_customers` → impossibile matchare)
+- figlio con `match_to_group_id` diverso dal padre (V006)
+
+Inoltre vengono mostrati come **warning** (non bloccanti):
+- W004 match ridondante padre/figlio (stesso valore su un campo)
+- W_PRI_GAP gap minimo fra fratelli < 5 (consigliato ≥ 10)
 
 ### 4.4 Test e simulazione
 
@@ -928,6 +987,88 @@ regole di auto-assegnamento basate sui campi del cliente. Esempio:
 
 Il sistema ricalcola i membri del gruppo ogni 5 minuti (o on-customer-
 update). Il bottone "Ricalcola adesso" forza il refresh.
+
+### "Cosa fa il toggle Base/Avanzata in cima al form regola?"
+
+In cima al form delle regole (orfana, gruppo padre, figlio) c'è un
+toggle **Modalità: Base / Avanzata**.
+
+- **Base** (default): mostra solo i campi essenziali per il caso
+  d'uso normale. La gestione si fa **per gruppo cliente** + gruppo
+  destinatari + contenuto + orario + azione. ~12 campi visibili.
+- **Avanzata**: si sbloccano tutti i campi puntuali (`from_*`,
+  `to_regex`, lista email forward, tristate "deriva dal gruppo",
+  scope, severity, flag flow, thread continuation, ecc.). I campi
+  avanzati hanno bordo + sfondo giallo per distinguerli. ~28 campi
+  visibili totali.
+
+Lo stato del toggle si **salva nel browser** (localStorage), così
+la prossima volta che apri un form regola riparte dalla modalità che
+avevi scelto. Per cambiare al volo c'è anche il link
+"Mostra avanzate ▾" sotto ogni sezione in modalità Base.
+
+**Quando usare Base?** Sempre, per il 90% dei casi. Filtri principali
+sono Gruppi clienti (built-in `contract_h24`, `vip`, ecc.) +
+Gruppo destinatari + Subject regex + Stato servizio + Azione.
+
+**Quando passare ad Avanzata?**
+- regola per un singolo cliente (override) → `match_from_domain`
+- regola per un singolo destinatario (es. `h24@datia.it` esatto) → `match_to_regex`
+- regola che deve scattare solo se il cliente ha eccezione oggi
+- shadow note esplicita per ricordarsi perché la regola è in shadow
+- regole tecniche con flag flow particolari (continue_in_group, ecc.)
+
+### "Cosa fanno i bottoni preset accanto a Priority?"
+
+I 4 quick-button impostano la priority a un valore "tipico":
+
+| Preset | Valore | Quando usare |
+|---|---|---|
+| ⚡ Critica | 10 | Allarmi, sicurezza, codici H24 — valutate tra le prime |
+| 📋 Standard | 200 | Default per la maggior parte delle regole di contratto |
+| 🐢 Bassa | 500 | Regole "fallback" o auto-reply che non urgono |
+| 🪤 Catch-all | 900 | Cattura tutto ciò che non ha matchato sopra |
+
+Nel form figlio i preset sono **relativi al padre**: +10/+50/+100
+rispetto alla priority del gruppo padre.
+
+### "Perché il regex diventa rosso mentre scrivo?"
+
+Stai vedendo la **validazione live**: il sistema fa `new RegExp()`
+client-side mentre digiti (con un piccolo debounce di 350ms) e ti dice
+subito se la regex è sintatticamente valida. Se è verde puoi salvare
+tranquillo; se è rossa il backend rifiuterebbe comunque il save con
+messaggio chiaro `Regex invalida in match_*_regex: ...`.
+
+Pulsanti "Test" inline per ogni regex restano disponibili per fare un
+match contro un sample arbitrario.
+
+### "A cosa serve il mini-simulatore in fondo al form?"
+
+Il mini-simulatore è una **textarea** in fondo ai form orfana e figlio
+in cui puoi incollare un subject di prova: il sistema verifica live
+se matcha la regola che stai compilando (basato sul `match_subject_regex`
+inserito). Utile per testare rapidamente senza dover salvare la regola e
+fare la simulazione su una pagina separata.
+
+Il form gruppo padre non ha il mini-simulatore: il gruppo non esegue
+azioni dirette, le sue match condizioni sono solo "filtri" ereditati
+dai figli.
+
+### "Cosa fa il bottone 'Calcola impatto'?"
+
+Premilo per chiedere al sistema: "se questa regola fosse attiva, quante
+mail degli ultimi 7 giorni avrebbe matchato?". Il backend scansiona gli
+eventi (cap 2000) applicando i match_* del form e ritorna:
+
+- conteggio matched / totali (con percentuale)
+- prime 5 mail che avrebbero matchato (con from / to / subject)
+- top 5 domini coinvolti
+
+Utilissimo per **capire se la regola è troppo larga o troppo stretta**
+prima di abilitarla in live. Se vedi 500 match su 800 totali probabilmente
+hai un filtro mancante; se vedi 0 match probabilmente il filtro è troppo
+restrittivo o non si è mai presentato un caso simile negli ultimi 7gg.
 
 ### "Le regole avevano `active_rule_set_ids`, ora non lo trovo più"
 

@@ -4,6 +4,147 @@
 Tutte le modifiche rilevanti a questo progetto vengono documentate in questo file.
 Il formato è basato su [Keep a Changelog](https://keepachangelog.com/it/1.1.0/).
 
+## [Unreleased] — 2026-05-06
+
+### Aggiunte — Form regole UX v3: Toggle Modalità Base/Avanzata + 5 opzioni di semplificazione
+
+I 3 form regola (orfana, gruppo padre, figlio) ora hanno un **toggle
+globale Base/Avanzata** in alto e una **filosofia gruppi-first** che
+porta in Base solo i campi essenziali per il caso d'uso normale (la
+gestione dovrebbe avvenire per gruppo cliente; il singolo cliente è
+un'eccezione).
+
+#### Filosofia
+
+- **`match_customer_groups`** è il filtro principale per contratto/
+  segmento (centrale, evidenziato in card gialla con min-height 160px)
+- **`match_to_group_id`** è il gruppo destinatari di default
+- **`forward_to_group_id`** è il default per il forward (lista email
+  in Avanzata)
+- I tristate `match_known_customer` e `match_contract_active` sono
+  in Avanzata con etichetta "(deriva dal gruppo)" per scoraggiarne
+  l'uso quando il gruppo è già scelto (i gruppi `contract_active`/
+  `contract_inactive` built-in M034 li implicano)
+- `match_is_thread_continuation` (M036) in Avanzata: la regola seed
+  priority=5 in `globali` la gestisce nel 99% dei casi
+- `rule_set_id` in Avanzata marcato `(legacy)`: post-M035 il filtro
+  contratto è via gruppi cliente
+
+#### Matrice Base / Avanzata (per le 5 sezioni)
+
+| Sezione | Base | Avanzata |
+|---|---|---|
+| 1 Identificazione | name, description, priority+preset, enabled, shadow | shadow_note, scope, severity, rule_set_id, flag flow, greyed cross-tipo |
+| 2 Origine/destinatari | match_customer_groups★, match_to_group_id, forward_to_group_id | match_from_*, match_to_domain/regex, forward_to_emails, contract_active/known_customer |
+| 3 Contenuto | subject_regex, body_regex (con validazione live) | match_tag |
+| 4 Contesto/orario | match_in_service, match_at_hours+preset profili | match_has_exception_today, match_is_thread_continuation |
+| 5 Azione | action selector + parametri principali, keep_original_delivery | also_deliver_to, apply_rules, severity, quote_original, attach_original, addetto_gestione, forward_to_emails |
+
+#### Opzioni implementate
+
+**B. Preset priority** — 4 quick-button accanto al campo priority:
+   ⚡ Critica (10), 📋 Standard (200), 🐢 Bassa (500), 🪤 Catch-all
+   (900). Per il figlio i preset sono relativi al padre (+10/+50/+100).
+
+**C. Validazione live inline** — try/catch su `new RegExp()` lato
+   client per match_*_regex con feedback verde/rosso a 350ms debounce
+   + check lunghezza minima per il name. Backend rifiuta comunque
+   regex spezzata via `re.compile()` in `upsert_rule`.
+
+**D. Anteprima impatto** — endpoint `/rules/preview-impact` (POST)
+   che scansiona `events_log` degli ultimi 7 giorni (cap 2000 eventi)
+   e ritorna conteggio match + sample + top domini, valutando in
+   Python i match_* del form (regex, domain, in_service,
+   match_customer_groups via `list_group_members`).
+
+**E. Mini-simulatore inline** — textarea per subject di prova in
+   fondo ai form orfana e figlio (gruppo non ne ha bisogno: non
+   esegue azioni). Feedback ✓/✗ basato su client-side regex contro
+   il subject inserito.
+
+**F. Banner ricetta M035 RIMOSSO** dal form orfana (era ridondante
+   con la nuova UX Base che già implementa la stessa semplificazione).
+
+**G. Defaults action_map gruppo padre SFOLTITI**: in Base solo
+   `keep_original_delivery` (il più usato); Avanzata =
+   `also_deliver_to`, `apply_rules`, `reply_mode/prefix/to`,
+   `generate_auth_code`, `auth_code_ttl_hours`.
+
+#### UX
+
+- Toggle radio Base/Avanzata in cima al form, persistito in
+  `localStorage` (chiave `rf-mode`)
+- Hint "+ N opzioni avanzate. Mostra avanzate ▾" sotto ogni sezione
+  in modalità Base con link diretto a switchare modo
+- In modalità Avanzata i campi avanzati hanno bordo giallo + sfondo
+  giallo chiaro per distinguerli visivamente da quelli Base
+- Stessa struttura nei 3 form: campi non applicabili al tipo di
+  regola corrente sono mostrati greyed solo in Avanzata (in Base
+  nascosti totalmente per non distrarre)
+
+#### File
+
+- `static/css/rule_form.css`: +259 righe (toggle, mode classes,
+  preset, validation, mini-sim, impact preview)
+- `static/js/rule_form_modes.js` (NEW, 274 righe): `rfSetMode`,
+  `rfSetPriority`, `rfLiveValidate`, `rfSimulateInline`,
+  `rfPreviewImpact` con CSRF integrato
+- `domarc_relay_admin/routes/rules.py` +132 righe (endpoint
+  `/rules/preview-impact`)
+- `templates/admin/rule_*.html` (3 file): refactor classi
+  `rf-base-only`/`rf-advanced-only`, preset, mini-sim, impact
+- `static/mockups/rule_form_v2.html` (NEW): mockup statico originale
+  che ha guidato il design, lasciato in repo come reference visivo
+  (raggiungibile da `https://192.168.4.25/static/mockups/rule_form_v2.html`)
+
+### Aggiunte — Validazione regola backend irrobustita
+
+Chiusa una serie di gap che permettevano di salvare regole non
+valide (audit utente):
+
+- `upsert_rule` "almeno un match_*" check esteso a tutti i campi
+  M018/M027/M035/M036 (era solo regex/domain → rifiutava regole
+  con SOLO `match_customer_groups` o `match_to_group_id` ecc.)
+- `validate_rule()` (V001-V008/V_PRI_RANGE + W004/W_PRI_GAP)
+  finalmente **wired** in tutti i 3 route handler via helper
+  `_run_full_validators()` (era dead code)
+- `MATCH_FIELDS_TEXT/INT/TRISTATE` esteso con
+  `match_customer_groups`, `match_to_group_id`,
+  `match_is_thread_continuation`
+- `_matches_compatible` ora gestisce `match_to_group_id`
+  (uguaglianza esatta) e `match_customer_groups` (intersezione CSV
+  non vuota)
+- `re.compile()` validation in `upsert_rule` su tutti i regex
+  → regex spezzata rifiutata con messaggio chiaro
+- Mutex backend `match_to_regex`/`match_to_group_id` e
+  `forward_to_emails`/`forward_to_group_id` (prima validato solo
+  in form orfana)
+- Priority range hard-validated 1..999_999 (V007) anche server-side
+- Form figlio ora ha campo `description` (era assente, presente
+  solo in orfana e gruppo)
+- 7 nuovi test M027/M035/M036 in `tests/test_validators.py`
+  → 194/194 totali passano
+
+## [v0.9.5] — 2026-05-05
+
+### Aggiunte — Form regole con 5 sezioni semantiche identiche
+
+Refactor UX delle 3 maschere regola: layout uniforme con 5 sezioni
+numerate, no più 2 colonne strette affiancate.
+
+- **5 sezioni numerate** in tutti e 3 i form (orfana / gruppo padre /
+  figlio): 1 Identificazione, 2 Origine/destinatari/forward,
+  3 Contenuto, 4 Contesto/orario, 5 Azione
+- Layout vertical full-width con sub-blocchi tematici (Mittente /
+  Destinatari / Forward target nella sezione 2)
+- `customer_groups` in card dedicata (min-height 160px, era ~120px)
+- Campi non applicabili al tipo di regola corrente in **greyed**
+  con tooltip ("Solo per gruppi padre" / "Solo per figli", ecc.)
+- CSS condiviso in `static/css/rule_form.css` (un solo punto di
+  manutenzione)
+- Etichette `match_in_service` rinominate "DENTRO orario operativo
+  del cliente" / "FUORI orario operativo del cliente" (più chiare)
+
 ## [Unreleased] — 2026-05-05
 
 ### Aggiunte — M036 Thread tracking RFC 2822 (no duplicate ticket su risposte)

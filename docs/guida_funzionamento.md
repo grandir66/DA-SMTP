@@ -943,6 +943,55 @@ Etichette `match_in_service` rinominate "DENTRO orario operativo del
 cliente" / "FUORI orario operativo del cliente" (più chiare di "in
 servizio" / "fuori servizio").
 
+### 10.8 UX form regole v3 (2026-05-06): Toggle Modalità Base/Avanzata
+
+Refactor delle 3 maschere con **toggle Base/Avanzata** in cima e
+**filosofia gruppi-first** che porta in Base solo i campi essenziali.
+
+**Toggle in cima** persistito in `localStorage` (chiave `rf-mode`):
+- **Base** (default): 5 sezioni snelle con i campi essenziali per il
+  caso d'uso normale (gestione per gruppo cliente)
+- **Avanzata**: si sbloccano i campi puntuali, tristate derivati, flag
+  flow, scope, severity. I campi avanzati hanno bordo + sfondo giallo
+  per distinguerli visivamente
+
+**Funzioni interattive**:
+- **Preset priority** (4 button): ⚡ Critica (10), 📋 Standard (200),
+  🐢 Bassa (500), 🪤 Catch-all (900). Nel form figlio i preset sono
+  offset dal padre (+10/+50/+100).
+- **Validazione live regex** (debounce 350ms): feedback verde/rosso
+  inline mentre l'utente digita.
+- **Mini-simulatore inline** (orfana e figlio): textarea con subject
+  di prova, mostra match ✓/✗ live.
+- **Anteprima impatto**: bottone che chiama `POST
+  /rules/preview-impact` con i match_* del form, scansiona events_log
+  ultimi 7gg e mostra "X eventi avrebbero matchato (Y%) + sample +
+  top domini".
+
+**Filosofia gruppi-first**:
+- `match_customer_groups` è il filtro principale Base (centrale, card
+  gialla evidenziata) — i gruppi built-in (`contract_standard`,
+  `contract_h24`, `vip`, ecc.) sono auto-popolati via Mappatura
+  gruppi M034 e implicano già contract_active, tipologia_servizio,
+  ecc.
+- I tristate `match_known_customer` / `match_contract_active` sono in
+  Avanzata con etichetta "(deriva dal gruppo)" per scoraggiarne l'uso
+- `forward_to_group_id` è default; `forward_to_emails` (lista
+  singola) finisce in Avanzata come "eccezione"
+- `match_is_thread_continuation` (M036) in Avanzata: regola seed
+  priority=5 in `globali` la gestisce nel 99% dei casi
+
+**Validazione server-side V001-V008**: prima esisteva ma non veniva
+mai chiamata. Ora `validate_rule()` è wired nei 3 route handler via
+helper `_run_full_validators()`. Errori bloccano save, warnings
+(W004 ridondante, W_PRI_GAP) sono flushed come info.
+
+**Mockup di riferimento**: `static/mockups/rule_form_v2.html`,
+raggiungibile in browser via
+`https://192.168.4.25/static/mockups/rule_form_v2.html` —
+contiene la stessa UX in versione standalone con dati mock per
+sperimentare il toggle senza creare una regola reale.
+
 ---
 
-*Ultimo aggiornamento: 2026-05-05 — Migration 028-036 (customer sync agnostico, rule_sets, shadow mode in cascata, gruppi cliente self-contained, semplificazione filtro contratto, thread tracking RFC 2822, form regole sincronizzati).*
+*Ultimo aggiornamento: 2026-05-06 — Form regole UX v3 (toggle Base/Avanzata + validazione live + anteprima impatto + mini-simulatore + V001-V008 wired) sopra Migration 028-036 (customer sync agnostico, gruppi self-contained, shadow mode, thread tracking RFC 2822, semplificazione rule engine).*

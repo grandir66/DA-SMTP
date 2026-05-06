@@ -3,7 +3,12 @@
 Documento operatore per la gestione delle regole SMTP nell'admin Domarc Relay
 dopo l'introduzione del modello padre/figlio (migration 010).
 
-> **Aggiornato 2026-05-05** con M028-M036:
+> **Aggiornato 2026-05-06** con Form regole UX v3 + M028-M036:
+> - **UX v3** Toggle Modalità Base/Avanzata sui 3 form (orfana/gruppo/figlio)
+>   con persistenza localStorage, validazione live regex, mini-simulatore
+>   inline, anteprima impatto. Vedi sezione "UX dei form" più sotto.
+> - **V001-V008/V_PRI_RANGE** finalmente wired in `upsert_rule` via helper
+>   `_run_full_validators()` nei 3 route handler (era dead code).
 > - **M029** rule_sets per profilo orario (organizzazione UI; **non** gating runtime dopo M035)
 > - **M033** shadow mode per regola singola
 > - **M034** gruppi cliente self-contained (auto-assignment via mapping rules)
@@ -226,6 +231,82 @@ Cascata:
 Use case tipico: portare in produzione una nuova regola a basso rischio,
 osservare per N giorni in shadow, poi disattivare il flag quando si è
 sicuri.
+
+## UX dei form regola (v3, 2026-05-06)
+
+I 3 form (`/rules/new`, `/rules/groups/new`,
+`/rules/groups/<id>/children/new`) condividono **stessa struttura a 5
+sezioni numerate** + **toggle globale Base/Avanzata** in cima.
+
+### Filosofia
+
+- **Default = gestione per gruppo cliente**: il singolo cliente è
+  un'eccezione. Il filtro principale visibile in Base è
+  `match_customer_groups` (multi-select con i gruppi built-in
+  auto-popolati `contract_standard`/`contract_extended`/
+  `contract_h24`/`vip`/`secondary`/`do_not_follow`).
+- **Default destinatari = gruppo destinatari** (`match_to_group_id`),
+  no singolo destinatario. Stessa cosa per il forward target.
+- **Tristate `match_known_customer` / `match_contract_active`** in
+  Avanzata, etichettati "(deriva dal gruppo)": scegliendo un
+  gruppo cliente built-in l'informazione è già implicita.
+- `match_is_thread_continuation` in Avanzata: la regola seed
+  priority=5 in `globali` la gestisce nel 99% dei casi.
+- `rule_set_id` in Avanzata marcato `(legacy)`: post-M035 il filtro
+  contratto è via gruppi cliente, il set rimane solo organizzazione UI.
+
+### Le 5 sezioni
+
+1. **Identificazione e stato** — name, description, priority+preset, enabled, shadow_mode (Avanzata: shadow_note, scope, severity, rule_set_id, flag flow, greyed cross-tipo)
+2. **Origine, destinatari e forward** — `match_customer_groups`★, `match_to_group_id`, `forward_to_group_id` (Avanzata: from_*, to_domain/regex puntuali, forward_to_emails lista, contract/known)
+3. **Contenuto del messaggio** — subject_regex, body_regex (Avanzata: match_tag)
+4. **Contesto cliente e orario** — match_in_service, match_at_hours+preset (Avanzata: has_exception_today, is_thread_continuation)
+5. **Azione e flusso** — action selector + parametri principali, keep_original_delivery (Avanzata: also_deliver_to, apply_rules, severity, varianti reply_*)
+
+### Funzioni interattive
+
+- **Preset priority** (4 button accanto al campo): ⚡ Critica (10),
+  📋 Standard (200), 🐢 Bassa (500), 🪤 Catch-all (900). Per il figlio
+  i preset sono offset dal padre (+10/+50/+100).
+- **Validazione live regex** (debounce 350ms): mentre digiti in un
+  campo `match_*_regex` il sistema fa `new RegExp()` client-side e
+  mostra ✓ verde / ✗ rosso. Backend rifiuta comunque regex spezzata
+  via `re.compile()` in `upsert_rule` (V_REGEX).
+- **Mini-simulatore inline** (orfana e figlio): textarea per subject
+  di prova in fondo al form, mostra ✓/✗ live contro il
+  `match_subject_regex` corrente.
+- **Anteprima impatto** (orfana e figlio): bottone che chiama `POST
+  /rules/preview-impact` con tutti i match_* del form. Il backend
+  scansiona `events_log` degli ultimi 7gg (cap 2000 eventi) e
+  ritorna conteggio + sample + top domini. Utile per capire se la
+  regola è troppo larga/stretta prima di abilitarla.
+
+### Validazione server-side (V001-V008/V_PRI_RANGE wired)
+
+`validate_rule()` di `rules/validators.py` è ora chiamato da
+`form_view`/`group_form_view`/`child_form_view` via helper
+`_run_full_validators()`. Errori bloccano save (flash `error`),
+warnings (W004 redundant match, W_PRI_GAP gap minimo) flushed come
+`warning` ma il save procede.
+
+`upsert_rule` aggiunge:
+- check "almeno un match_*" esteso a `match_customer_groups`,
+  `match_to_group_id`, `match_at_hours`, `match_tag`, tutti i
+  tristate (era solo regex/domain → rifiutava regole con SOLO
+  filtro su gruppo cliente)
+- `re.compile()` su tutti i regex prima del salvataggio
+- mutex backend `match_to_regex`/`match_to_group_id` e
+  `forward_to_emails`/`forward_to_group_id` (prima validato solo
+  in form orfana)
+- range priority hard 1..999_999 (V007 server-side)
+
+`MATCH_FIELDS_TEXT/INT/TRISTATE` esteso con `match_customer_groups`,
+`match_to_group_id`, `match_is_thread_continuation`.
+`_matches_compatible` ora gestisce:
+- `match_to_group_id`: uguaglianza esatta padre/figlio (V006 se
+  diversi)
+- `match_customer_groups`: intersezione CSV non vuota (V006 se
+  disgiunti, es. padre h24_customers + figlio std_customers)
 
 ## API listener (retro-compatibile)
 

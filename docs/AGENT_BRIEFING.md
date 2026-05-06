@@ -581,9 +581,10 @@ AI Assistant              (top-level, admin only)
 
 - Tutte le tabelle `.dr-table` / `.fw-table` hanno **sort cliccabile** (`static/js/sortable.js`)
 - Indicatore globale nell'header: badge **verde "OK"** o **rosso "KILL ON"** sempre visibile
-- Form regole: **4 sotto-card espanse** (Origine + anagrafica cliente, Destinazione, Oggetto/Contenuto, Orario)
+- Form regole (UX v3, 2026-05-06): **5 sezioni semantiche numerate identiche** nei 3 form (orfana/gruppo padre/figlio) + **toggle globale Base/Avanzata** in cima persistito in localStorage. Vedi §7.5.
 - Mutex visivo: campi reciprocamente esclusivi grigiati con messaggio
 - Preset orari: pulsanti che riempiono `match_at_hours` dai profili esistenti
+- Preset priority (UX v3): 4 quick-button accanto al campo (Critica/Standard/Bassa/Catch-all)
 - Editor template HTML: CodeMirror 5 + preview iframe live + toolbar variabili Jinja
 
 ### 7.3 File template critici
@@ -593,12 +594,56 @@ AI Assistant              (top-level, admin only)
 | `_base.html` | Header + sidebar + flash messages — tocca solo per nav globale |
 | `_group_form_macro.html` | Macro Jinja shared per group form (customer + recipient) |
 | `dashboard.html` | KPI principale + box H24 KPI assorbito |
-| `rule_form.html` | Form regola con 4 sotto-card e preset orari |
+| `rule_form.html` | Form regola **orfana** — 5 sezioni numerate, toggle Base/Avanzata |
+| `rule_group_form.html` | Form **gruppo padre** — stessa struttura, defaults action_map |
+| `rule_child_form.html` | Form **figlio** — stessa struttura, banner "ereditato dal padre" + anteprima action_map merge |
 | `template_form.html` | Editor HTML CodeMirror + preview live |
 | `codes_h24_overview.html` | Panoramica unificata codici H24 con 3 tab |
 | `aggregations_list.html` + `ai_clusters.html` | Coppia con barra tab condivisa |
 | `addresses_list.html` | Lista mittenti/destinatari con bulk action su `/addresses-to` |
 | `customers_list.html` | Filtri AND/OR/NOT + bulk action |
+
+### 7.4 Stack form regole (UX v3, 2026-05-06)
+
+CSS condiviso `static/css/rule_form.css` + JS condiviso
+`static/js/rule_form_modes.js` (no più style/JS inline duplicati nei 3
+template).
+
+| Pezzo | File | Funzione |
+|---|---|---|
+| Toggle Base/Avanzata | `rule_form_modes.js:rfSetMode` | Switch classi `body.rf-mode-base/-advanced` + persiste localStorage `rf-mode` |
+| Preset priority | `rule_form_modes.js:rfSetPriority` | 4 quick-button (10/200/500/900); per figlio offset +N dal padre |
+| Validazione live | `rule_form_modes.js:rfLiveValidate` | `new RegExp()` client-side con debounce 350ms; classi `.rf-valid/.rf-invalid/.rf-validating` |
+| Mini-simulatore | `rule_form_modes.js:rfSimulateInline` | Subject di prova → match contro `match_subject_regex` client-side |
+| Anteprima impatto | `rule_form_modes.js:rfPreviewImpact` | POST `/rules/preview-impact` con tutti i match_* del form, mostra count + sample + top domini |
+
+Mockup statico di riferimento: `static/mockups/rule_form_v2.html` —
+raggiungibile in browser via `https://192.168.4.25/static/mockups/rule_form_v2.html`.
+
+### 7.5 Filosofia Base / Avanzata
+
+Cosa va in **Base** (caso d'uso normale, ~12 campi visibili):
+- **Sezione 1**: name, description, priority+preset, enabled,
+  shadow_mode
+- **Sezione 2**: `match_customer_groups` (★ filtro principale, card
+  gialla min-height 160px), `match_to_group_id`, `forward_to_group_id`
+- **Sezione 3**: `match_subject_regex`, `match_body_regex`
+- **Sezione 4**: `match_in_service`, `match_at_hours` con preset profili
+- **Sezione 5**: action selector + parametri principali action,
+  `keep_original_delivery`
+
+Cosa va in **Avanzata** (~28 campi visibili totali):
+- shadow_note, scope, severity, rule_set_id (legacy), flag flow
+  (continue_after_match, continue_in_group, exit_group_continue,
+  exclusive_match), greyed cross-tipo
+- `match_from_*`, `match_to_domain/regex`, `forward_to_emails`,
+  `match_known_customer` ("deriva dal gruppo"),
+  `match_contract_active` ("deriva dal gruppo")
+- `match_tag`
+- `match_has_exception_today`, `match_is_thread_continuation`
+  ("gestita da regola seed priority=5")
+- `also_deliver_to`, `apply_rules`, `quote_original`,
+  `attach_original`, `addetto_gestione`
 
 ---
 
@@ -633,6 +678,14 @@ Tutti sotto `/api/v1/relay/`, autenticati via `X-API-Key` (no CSRF). Chiave in `
 | `/ai/classify` | Inferenza inline IA (timeout 5s) |
 | `/aggregations/<id>/occurrence` | Replica occurrence statica |
 | `/maintenance/cleanup-oneshot-codes` | Cleanup codici monouso scaduti (nightly) |
+
+### 8.4 Endpoint UI rules (form regole UX v3)
+
+| Endpoint | Scopo |
+|---|---|
+| `POST /rules/test-regex` | Test regex (chiamato dai bottoni Test inline + dal form orfana) |
+| `POST /rules/preview-impact` | Anteprima impatto: scansiona events_log ultimi 7gg con i match_* del form, ritorna `{matched_count, total_events_window, samples[], top_domains[]}` |
+| `GET /rules/lookup-domain?domain=` | Risolve dominio mittente in info cliente (live autocomplete del campo from_domain) |
 
 ### 8.3 Endpoint UI (no api/v1, autenticati via session)
 
@@ -803,4 +856,4 @@ Priorità:
 
 ---
 
-*Documento mantenuto a mano, aggiornare quando arrivano feature significative. Ultima modifica: 2026-05-05 dopo M028-M036 (customer sync agnostico, gruppi self-contained, shadow mode in cascata, thread tracking RFC 2822, semplificazione rule engine, sync form regole).*
+*Documento mantenuto a mano, aggiornare quando arrivano feature significative. Ultima modifica: 2026-05-06 dopo Form regole UX v3 (toggle Base/Avanzata + 5 sezioni semantiche + validazione live + anteprima impatto + mini-simulatore + V001-V008 finalmente wired).*
