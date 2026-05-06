@@ -12,10 +12,17 @@
     .manual-doc h3 { color: var(--dr-gray-dark); margin-top: 1.2rem; }
     .manual-doc table { font-size: 0.85rem; margin: 0.5rem 0; }
     .manual-doc table th { background: var(--dr-gray-light); }
-    .manual-doc code { background: #eef2f7; padding: 0.05rem 0.35rem; border-radius: 3px;
-                       font-size: 0.85rem; }
+    .manual-doc code { background: #eef2f7; color: #0f172a; padding: 0.05rem 0.35rem;
+                       border-radius: 3px; font-size: 0.85rem; }
     .manual-doc pre { background: #0f172a; color: #e2e8f0; padding: 1rem; border-radius: 5px;
-                      overflow: auto; font-size: 0.82rem; }
+                      overflow: auto; font-size: 0.82rem; line-height: 1.5;
+                      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    /* Reset del <code> dentro al <pre>: senza override il <code> innestato eredita
+     * sfondo chiaro + testo chiaro → testo invisibile. Il pre fenced markdown
+     * viene reso come <pre><code>...</code></pre>. */
+    .manual-doc pre code { background: transparent; color: inherit; padding: 0;
+                            font-size: inherit; border-radius: 0;
+                            font-family: inherit; white-space: pre; }
     .manual-doc hr { border: none; border-top: 2px solid var(--dr-gray); margin: 1.5rem 0; }
     .manual-doc a { color: var(--dr-blue); }
     .manual-toolbar { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 1rem;
