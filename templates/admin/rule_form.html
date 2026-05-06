@@ -2,16 +2,20 @@
 {% block title %}{{ 'Nuova regola' if is_new else record.name }}{% endblock %}
 
 {% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/rule_form.css') }}">
 <style>
-    .rf-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; max-width:1100px; }
+    /* Layout vertical full-width — coerente con form gruppo/figlio (M035 refactor 2026-05-05) */
+    .rf-grid { display:flex; flex-direction:column; gap:0.9rem; max-width:1100px; }
     .rf-card { background:#fff; border:1px solid #cbd5e1; border-radius:8px; overflow:hidden; }
-    .rf-card.full { grid-column:1 / -1; }
-    .rf-card > h3 { margin:0; padding:0.8rem 1.1rem; font-size:0.95rem; background:linear-gradient(180deg, #fafbfd 0%, #f4f6fa 100%); color:#0b2a4a; border-bottom:1px solid #cbd5e1; display:flex; align-items:center; gap:0.5rem; }
-    .rf-body { padding:1rem 1.1rem; }
-    .rf-row { display:grid; grid-template-columns:140px 1fr; gap:0.8rem; align-items:start; margin-bottom:0.7rem; }
-    .rf-row > label { font-weight:500; color:#0b2a4a; padding-top:0.4rem; font-size:0.88rem; }
+    .rf-card.full { /* compat: full era per grid 2-col, ora ininfluente */ }
+    .rf-card > h3 { margin:0; padding:0.7rem 1rem; font-size:0.95rem; background:linear-gradient(180deg, #fafbfd 0%, #f4f6fa 100%); color:#0b2a4a; border-bottom:1px solid #cbd5e1; display:flex; align-items:center; gap:0.55rem; font-weight:600; }
+    .rf-card > h3 .rf-section-num { display:inline-flex; width:22px; height:22px; border-radius:50%; background:#1e3a8a; color:#fff; font-size:0.75rem; font-weight:700; align-items:center; justify-content:center; }
+    .rf-card > h3 .rf-section-sub { font-weight:400; color:#64748b; font-size:0.78rem; margin-left:auto; }
+    .rf-body { padding:0.9rem 1.1rem; }
+    .rf-row { display:grid; grid-template-columns:175px 1fr; gap:0.8rem; align-items:start; margin-bottom:0.65rem; }
+    .rf-row > label { font-weight:500; color:#0b2a4a; padding-top:0.4rem; font-size:0.86rem; }
     .rf-row input[type="text"], .rf-row input[type="number"], .rf-row textarea, .rf-row select {
-        width:100%; padding:0.45rem 0.6rem; border:1px solid #cbd5e1; border-radius:5px; font-family:inherit; font-size:0.88rem;
+        width:100%; padding:0.42rem 0.6rem; border:1px solid #cbd5e1; border-radius:5px; font-family:inherit; font-size:0.88rem;
     }
     .rf-row .help { font-size:0.78rem; color:#64748b; margin-top:0.2rem; }
     .rf-row .inline-test { display:flex; gap:0.3rem; align-items:center; }
@@ -175,9 +179,16 @@
         .rf-tip-balloon code { background: rgba(255,255,255,0.15); padding: 1px 4px; border-radius: 2px; }
     </style>
 
-    {# === 1. IDENTIFICAZIONE === #}
+    {# ===================================================================== #}
+    {# SEZIONE 1 — IDENTIFICAZIONE E STATO                                    #}
+    {# Identica nei 3 form (orfana / gruppo / figlio).                       #}
+    {# ===================================================================== #}
     <div class="rf-card">
-        <h3><i class="fas fa-tag"></i> Identificazione</h3>
+        <h3>
+            <span class="rf-section-num">1</span>
+            <i class="fas fa-id-card"></i> Identificazione e stato
+            <span class="rf-section-sub">chi è la regola, set, priorità, attivazione, shadow, scope</span>
+        </h3>
         <div class="rf-body">
             {% if rule_sets %}
             <!-- M035: Banner pattern semplificato -->
@@ -342,49 +353,68 @@
                 </span></span></label>
                 <div><label style="font-weight:400;"><input type="checkbox" name="continue_after_match" {% if record.continue_after_match %}checked{% endif %}> Continua a valutare regole successive</label></div>
             </div>
-        </div>
-    </div>
-
-    {# === 2. SCOPE === #}
-    <div class="rf-card">
-        <h3><i class="fas fa-bullseye"></i> Scope</h3>
-        <div class="rf-body">
+            {# Scope unificato dentro Identificazione (era card separata) #}
             <div class="rf-row">
-                <label>Tipo<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
+                <label>Scope<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
                     <strong>Globale</strong>: tutte le mail.
                     <strong>Mailbox specifica</strong>: solo per scope_ref.
                     <strong>Settore</strong>: solo per pack settore.
                 </span></span></label>
-                <select name="scope_type">
-                    <option value="global"      {% if record.scope_type == 'global' or not record.scope_type %}selected{% endif %}>Globale</option>
-                    <option value="mailbox"     {% if record.scope_type == 'mailbox' %}selected{% endif %}>Mailbox specifica</option>
-                    <option value="sector_pack" {% if record.scope_type == 'sector_pack' %}selected{% endif %}>Settore</option>
-                </select>
-            </div>
-            <div class="rf-row">
-                <label>Riferimento</label>
                 <div>
-                    <input type="text" name="scope_ref" value="{{ record.scope_ref or '' }}" placeholder="es. id mailbox o nome settore">
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem;">
+                        <select name="scope_type">
+                            <option value="global"      {% if record.scope_type == 'global' or not record.scope_type %}selected{% endif %}>Globale</option>
+                            <option value="mailbox"     {% if record.scope_type == 'mailbox' %}selected{% endif %}>Mailbox specifica</option>
+                            <option value="sector_pack" {% if record.scope_type == 'sector_pack' %}selected{% endif %}>Settore</option>
+                        </select>
+                        <input type="text" name="scope_ref" value="{{ record.scope_ref or '' }}" placeholder="riferimento (id mailbox o settore)">
+                    </div>
                     <div class="help">Vuoto se scope = global.</div>
+                </div>
+            </div>
+            {# Campi non applicabili a un'orfana — mostrati greyed per parità con form gruppo/figlio #}
+            <div class="rf-row rf-disabled" title="Non applicabile a una regola orfana — usato solo nei gruppi padre">
+                <label>Esclusivo del gruppo</label>
+                <div>
+                    <label style="font-weight:normal;"><input type="checkbox" disabled> Blocca i top-level successivi se un figlio matcha</label>
+                    <div class="rf-disabled-note">Solo per gruppi padre.</div>
+                </div>
+            </div>
+            <div class="rf-row rf-disabled" title="Non applicabile a una regola orfana — solo per figli del gruppo">
+                <label>Continue in group</label>
+                <div>
+                    <label style="font-weight:normal;"><input type="checkbox" disabled> Dopo match, valuta anche i fratelli successivi</label>
+                    <div class="rf-disabled-note">Solo per figli del gruppo.</div>
+                </div>
+            </div>
+            <div class="rf-row rf-disabled" title="Non applicabile a una regola orfana — solo per figli del gruppo">
+                <label>Exit group + continue</label>
+                <div>
+                    <label style="font-weight:normal;"><input type="checkbox" disabled> Continua nei fratelli e propaga ai top-level</label>
+                    <div class="rf-disabled-note">Solo per figli del gruppo.</div>
                 </div>
             </div>
         </div>
     </div>
 
-    {# === 3. CRITERI DI MATCH (5 sotto-sezioni) === #}
-    <div class="rf-card full">
-        <h3><i class="fas fa-magnifying-glass"></i> Criteri di match
-            <span style="margin-left:auto; font-size:0.78rem; font-weight:normal; color:#64748b;">
-                AND logico tra i campi compilati di tutte le sezioni
-            </span>
+    {# ===================================================================== #}
+    {# SEZIONE 2 — ORIGINE, DESTINATARI E FORWARD                             #}
+    {# Promuovo le 2 vecchie sub-card "Origine" e "Destinazione" a sezione   #}
+    {# unica di pari livello con le altre.                                    #}
+    {# ===================================================================== #}
+    <div class="rf-card">
+        <h3>
+            <span class="rf-section-num">2</span>
+            <i class="fas fa-route"></i> Origine, destinatari e forward
+            <span class="rf-section-sub">mittente, destinatari, gruppi cliente, target forward — AND logico</span>
         </h3>
         <div class="rf-body">
 
-            {# 3.1 ORIGINE === #}
+            {# 2.1 MITTENTE + ANAGRAFICA CLIENTE === #}
             <div class="rf-subcard">
                 <div class="rf-subcard-header">
                     <span class="rf-subcard-icon"><i class="fas fa-paper-plane"></i></span>
-                    Origine (mittente + anagrafica cliente)
+                    Mittente + anagrafica cliente
                     <span class="rf-subcard-stats">
                         Filtra per <em>chi ha mandato</em> la mail e per <em>stato del cliente</em>
                     </span>
@@ -533,11 +563,11 @@
                 </div>
             </div>
 
-            {# 3.2 DESTINAZIONE === #}
+            {# 2.2 DESTINATARI === #}
             <div class="rf-subcard">
                 <div class="rf-subcard-header">
                     <span class="rf-subcard-icon" style="background:#fef3c7; color:#92400e;"><i class="fas fa-envelope-open"></i></span>
-                    Destinazione (destinatario)
+                    Destinatari
                     <span class="rf-subcard-stats">
                         Filtra per <em>a chi è destinata</em> la mail
                     </span>
@@ -591,16 +621,21 @@
                 </div>
             </div>
 
-            {# 3.3 OGGETTO E CONTENUTO === #}
-            <div class="rf-subcard">
-                <div class="rf-subcard-header">
-                    <span class="rf-subcard-icon" style="background:#dcfce7; color:#166534;"><i class="fas fa-file-lines"></i></span>
-                    Oggetto e contenuto
-                    <span class="rf-subcard-stats">
-                        Filtra per <em>cosa c'è scritto</em> nella mail
-                    </span>
-                </div>
-                <div class="rf-subcard-body">
+        </div>
+    </div>
+
+    {# ===================================================================== #}
+    {# SEZIONE 3 — CONTENUTO DEL MESSAGGIO                                    #}
+    {# ===================================================================== #}
+    <div class="rf-card">
+        <h3>
+            <span class="rf-section-num">3</span>
+            <i class="fas fa-file-alt"></i> Contenuto del messaggio
+            <span class="rf-section-sub">subject, body, tag header — filtri su cosa c'è scritto</span>
+        </h3>
+        <div class="rf-body">
+            <div class="rf-subcard" style="border:none; background:transparent; margin:0;">
+                <div class="rf-subcard-body" style="padding:0;">
                     <div class="rf-row">
                         <label>Subject regex<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
                             Regex Python sul <strong>subject</strong>. Es:
@@ -636,19 +671,24 @@
                 </div>
             </div>
 
-            {# 3.4 ORARIO E CALENDARIO === #}
-            <div class="rf-subcard" id="orario-section" style="border:2px solid #3b82f6;">
-                <div class="rf-subcard-header" style="background:linear-gradient(90deg,#dbeafe,#eff6ff);">
-                    <span class="rf-subcard-icon" style="background:#3b82f6; color:#fff;"><i class="fas fa-clock"></i></span>
-                    <strong>Orario e calendario</strong> &nbsp;
-                    <span style="color:#1e40af; font-weight:600; font-size:0.82rem;">
-                        ← qui scegli "in orario" / "fuori orario"
-                    </span>
-                    <span class="rf-subcard-stats">
-                        Filtra per <em>quando arriva</em> la mail
-                    </span>
-                </div>
-                <div class="rf-subcard-body">
+        </div>
+    </div>
+
+    {# ===================================================================== #}
+    {# SEZIONE 4 — CONTESTO CLIENTE E ORARIO                                  #}
+    {# Orario, eccezioni calendario, profilo cliente.                         #}
+    {# (cliente_noto / contratto / thread sono in sezione 2 con i filtri      #}
+    {# anagrafici del mittente, perché servono insieme a from_*)              #}
+    {# ===================================================================== #}
+    <div class="rf-card">
+        <h3>
+            <span class="rf-section-num">4</span>
+            <i class="fas fa-clock"></i> Contesto cliente e orario
+            <span class="rf-section-sub">orario operativo del cliente, eccezioni calendario, override slot</span>
+        </h3>
+        <div class="rf-body">
+            <div class="rf-subcard" id="orario-section" style="border:none; background:transparent; margin:0;">
+                <div class="rf-subcard-body" style="padding:0;">
                     <p style="margin: 0 0 0.7rem; font-size:0.82rem; color:#64748b;">
                         Il rule engine confronta l'orario corrente con il <strong>profilo orario del cliente del mittente</strong>
                         (STD/EXT/H24/NO o profilo custom). Le festività del profilo sono trattate come "fuori servizio".
@@ -746,9 +786,15 @@
         </div>
     </div>
 
-    {# === 4. AZIONE === #}
-    <div class="rf-card full">
-        <h3><i class="fas fa-bolt"></i> Azione</h3>
+    {# ===================================================================== #}
+    {# SEZIONE 5 — AZIONE E FLUSSO                                            #}
+    {# ===================================================================== #}
+    <div class="rf-card">
+        <h3>
+            <span class="rf-section-num">5</span>
+            <i class="fas fa-bolt"></i> Azione e flusso
+            <span class="rf-section-sub">scegli l'azione, parametri specifici e delivery extra</span>
+        </h3>
         <div class="rf-body">
             <div class="rf-action-grid">
                 {% set actions = [

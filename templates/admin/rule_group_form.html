@@ -2,21 +2,7 @@
 {% block title %}{{ 'Nuovo gruppo' if is_new else (record.group_label or record.name) }}{% endblock %}
 
 {% block extra_head %}
-<style>
-    .rg-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; max-width:1100px; }
-    .rg-card { background:#fff; border:1px solid #cbd5e1; border-radius:8px; overflow:hidden; }
-    .rg-card.full { grid-column:1 / -1; }
-    .rg-card > h3 { margin:0; padding:0.8rem 1.1rem; font-size:0.95rem; background:linear-gradient(180deg, #fafbfd 0%, #f4f6fa 100%); color:#0b2a4a; border-bottom:1px solid #cbd5e1; display:flex; align-items:center; gap:0.5rem; }
-    .rg-body { padding:1rem 1.1rem; }
-    .rg-row { display:grid; grid-template-columns:170px 1fr; gap:0.8rem; align-items:start; margin-bottom:0.7rem; }
-    .rg-row > label { font-weight:500; color:#0b2a4a; padding-top:0.4rem; font-size:0.88rem; }
-    .rg-row input[type="text"], .rg-row input[type="number"], .rg-row select, .rg-row textarea {
-        width:100%; padding:0.45rem 0.6rem; border:1px solid #cbd5e1; border-radius:5px; font-family:inherit; font-size:0.88rem;
-    }
-    .rg-row .help { font-size:0.78rem; color:#64748b; margin-top:0.2rem; }
-    .rg-defaults-grid { display:grid; grid-template-columns:1fr 1fr; gap:0.6rem; }
-    .rg-defaults-grid .rg-row { grid-template-columns:120px 1fr; }
-</style>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/rule_form.css') }}">
 {% endblock %}
 
 {% block content %}
@@ -27,287 +13,461 @@
             {% if is_new %}<i class="fas fa-folder-plus"></i> Nuovo gruppo
             {% else %}<i class="fas fa-folder-open"></i> {{ record.group_label or record.name }}{% endif %}
         </h2>
-        <span class="rule-badge-group">gruppo</span>
+        <span class="rule-badge-group">gruppo padre</span>
     </div>
     <p style="color:var(--dr-gray-dark); font-size:0.85rem; margin:0.4rem 0;">
-        Un gruppo definisce <strong>match_*</strong> e <strong>action_map_defaults</strong> condivisi
+        Un <strong>gruppo padre</strong> definisce match_* e action_map_defaults condivisi
         ereditati dai figli. Non esegue azioni dirette: l'azione concreta vive sui figli.
     </p>
 </section>
 
-<form method="post">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-<div class="rg-grid">
+<form method="post" class="rf-form-wrap">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-    <div class="rg-card">
-        <h3><i class="fas fa-id-card"></i> Identificazione</h3>
-        <div class="rg-body">
-            <div class="rg-row">
-                <label>Etichetta</label>
+    {# ===================================================================== #}
+    {# SEZIONE 1 — IDENTIFICAZIONE E STATO                                    #}
+    {# Identica nei 3 form: name, description, priority, enabled, scope,     #}
+    {# shadow_mode/note. Specifico gruppo: exclusive_match.                   #}
+    {# ===================================================================== #}
+    <div class="rf-section">
+        <h3 class="rf-section-head">
+            <span class="rf-section-num">1</span>
+            <i class="fas fa-id-card"></i> Identificazione e stato
+            <span class="rf-section-sub">chi è la regola, priorità, attivazione</span>
+        </h3>
+        <div class="rf-section-body">
+            <div class="rf-row">
+                <label>Etichetta <span style="color:#dc2626;">*</span></label>
                 <div>
                     <input type="text" name="group_label" value="{{ record.group_label or '' }}"
                            placeholder="es. Fuori orario contratto" required>
-                    <div class="help">Mostrata nella tree view come titolo del gruppo.</div>
+                    <div class="rf-help">Mostrata nella tree view come titolo del gruppo. Usata anche per generare il nome interno automatico.</div>
                 </div>
             </div>
-            <div class="rg-row">
+            <div class="rf-row">
                 <label>Nome interno</label>
-                <input type="text" name="name" value="{{ record.name or '' }}"
-                       placeholder="auto: [GRUPPO] {etichetta}">
+                <div>
+                    <input type="text" name="name" value="{{ record.name or '' }}"
+                           placeholder="auto: [GRUPPO] {etichetta}">
+                    <div class="rf-help">Vuoto = generato automaticamente da etichetta.</div>
+                </div>
             </div>
-            <div class="rg-row">
+            <div class="rf-row">
                 <label>Descrizione</label>
-                <textarea name="description" rows="2" style="width:100%; font-family:inherit;"
-                          placeholder="Note interne sul gruppo (perche', quando matcha, cosa fa)">{{ record.description or '' }}</textarea>
+                <textarea name="description" rows="2"
+                          placeholder="Note operative: perché esiste, quando matcha, cosa fa, chi lo gestisce">{{ record.description or '' }}</textarea>
             </div>
-            <div class="rg-row">
-                <label>Priority globale</label>
+            <div class="rf-row">
+                <label>Priority globale <span style="color:#dc2626;">*</span></label>
                 <div>
                     <input type="number" name="priority" min="1" max="999999" value="{{ record.priority or 100 }}" required>
-                    <div class="help">1..999999. Lascia spazio (≥10) tra il padre e i figli per inserimenti futuri.</div>
+                    <div class="rf-help">Range 1..999999 (più basso = valutato prima). Lascia spazio (≥10) tra il padre e i figli per inserimenti futuri.</div>
                 </div>
             </div>
-            <div class="rg-row">
+            <div class="rf-row">
+                <label>Scope</label>
+                <div>
+                    <div class="rf-row-pair">
+                        <select name="scope_type">
+                            <option value="global" {% if record.scope_type=='global' or not record.scope_type %}selected{% endif %}>global</option>
+                            <option value="sector_pack" {% if record.scope_type=='sector_pack' %}selected{% endif %}>sector_pack</option>
+                        </select>
+                        <input type="text" name="scope_ref" value="{{ record.scope_ref or '' }}"
+                               placeholder="settore (solo se sector_pack)">
+                    </div>
+                    <div class="rf-help">Default <code>global</code>. <code>sector_pack</code> per regole specifiche per settore.</div>
+                </div>
+            </div>
+            <div class="rf-row">
                 <label>Stato</label>
                 <label style="font-weight:normal;">
-                    <input type="checkbox" name="enabled" {% if record.enabled is not defined or record.enabled %}checked{% endif %}> Gruppo attivo
+                    <input type="checkbox" name="enabled" {% if record.enabled is not defined or record.enabled %}checked{% endif %}>
+                    Gruppo attivo
                 </label>
             </div>
-            <div class="rg-row">
-                <label>Esclusivo</label>
+            <div class="rf-row">
+                <label>Esclusivo del gruppo</label>
                 <div>
                     <label style="font-weight:normal;">
                         <input type="checkbox" name="exclusive_match" {% if record.exclusive_match is not defined or record.exclusive_match %}checked{% endif %}>
                         Blocca i top-level successivi se un figlio matcha
                     </label>
-                    <div class="help">Default ON. Se OFF, dopo un match nel gruppo si valutano comunque gruppi/orfane successive.</div>
+                    <div class="rf-help">Default <strong>ON</strong>. Se OFF, dopo un match nel gruppo si valutano comunque gruppi/orfane successivi.</div>
                 </div>
             </div>
-            <div class="rg-row">
-                <label>Scope</label>
+            <div class="rf-row rf-row-shadow">
+                <label>🌒 Shadow mode</label>
                 <div>
-                    <select name="scope_type">
-                        <option value="global" {% if record.scope_type=='global' or not record.scope_type %}selected{% endif %}>global</option>
-                        <option value="sector_pack" {% if record.scope_type=='sector_pack' %}selected{% endif %}>sector_pack</option>
-                    </select>
-                    <input type="text" name="scope_ref" value="{{ record.scope_ref or '' }}" placeholder="settore (solo per sector_pack)">
+                    <label style="font-weight:normal;">
+                        <input type="checkbox" name="shadow_mode" value="1" {% if record.shadow_mode %}checked{% endif %}>
+                        Gruppo in shadow (azione SOPPRESSA, ereditata dai figli)
+                    </label>
+                    <input type="text" name="shadow_note" value="{{ record.shadow_note or '' }}"
+                           placeholder="Note shadow (es. Test 2026-05-05, validare 7gg)"
+                           style="width:100%; margin-top:0.3rem; font-size:0.83rem;">
+                    <div class="rf-help">Le mail vengono valutate ma viene fatto solo <code>default_delivery</code>. Audit in <code>events_log.shadow_action</code>.</div>
+                </div>
+            </div>
+            {# Campi non applicabili al gruppo: mostrati greyed per coerenza con orfana/figlio #}
+            <div class="rf-row rf-disabled" title="Non applicabile a un gruppo padre — usato solo da regole orfane / figli">
+                <label>Continue after match</label>
+                <div>
+                    <label style="font-weight:normal;"><input type="checkbox" disabled> Dopo il match, valuta comunque le regole successive</label>
+                    <div class="rf-disabled-note">Solo per regole orfane.</div>
+                </div>
+            </div>
+            <div class="rf-row rf-disabled" title="Non applicabile a un gruppo padre — solo per figli del gruppo">
+                <label>Continue in group</label>
+                <div>
+                    <label style="font-weight:normal;"><input type="checkbox" disabled> Dopo match, valuta anche i fratelli successivi</label>
+                    <div class="rf-disabled-note">Solo per figli del gruppo.</div>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="rg-card">
-        <h3><i class="fas fa-filter"></i> Match condivisi (ereditati dai figli)</h3>
-        <div class="rg-body">
-            <div class="rg-row">
-                <label>To dominio</label>
-                <input type="text" name="match_to_domain" value="{{ record.match_to_domain or '' }}" placeholder="es. domarc.it">
+    {# ===================================================================== #}
+    {# SEZIONE 2 — ORIGINE, DESTINATARI E FORWARD                             #}
+    {# Tutto ciò che riguarda il routing della mail: chi la manda, a chi è   #}
+    {# diretta, su quali gruppi cliente filtrare, dove inoltrarla.            #}
+    {# ===================================================================== #}
+    <div class="rf-section">
+        <h3 class="rf-section-head">
+            <span class="rf-section-num">2</span>
+            <i class="fas fa-route"></i> Origine, destinatari e forward
+            <span class="rf-section-sub">mittente, destinatari, gruppi cliente, target forward</span>
+        </h3>
+        <div class="rf-section-body">
+
+            {# ----- Sub-blocco: MITTENTE ----- #}
+            <div class="rf-subblock">
+                <div class="rf-subblock-head"><i class="fas fa-paper-plane"></i> Mittente</div>
+                <div class="rf-row">
+                    <label>From dominio</label>
+                    <div>
+                        <input type="text" name="match_from_domain" value="{{ record.match_from_domain or '' }}"
+                               placeholder="es. cliente.com">
+                        <div class="rf-help">Match esatto sul dominio del mittente. Vuoto = qualsiasi.</div>
+                    </div>
+                </div>
+                <div class="rf-row">
+                    <label>From regex</label>
+                    <input type="text" name="match_from_regex" value="{{ record.match_from_regex or '' }}"
+                           placeholder="(?i)^supporto@.*\.it$">
+                </div>
             </div>
-            <div class="rg-row">
-                <label>From dominio</label>
-                <input type="text" name="match_from_domain" value="{{ record.match_from_domain or '' }}" placeholder="es. cliente.com">
+
+            {# ----- Sub-blocco: DESTINATARI ----- #}
+            <div class="rf-subblock">
+                <div class="rf-subblock-head"><i class="fas fa-inbox"></i> Destinatari</div>
+                <div class="rf-row">
+                    <label>To dominio</label>
+                    <input type="text" name="match_to_domain" value="{{ record.match_to_domain or '' }}"
+                           placeholder="es. domarc.it">
+                </div>
+                <div class="rf-row">
+                    <label>To regex <small>(mutex con gruppo)</small></label>
+                    <div>
+                        <input type="text" name="match_to_regex" value="{{ record.match_to_regex or '' }}"
+                               placeholder="(?i)^supporto@">
+                        <div class="rf-help">Mutex con "Gruppo destinatari" sotto. Usa l'una o l'altro, non entrambi.</div>
+                    </div>
+                </div>
+                <div class="rf-row">
+                    <label>Gruppo destinatari (M027)</label>
+                    <div>
+                        <select name="match_to_group_id">
+                            <option value="">— nessuno (qualsiasi destinatario) —</option>
+                            {% for rg in (recipient_groups or []) %}
+                                <option value="{{ rg.id }}" {% if record.match_to_group_id == rg.id %}selected{% endif %}>
+                                    {{ rg.name }} ({{ rg.member_count or 0 }} membri)
+                                </option>
+                            {% endfor %}
+                        </select>
+                        <div class="rf-help">Scatta solo se uno dei destinatari è membro del gruppo. <a href="{{ url_for('recipient_groups.list_view') }}" target="_blank">Gestisci gruppi destinatari</a>.</div>
+                    </div>
+                </div>
             </div>
-            <div class="rg-row">
-                <label>Subject regex</label>
-                <input type="text" name="match_subject_regex" value="{{ record.match_subject_regex or '' }}" placeholder="(?i)urgente|critico">
+
+            {# ----- Sub-blocco: GRUPPI CLIENTI (M035) — il filtro principale ----- #}
+            <div class="rf-customer-groups-block">
+                <div class="rf-cg-head">
+                    <i class="fas fa-users"></i> Gruppi clienti (M035) — filtro principale per contratto/segmento
+                </div>
+                {% set selected_groups = (record.match_customer_groups or '').split(',') | map('trim') | list %}
+                <select name="match_customer_groups" multiple>
+                    {% for g in (customer_groups or []) %}
+                    <option value="{{ g.code }}" {% if g.code in selected_groups %}selected{% endif %}>
+                        {% if g.is_builtin %}🏛️ {% endif %}{{ g.code }} — {{ g.name }} ({{ g.member_count }} membri)
+                    </option>
+                    {% else %}
+                    <option disabled>Nessun gruppo definito</option>
+                    {% endfor %}
+                </select>
+                <div class="rf-cg-help">
+                    <strong>Ctrl/Cmd</strong> per selezione multipla (logica OR). Vuoto = tutti i clienti.
+                    Gruppi 🏛️ sono <strong>built-in auto-popolati</strong> via
+                    <a href="{{ url_for('group_mapping.list_view') }}" target="_blank">Mappatura gruppi (M034)</a>:
+                    <code>contract_standard</code>, <code>contract_extended</code>, <code>contract_h24</code>,
+                    <code>contract_inactive</code>, <code>vip</code>, <code>secondary</code>, <code>do_not_follow</code>.
+                    Ereditato dai figli del gruppo.
+                </div>
             </div>
-            <div class="rg-row">
-                <label>From regex</label>
-                <input type="text" name="match_from_regex" value="{{ record.match_from_regex or '' }}">
-            </div>
-            <div class="rg-row">
-                <label>To regex</label>
-                <input type="text" name="match_to_regex" value="{{ record.match_to_regex or '' }}"
-                       placeholder="(?i)^supporto@">
-                <div class="help">Mutex con "Gruppo destinatari" sotto.</div>
-            </div>
-            <div class="rg-row">
-                <label>Gruppo destinatari (M027)</label>
-                <div>
-                    <select name="match_to_group_id">
-                        <option value="">— nessuno (qualsiasi destinatario) —</option>
+
+            {# ----- Sub-blocco: FORWARD TARGET ----- #}
+            <div class="rf-subblock">
+                <div class="rf-subblock-head"><i class="fas fa-share"></i> Forward target ereditato (action <code>forward</code>)</div>
+                <div class="rf-row">
+                    <label>Forward to (lista email)</label>
+                    <div>
+                        <input type="text" name="forward_to_emails" value="{{ record.forward_to_emails or '' }}"
+                               placeholder="reperibile@studio.it; sostituto@studio.it">
+                        <div class="rf-help">Lista separata da <code>;</code> <code>,</code> o spazi. Mutex con "Forward to gruppo".</div>
+                    </div>
+                </div>
+                <div class="rf-row">
+                    <label>Forward to gruppo</label>
+                    <select name="forward_to_group_id">
+                        <option value="">— nessun gruppo —</option>
                         {% for rg in (recipient_groups or []) %}
-                            <option value="{{ rg.id }}"
-                                    {% if record.match_to_group_id == rg.id %}selected{% endif %}>
+                            <option value="{{ rg.id }}" {% if record.forward_to_group_id == rg.id %}selected{% endif %}>
                                 {{ rg.name }} ({{ rg.member_count or 0 }} membri)
                             </option>
                         {% endfor %}
                     </select>
-                    <div class="help">
-                        Scatta solo se uno dei destinatari della mail e' membro del gruppo.
-                        <strong>Mutex con "To regex"</strong>.
-                        <a href="{{ url_for('recipient_groups.list_view') }}" target="_blank">Gestisci gruppi destinatari</a>.
-                    </div>
                 </div>
             </div>
-            <div class="rg-row">
+        </div>
+    </div>
+
+    {# ===================================================================== #}
+    {# SEZIONE 3 — CONTENUTO DEL MESSAGGIO                                    #}
+    {# Subject, body, tag header.                                              #}
+    {# ===================================================================== #}
+    <div class="rf-section">
+        <h3 class="rf-section-head">
+            <span class="rf-section-num">3</span>
+            <i class="fas fa-file-alt"></i> Contenuto del messaggio
+            <span class="rf-section-sub">subject, body, tag header</span>
+        </h3>
+        <div class="rf-section-body">
+            <div class="rf-row">
+                <label>Subject regex</label>
+                <input type="text" name="match_subject_regex" value="{{ record.match_subject_regex or '' }}"
+                       placeholder="(?i)urgente|critico">
+            </div>
+            <div class="rf-row">
                 <label>Body regex</label>
-                <input type="text" name="match_body_regex" value="{{ record.match_body_regex or '' }}"
-                       placeholder="(?i)\b(urgent|critical)\b">
+                <div>
+                    <input type="text" name="match_body_regex" value="{{ record.match_body_regex or '' }}"
+                           placeholder="(?i)\b(urgent|critical)\b">
+                    <div class="rf-help">Match sul body testuale (troncato a 16 KB).</div>
+                </div>
             </div>
-            <div class="rg-row">
+            <div class="rf-row">
                 <label>Tag custom</label>
-                <input type="text" name="match_tag" value="{{ record.match_tag or '' }}"
-                       placeholder="es. spam, priority">
-                <div class="help">Match su header X-Tag o equivalente. Vuoto = qualsiasi.</div>
-            </div>
-            <div class="rg-row">
-                <label>Override slot orario</label>
                 <div>
-                    <input type="text" name="match_at_hours" id="rg_match_at_hours"
-                           value="{{ record.match_at_hours or '' }}"
-                           placeholder="es. 22:00-06:00 oppure mon=00:00-08:00;sat=*">
-                    <div class="help">
-                        Override sul profilo cliente: se valorizzato, ignora il profilo
-                        e applica solo se l'orario corrente cade in questo slot.
-                        Vuoto = usa profilo del cliente (con "Stato servizio" sopra).
-                    </div>
-                </div>
-            </div>
-            <div class="rg-row">
-                <label>Stato servizio</label>
-                <select name="match_in_service">
-                    <option value="" {% if record.match_in_service is none %}selected{% endif %}>indifferente</option>
-                    <option value="true" {% if record.match_in_service==1 %}selected{% endif %}>in orario</option>
-                    <option value="false" {% if record.match_in_service==0 %}selected{% endif %}>fuori orario</option>
-                </select>
-            </div>
-            <div class="rg-row">
-                <label>Contratto attivo</label>
-                <select name="match_contract_active">
-                    <option value="" {% if record.match_contract_active is none %}selected{% endif %}>indifferente</option>
-                    <option value="true" {% if record.match_contract_active==1 %}selected{% endif %}>con contratto</option>
-                    <option value="false" {% if record.match_contract_active==0 %}selected{% endif %}>senza contratto</option>
-                </select>
-            </div>
-            <div class="rg-row">
-                <label>Cliente noto</label>
-                <select name="match_known_customer">
-                    <option value="" {% if record.match_known_customer is none %}selected{% endif %}>indifferente</option>
-                    <option value="true" {% if record.match_known_customer==1 %}selected{% endif %}>censito</option>
-                    <option value="false" {% if record.match_known_customer==0 %}selected{% endif %}>non censito</option>
-                </select>
-            </div>
-            <div class="rg-row">
-                <label>Eccezione oggi</label>
-                <select name="match_has_exception_today">
-                    <option value="" {% if record.match_has_exception_today is none %}selected{% endif %}>indifferente</option>
-                    <option value="true" {% if record.match_has_exception_today==1 %}selected{% endif %}>solo se eccezione attiva</option>
-                    <option value="false" {% if record.match_has_exception_today==0 %}selected{% endif %}>solo senza eccezione</option>
-                </select>
-            </div>
-            <div class="rg-row">
-                <label>Risposta a thread (M036)</label>
-                <select name="match_is_thread_continuation">
-                    <option value="" {% if record.match_is_thread_continuation is none %}selected{% endif %}>indifferente</option>
-                    <option value="true" {% if record.match_is_thread_continuation==1 %}selected{% endif %}>solo continuazioni di thread tracciato</option>
-                    <option value="false" {% if record.match_is_thread_continuation==0 %}selected{% endif %}>solo prime mail (no risposte)</option>
-                </select>
-                <div class="help">RFC 2822: la mail e' una risposta a un evento gia' processato.</div>
-            </div>
-
-            <!-- M035: Filtro per gruppi cliente (auto-popolati via Mappatura gruppi) -->
-            <div class="rg-row" style="background:#fef9c3; padding:0.55rem 0.7rem; border-radius:6px; border-left:3px solid #ca8a04;">
-                <label>Gruppi clienti (M035)</label>
-                <div>
-                    {% set selected_groups = (record.match_customer_groups or '').split(',') | map('trim') | list %}
-                    <select name="match_customer_groups" multiple
-                            style="width:100%; min-height:140px; font-size:0.85rem; font-family:ui-monospace,Menlo,monospace;">
-                        {% for g in (customer_groups or []) %}
-                        <option value="{{ g.code }}"
-                                {% if g.code in selected_groups %}selected{% endif %}>
-                            {% if g.is_builtin %}🏛️ {% endif %}{{ g.code }} — {{ g.name }} ({{ g.member_count }} membri)
-                        </option>
-                        {% else %}
-                        <option disabled>Nessun gruppo definito</option>
-                        {% endfor %}
-                    </select>
-                    <div class="help" style="font-size:0.78rem; color:#713f12;">
-                        <strong>Filtro principale per contratto/segmento</strong> (Ctrl/Cmd per multipla, logica OR).
-                        Gruppi built-in 🏛️ auto-popolati via
-                        <a href="{{ url_for('group_mapping.list_view') }}" target="_blank">Mappatura gruppi</a>:
-                        <code>contract_standard</code>, <code>contract_extended</code>, <code>contract_h24</code>,
-                        <code>contract_inactive</code>, <code>vip</code>, <code>secondary</code>, <code>do_not_follow</code>.
-                        Ereditato dai figli del gruppo.
-                    </div>
+                    <input type="text" name="match_tag" value="{{ record.match_tag or '' }}"
+                           placeholder="es. spam, priority">
+                    <div class="rf-help">Match su header <code>X-Tag</code> o equivalente. Vuoto = qualsiasi.</div>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="rg-card full">
-        <h3><i class="fas fa-cogs"></i> Defaults action_map ereditabili (whitelist)</h3>
-        <div class="rg-body">
-            <p class="help" style="margin-top:0;">Solo le chiavi qui presenti vengono ereditate dai figli. I figli possono sovrascriverle individualmente.</p>
-            <div class="rg-defaults-grid">
-                <div>
-                    <h4 style="margin:0 0 0.4rem; font-size:0.88rem; color:var(--dr-primary);">Delivery</h4>
-                    <div class="rg-row">
-                        <label>keep_original</label>
-                        <label style="font-weight:normal;">
-                            <input type="checkbox" name="action_map_keep_original_delivery"
-                                   {% if record.action_map and record.action_map.keep_original_delivery %}checked{% endif %}>
-                            Recapita anche al destinatario originale
-                        </label>
-                    </div>
-                    <div class="rg-row">
-                        <label>also_deliver_to</label>
-                        <input type="text" name="action_map_also_deliver_to"
-                               value="{{ record.action_map.also_deliver_to if record.action_map else '' }}"
-                               placeholder="ticket@domarc.it,...">
-                    </div>
-                    <div class="rg-row">
-                        <label>apply_rules</label>
-                        <label style="font-weight:normal;">
-                            <input type="checkbox" name="action_map_apply_rules"
-                                   {% if record.action_map and record.action_map.apply_rules %}checked{% endif %}>
-                            Forza riapplicazione regole
-                        </label>
-                    </div>
-                </div>
-                <div>
-                    <h4 style="margin:0 0 0.4rem; font-size:0.88rem; color:var(--dr-primary);">Auto-reply defaults</h4>
-                    <div class="rg-row">
-                        <label>reply_mode</label>
-                        <select name="action_map_reply_mode">
-                            <option value="" {% if not record.action_map or not record.action_map.reply_mode %}selected{% endif %}>—</option>
-                            <option value="to_sender_only" {% if record.action_map and record.action_map.reply_mode=='to_sender_only' %}selected{% endif %}>to_sender_only</option>
-                            <option value="reply_all" {% if record.action_map and record.action_map.reply_mode=='reply_all' %}selected{% endif %}>reply_all</option>
-                            <option value="to_alias" {% if record.action_map and record.action_map.reply_mode=='to_alias' %}selected{% endif %}>to_alias</option>
+    {# ===================================================================== #}
+    {# SEZIONE 4 — CONTESTO CLIENTE E ORARIO                                  #}
+    {# Stato servizio, orari, contratto, cliente noto, eccezione, thread.   #}
+    {# ===================================================================== #}
+    <div class="rf-section">
+        <h3 class="rf-section-head">
+            <span class="rf-section-num">4</span>
+            <i class="fas fa-clock"></i> Contesto cliente e orario
+            <span class="rf-section-sub">profilo orario, contratto, stato cliente, thread</span>
+        </h3>
+        <div class="rf-section-body">
+
+            {# ----- Sub-blocco: ORARIO ----- #}
+            <div class="rf-subblock">
+                <div class="rf-subblock-head"><i class="fas fa-business-time"></i> Finestra oraria</div>
+                <div class="rf-row">
+                    <label>Stato servizio</label>
+                    <div>
+                        <select name="match_in_service">
+                            <option value="" {% if record.match_in_service is none %}selected{% endif %}>indifferente</option>
+                            <option value="true" {% if record.match_in_service==1 %}selected{% endif %}>solo DENTRO orario operativo del cliente</option>
+                            <option value="false" {% if record.match_in_service==0 %}selected{% endif %}>solo FUORI orario operativo del cliente</option>
                         </select>
+                        <div class="rf-help">Calcolato dal profilo del cliente (STD/EXT/H24/NO) + ora corrente. Rispetta automaticamente STD ⊂ EXT ⊂ H24.</div>
                     </div>
-                    <div class="rg-row">
-                        <label>subject_prefix</label>
-                        <input type="text" name="action_map_reply_subject_prefix"
-                               value="{{ record.action_map.reply_subject_prefix if record.action_map else '' }}">
+                </div>
+                <div class="rf-row">
+                    <label>Override slot orario</label>
+                    <div>
+                        <input type="text" name="match_at_hours" value="{{ record.match_at_hours or '' }}"
+                               placeholder="es. 22:00-06:00 oppure mon=00:00-08:00;sat=*">
+                        <div class="rf-help">Se valorizzato, ignora il profilo del cliente e applica solo se l'orario corrente cade nello slot. Vuoto = usa "Stato servizio" sopra.</div>
                     </div>
-                    <div class="rg-row">
-                        <label>reply_to</label>
-                        <input type="text" name="action_map_reply_to"
-                               value="{{ record.action_map.reply_to if record.action_map else '' }}">
+                </div>
+            </div>
+
+            {# ----- Sub-blocco: CLIENTE ----- #}
+            <div class="rf-subblock">
+                <div class="rf-subblock-head"><i class="fas fa-user-check"></i> Stato cliente</div>
+                <div class="rf-row">
+                    <label>Contratto attivo</label>
+                    <select name="match_contract_active">
+                        <option value="" {% if record.match_contract_active is none %}selected{% endif %}>indifferente</option>
+                        <option value="true" {% if record.match_contract_active==1 %}selected{% endif %}>solo con contratto</option>
+                        <option value="false" {% if record.match_contract_active==0 %}selected{% endif %}>solo senza contratto</option>
+                    </select>
+                </div>
+                <div class="rf-row">
+                    <label>Cliente noto</label>
+                    <div>
+                        <select name="match_known_customer">
+                            <option value="" {% if record.match_known_customer is none %}selected{% endif %}>indifferente</option>
+                            <option value="true" {% if record.match_known_customer==1 %}selected{% endif %}>solo censito (in customer_aliases / client_domains)</option>
+                            <option value="false" {% if record.match_known_customer==0 %}selected{% endif %}>solo non censito</option>
+                        </select>
+                        <div class="rf-help">Cliente "noto" = mittente o destinatario risolto a un <code>codcli</code>.</div>
                     </div>
-                    <div class="rg-row">
-                        <label>generate_auth_code</label>
-                        <label style="font-weight:normal;">
-                            <input type="checkbox" name="action_map_generate_auth_code"
-                                   {% if record.action_map and record.action_map.generate_auth_code %}checked{% endif %}>
-                        </label>
+                </div>
+                <div class="rf-row">
+                    <label>Eccezione oggi</label>
+                    <div>
+                        <select name="match_has_exception_today">
+                            <option value="" {% if record.match_has_exception_today is none %}selected{% endif %}>indifferente</option>
+                            <option value="true" {% if record.match_has_exception_today==1 %}selected{% endif %}>solo se eccezione oraria attiva oggi</option>
+                            <option value="false" {% if record.match_has_exception_today==0 %}selected{% endif %}>solo senza eccezione oggi</option>
+                        </select>
+                        <div class="rf-help">Es. festività, chiusure, orari speciali da <code>service_hours.schedule_exceptions</code>.</div>
                     </div>
-                    <div class="rg-row">
-                        <label>auth_code_ttl_h</label>
-                        <input type="number" name="action_map_auth_code_ttl_hours"
-                               value="{{ record.action_map.auth_code_ttl_hours if record.action_map else '' }}"
-                               min="1" max="720">
-                    </div>
+                </div>
+            </div>
+
+            {# ----- Sub-blocco: THREAD (M036) ----- #}
+            <div class="rf-row rf-row-thread">
+                <label>🔗 Risposta a thread (M036)</label>
+                <div>
+                    <select name="match_is_thread_continuation">
+                        <option value="" {% if record.match_is_thread_continuation is none %}selected{% endif %}>indifferente</option>
+                        <option value="true" {% if record.match_is_thread_continuation==1 %}selected{% endif %}>solo continuazioni di thread tracciato</option>
+                        <option value="false" {% if record.match_is_thread_continuation==0 %}selected{% endif %}>solo prime mail (no risposte)</option>
+                    </select>
+                    <div class="rf-help">RFC 2822 In-Reply-To/References: la mail è una risposta a un evento già processato (e quindi NON deve aprire un nuovo ticket).</div>
                 </div>
             </div>
         </div>
     </div>
 
+    {# ===================================================================== #}
+    {# SEZIONE 5 — AZIONE E FLUSSO                                            #}
+    {# Per il GRUPPO: solo defaults action_map ereditabili (whitelist).       #}
+    {# Action selector e specifici sono greyed (i figli definiscono l'azione)#}
+    {# ===================================================================== #}
+    <div class="rf-section">
+        <h3 class="rf-section-head">
+            <span class="rf-section-num">5</span>
+            <i class="fas fa-bolt"></i> Azione e flusso
+            <span class="rf-section-sub">il gruppo non esegue azioni, solo defaults ereditabili dai figli</span>
+        </h3>
+        <div class="rf-section-body">
+
+            {# Action selector: greyed nel gruppo (i figli scelgono) #}
+            <div class="rf-disabled" title="Il gruppo padre non esegue azioni dirette: l'azione concreta vive sui figli.">
+                <p style="margin:0 0 0.4rem; color:#475569; font-size:0.85rem;">
+                    <i class="fas fa-info-circle"></i> Selettore azione (gestito sui figli, non qui)
+                </p>
+                <div class="rf-action-grid">
+                    {% for code, label, icon in [
+                        ('auto_reply','Auto-reply','fa-reply'),
+                        ('create_ticket','Crea ticket','fa-ticket'),
+                        ('forward','Forward','fa-share'),
+                        ('redirect','Redirect','fa-arrow-right-arrow-left'),
+                        ('quarantine','Quarantena','fa-shield-virus'),
+                        ('flag_only','Flag only','fa-flag'),
+                        ('ignore','Ignora','fa-ban'),
+                        ('ai_classify','IA classifica','fa-robot'),
+                    ] %}
+                    <div class="rf-action-card"><i class="fas {{ icon }}"></i><div class="rf-action-name">{{ label }}</div></div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            {# Defaults action_map ereditabili (whitelist PARENT_ACTION_MAP_DEFAULTS) #}
+            <div class="rf-subblock" style="margin-top:0.9rem;">
+                <div class="rf-subblock-head"><i class="fas fa-cogs"></i> Defaults action_map ereditabili dai figli</div>
+                <p class="rf-help" style="margin:0 0 0.5rem;">Solo le chiavi qui presenti vengono ereditate dai figli. I figli possono sovrascriverle individualmente.</p>
+
+                <div class="rf-row">
+                    <label>Recapita all'originale</label>
+                    <label style="font-weight:normal;">
+                        <input type="checkbox" name="action_map_keep_original_delivery"
+                               {% if record.action_map and record.action_map.keep_original_delivery %}checked{% endif %}>
+                        Recapita anche al destinatario originale (CC)
+                    </label>
+                </div>
+                <div class="rf-row">
+                    <label>Also deliver to</label>
+                    <input type="text" name="action_map_also_deliver_to"
+                           value="{{ record.action_map.also_deliver_to if record.action_map else '' }}"
+                           placeholder="ticket@domarc.it, archivio@domarc.it">
+                </div>
+                <div class="rf-row">
+                    <label>Apply rules su CC</label>
+                    <label style="font-weight:normal;">
+                        <input type="checkbox" name="action_map_apply_rules"
+                               {% if record.action_map and record.action_map.apply_rules %}checked{% endif %}>
+                        Forza riapplicazione regole sul recapito CC
+                    </label>
+                </div>
+                <div class="rf-row">
+                    <label>Reply mode (auto_reply)</label>
+                    <select name="action_map_reply_mode">
+                        <option value="" {% if not record.action_map or not record.action_map.reply_mode %}selected{% endif %}>—</option>
+                        <option value="to_sender_only" {% if record.action_map and record.action_map.reply_mode=='to_sender_only' %}selected{% endif %}>to_sender_only</option>
+                        <option value="reply_all" {% if record.action_map and record.action_map.reply_mode=='reply_all' %}selected{% endif %}>reply_all</option>
+                        <option value="to_alias" {% if record.action_map and record.action_map.reply_mode=='to_alias' %}selected{% endif %}>to_alias</option>
+                    </select>
+                </div>
+                <div class="rf-row">
+                    <label>Subject prefix (auto_reply)</label>
+                    <input type="text" name="action_map_reply_subject_prefix"
+                           value="{{ record.action_map.reply_subject_prefix if record.action_map else '' }}"
+                           placeholder="Re: ">
+                </div>
+                <div class="rf-row">
+                    <label>Reply to (auto_reply)</label>
+                    <input type="text" name="action_map_reply_to"
+                           value="{{ record.action_map.reply_to if record.action_map else '' }}"
+                           placeholder="opzionale">
+                </div>
+                <div class="rf-row">
+                    <label>Generate auth code</label>
+                    <label style="font-weight:normal;">
+                        <input type="checkbox" name="action_map_generate_auth_code"
+                               {% if record.action_map and record.action_map.generate_auth_code %}checked{% endif %}>
+                        Genera codice autorizzazione monouso (H24)
+                    </label>
+                </div>
+                <div class="rf-row">
+                    <label>Auth code TTL (h)</label>
+                    <input type="number" name="action_map_auth_code_ttl_hours"
+                           value="{{ record.action_map.auth_code_ttl_hours if record.action_map else '' }}"
+                           min="1" max="720">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# Lista figli del gruppo (solo se esiste) #}
     {% if not is_new %}
-    <div class="rg-card full">
-        <h3><i class="fas fa-list-tree"></i> Figli del gruppo ({{ children|length }})</h3>
-        <div class="rg-body">
+    <div class="rf-section">
+        <h3 class="rf-section-head">
+            <i class="fas fa-list-tree"></i> Figli del gruppo ({{ children|length }})
+        </h3>
+        <div class="rf-section-body">
             {% if children %}
             <table class="dr-table">
                 <thead><tr><th class="num">Pri</th><th>Nome</th><th>Azione</th><th>Flow</th><th>Stato</th><th></th></tr></thead>
@@ -340,66 +500,11 @@
     </div>
     {% endif %}
 
-    <!-- Card Forward target ereditato (M027) -->
-    <div class="rg-card">
-        <h3><i class="fas fa-share"></i> Forward target ereditato</h3>
-        <div class="rg-body">
-            <p class="help" style="margin-top:0;">Destinatari del forward applicabili ai figli con
-                action='forward'. Mutex tra emails e group_id (usa una delle due).</p>
-            <div class="rg-row">
-                <label>Forward to (lista email)</label>
-                <input type="text" name="forward_to_emails"
-                       value="{{ record.forward_to_emails or '' }}"
-                       placeholder="reperibile@studio.it; sostituto@studio.it">
-            </div>
-            <div class="rg-row">
-                <label>Forward to gruppo</label>
-                <select name="forward_to_group_id">
-                    <option value="">— nessun gruppo —</option>
-                    {% for rg in (recipient_groups or []) %}
-                        <option value="{{ rg.id }}"
-                                {% if record.forward_to_group_id == rg.id %}selected{% endif %}>
-                            {{ rg.name }} ({{ rg.member_count or 0 }} membri)
-                        </option>
-                    {% endfor %}
-                </select>
-            </div>
-        </div>
+    <div class="rf-footer">
+        <button type="submit" class="dr-btn dr-btn-primary" style="width:auto;">
+            <i class="fas fa-save"></i> {{ 'Crea gruppo' if is_new else 'Salva modifiche' }}
+        </button>
+        <a href="{{ url_for('rules.list_view') }}" class="dr-btn" style="width:auto;">Annulla</a>
     </div>
-
-    <!-- Card Shadow mode (M033) -->
-    <div class="rg-card" style="background:#fffbeb; border-color:#f59e0b;">
-        <h3 style="color:#92400e;"><i class="fas fa-moon"></i> Shadow mode</h3>
-        <div class="rg-body">
-            <p class="help" style="margin:0 0 0.6rem; color:#78350f;">
-                Quando attivo, le mail che matchano questo gruppo (e quindi i suoi figli)
-                NON vengono dispatchate: viene fatto solo default_delivery con log di cosa
-                SAREBBE stato fatto. Utile per validare la regola su mail reali prima
-                di passarla in live.
-            </p>
-            <div class="rg-row">
-                <label>Stato</label>
-                <label style="font-weight:normal;">
-                    <input type="checkbox" name="shadow_mode" value="1"
-                           {% if record.shadow_mode %}checked{% endif %}>
-                    🌒 Gruppo in shadow (ereditato dai figli)
-                </label>
-            </div>
-            <div class="rg-row">
-                <label>Note shadow</label>
-                <input type="text" name="shadow_note"
-                       value="{{ record.shadow_note or '' }}"
-                       placeholder="Test 2026-05-05, validare 7gg">
-            </div>
-        </div>
-    </div>
-</div>
-
-<div style="display:flex; gap:0.5rem; padding:1rem 0; max-width:1100px;">
-    <button type="submit" class="dr-btn dr-btn-primary" style="width:auto;">
-        <i class="fas fa-save"></i> {{ 'Crea gruppo' if is_new else 'Salva' }}
-    </button>
-    <a href="{{ url_for('rules.list_view') }}" class="dr-btn" style="width:auto;">Annulla</a>
-</div>
 </form>
 {% endblock %}

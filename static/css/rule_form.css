@@ -1,0 +1,330 @@
+/* Layout condiviso form regole (orfana / gruppo padre / figlio).
+ * Le 3 maschere hanno le stesse 5 sezioni semantiche identiche. I campi
+ * non applicabili a un certo tipo (es. exclusive_match nel form figlio)
+ * sono presenti ma in stato `disabled` con classe .rf-disabled per coerenza
+ * visiva e per insegnare all'operatore una sola struttura.
+ */
+
+/* ============================================================ Layout root */
+
+.rf-form-wrap {
+    max-width: 1100px;
+    margin: 0;
+}
+
+.rf-section {
+    background: #fff;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 0.9rem;
+}
+
+.rf-section > .rf-section-head {
+    margin: 0;
+    padding: 0.7rem 1rem;
+    font-size: 0.95rem;
+    background: linear-gradient(180deg, #fafbfd 0%, #f4f6fa 100%);
+    color: #0b2a4a;
+    border-bottom: 1px solid #cbd5e1;
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    font-weight: 600;
+}
+
+.rf-section > .rf-section-head .rf-section-num {
+    display: inline-flex;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #1e3a8a;
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 700;
+    align-items: center;
+    justify-content: center;
+}
+
+.rf-section > .rf-section-head .rf-section-sub {
+    font-weight: 400;
+    color: #64748b;
+    font-size: 0.78rem;
+    margin-left: auto;
+}
+
+.rf-section-body {
+    padding: 0.9rem 1.1rem;
+}
+
+/* ============================================================ Sub-blocchi */
+/* Una sezione può avere sub-blocchi per gruppare campi tematicamente
+ * (es. dentro "Origine e destinatari" il sub "Mittente" + "Destinatari" +
+ * "Forward target"). */
+
+.rf-subblock {
+    border-left: 3px solid #c7d2fe;
+    padding: 0.5rem 0 0.4rem 0.85rem;
+    margin: 0.6rem 0 0.9rem 0;
+}
+.rf-subblock-head {
+    font-weight: 600;
+    color: #3730a3;
+    font-size: 0.83rem;
+    margin: 0 0 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+.rf-subblock-head .fa-fw,
+.rf-subblock-head i { color: #6366f1; }
+
+/* ================================================================ Righe */
+
+.rf-row {
+    display: grid;
+    grid-template-columns: 175px 1fr;
+    gap: 0.8rem;
+    align-items: start;
+    margin-bottom: 0.65rem;
+}
+
+.rf-row > label {
+    font-weight: 500;
+    color: #0b2a4a;
+    padding-top: 0.4rem;
+    font-size: 0.86rem;
+    line-height: 1.3;
+}
+
+.rf-row input[type="text"],
+.rf-row input[type="number"],
+.rf-row select,
+.rf-row textarea {
+    width: 100%;
+    padding: 0.42rem 0.6rem;
+    border: 1px solid #cbd5e1;
+    border-radius: 5px;
+    font-family: inherit;
+    font-size: 0.88rem;
+    background: #fff;
+}
+
+.rf-row input:focus,
+.rf-row select:focus,
+.rf-row textarea:focus {
+    outline: 0;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.18);
+}
+
+.rf-row .rf-help {
+    font-size: 0.76rem;
+    color: #64748b;
+    margin-top: 0.18rem;
+    line-height: 1.35;
+}
+
+.rf-row .rf-help code,
+.rf-row code {
+    background: #f1f5f9;
+    padding: 0.05rem 0.3rem;
+    border-radius: 3px;
+    font-size: 0.78rem;
+}
+
+/* Riga con due campi affiancati (es. scope_type + scope_ref) */
+.rf-row-pair {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+}
+
+/* =================================== Riga in evidenza (mutex / warning) */
+
+.rf-row.rf-row-warning {
+    background: #fef3c7;
+    padding: 0.5rem 0.7rem;
+    border-radius: 6px;
+    border-left: 3px solid #ca8a04;
+    margin-left: -0.4rem;
+}
+
+.rf-row.rf-row-shadow {
+    background: #fffbeb;
+    padding: 0.5rem 0.7rem;
+    border-radius: 6px;
+    border-left: 3px solid #f59e0b;
+    margin-left: -0.4rem;
+}
+
+.rf-row.rf-row-thread {
+    background: #faf5ff;
+    padding: 0.45rem 0.7rem;
+    border-radius: 6px;
+    border-left: 3px solid #a855f7;
+    margin-left: -0.4rem;
+}
+
+/* ====================================== Campi disabilitati per contesto */
+/* Un campo che logicamente non si applica al tipo di regola corrente:
+ * presente in DOM per uniformità tra orfana/gruppo/figlio, ma greyed e
+ * non editabile. Tooltip testuale spiega perché. */
+
+.rf-disabled,
+.rf-disabled input,
+.rf-disabled select,
+.rf-disabled textarea {
+    opacity: 0.45;
+    pointer-events: none;
+    cursor: not-allowed;
+    user-select: none;
+}
+
+.rf-disabled-note {
+    font-size: 0.74rem;
+    color: #94a3b8;
+    font-style: italic;
+    margin-top: 0.2rem;
+}
+
+/* ====================== Customer groups: spazio adeguato per visibilità */
+
+.rf-customer-groups-block {
+    background: #fefce8;
+    padding: 0.75rem 0.9rem;
+    border-radius: 7px;
+    border-left: 3px solid #ca8a04;
+    margin-bottom: 0.6rem;
+}
+
+.rf-customer-groups-block > .rf-cg-head {
+    font-weight: 600;
+    color: #713f12;
+    font-size: 0.86rem;
+    margin: 0 0 0.4rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.rf-customer-groups-block select[multiple] {
+    width: 100%;
+    min-height: 160px;
+    font-size: 0.83rem;
+    font-family: ui-monospace, Menlo, monospace;
+    padding: 0.35rem;
+    border: 1px solid #ca8a04;
+    border-radius: 5px;
+    background: #fff;
+}
+
+.rf-customer-groups-block .rf-cg-help {
+    font-size: 0.78rem;
+    color: #713f12;
+    margin-top: 0.4rem;
+    line-height: 1.45;
+}
+
+.rf-customer-groups-block .rf-cg-help code {
+    background: #fde68a;
+}
+
+/* =================================================== Footer pulsanti */
+
+.rf-footer {
+    display: flex;
+    gap: 0.5rem;
+    padding: 1rem 0;
+    max-width: 1100px;
+}
+
+/* ============================================== Banner ereditato (figlio) */
+
+.rf-inherited-banner {
+    margin: 0.7rem 0 0;
+    background: #eff6ff;
+    border: 1px solid #93c5fd;
+    border-radius: 8px;
+    padding: 0.7rem 0.9rem;
+}
+
+.rf-inherited-banner h4 {
+    margin: 0 0 0.4rem;
+    color: #1e3a8a;
+    font-size: 0.88rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.rf-inherited-banner .rf-inh-fields {
+    display: flex;
+    gap: 0.6rem 1rem;
+    flex-wrap: wrap;
+    font-size: 0.8rem;
+    color: #1e3a8a;
+}
+
+.rf-inherited-banner code {
+    background: #dbeafe;
+    padding: 0.05rem 0.3rem;
+    border-radius: 3px;
+}
+
+/* ============================================ Action selector card-grid */
+
+.rf-action-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(135px, 1fr));
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.rf-action-card {
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    padding: 0.55rem 0.5rem;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.12s;
+    background: #fff;
+}
+.rf-action-card:hover { border-color: #3b82f6; }
+.rf-action-card.selected {
+    border-color: #3b82f6;
+    background: #dbeafe;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.18);
+}
+.rf-action-card i {
+    font-size: 1.05rem;
+    color: #3b82f6;
+    display: block;
+    margin-bottom: 0.25rem;
+}
+.rf-action-card .rf-action-name {
+    font-weight: 600;
+    font-size: 0.8rem;
+}
+
+.rf-action-fields {
+    display: none;
+    padding: 0.7rem 0.85rem;
+    background: #f8fafc;
+    border-radius: 6px;
+    margin-top: 0.4rem;
+    border: 1px solid #e2e8f0;
+}
+.rf-action-fields.active { display: block; }
+
+/* ============================================= Anteprima action_map merge */
+
+.rf-effective-map {
+    background: #0f172a;
+    color: #e2e8f0;
+    padding: 0.7rem 0.9rem;
+    border-radius: 5px;
+    font-family: ui-monospace, monospace;
+    font-size: 0.8rem;
+    white-space: pre-wrap;
+}
