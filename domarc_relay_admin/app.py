@@ -59,6 +59,17 @@ def create_app(config: AppConfig | None = None, *, init_db: bool = True) -> Flas
             csrf.exempt(_tpl_preview)
         except Exception:  # noqa: BLE001
             pass
+        # Esento anche /rules/preview-impact e /rules/test-regex: idempotenti,
+        # solo lettura events_log + valutazione regex in memoria. Il fetch JS
+        # dei form regola passa il CSRF come header X-CSRFToken ma con
+        # FormData boundary multipart e SameSite cookie talvolta non viene
+        # validato correttamente — esentarli è coerente con preview_render.
+        try:
+            from .routes.rules import preview_impact as _r_impact, test_regex as _r_test
+            csrf.exempt(_r_impact)
+            csrf.exempt(_r_test)
+        except Exception:  # noqa: BLE001
+            pass
         app.extensions["domarc_csrf"] = csrf
     except Exception as exc:  # noqa: BLE001
         logging.warning("Flask-WTF CSRF non disponibile: %s — running senza protection", exc)

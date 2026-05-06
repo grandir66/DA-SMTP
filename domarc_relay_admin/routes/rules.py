@@ -713,7 +713,8 @@ def preview_impact():
     top_domains = sorted(domains_count.items(), key=lambda x: -x[1])[:5]
     samples = [
         {
-            "created_at": e.get("created_at"),
+            # events table usa received_at + ingested_at, non created_at
+            "created_at": e.get("received_at") or e.get("ingested_at"),
             "from_address": e.get("from_address"),
             "to_address": e.get("to_address"),
             "subject": e.get("subject"),
@@ -1029,11 +1030,14 @@ def _parse_form(form) -> dict:
     for k in ("urgenza", "settore", "addetto_gestione", "referente", "note_extra",
               "template_id", "forward_target", "forward_port", "forward_tls",
               "redirect_to", "reason", "also_deliver_to", "auth_code_ttl_hours",
+              # H24 create_authorized_ticket
+              "ack_template_id", "reject_template_id",
               # Reply-mode (auto_reply)
               "reply_mode", "reply_subject_prefix", "reply_to"):
         v = (form.get(f"action_map_{k}") or "").strip()
         if v:
-            if k in ("forward_port", "auth_code_ttl_hours", "template_id"):
+            if k in ("forward_port", "auth_code_ttl_hours", "template_id",
+                     "ack_template_id", "reject_template_id"):
                 try: action_map[k] = int(v)
                 except ValueError: pass
             else:

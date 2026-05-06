@@ -705,6 +705,7 @@
                     ('flag_only', 'Solo flag', 'fa-flag'),
                     ('auto_reply', 'Auto reply', 'fa-reply'),
                     ('create_ticket', 'Crea ticket', 'fa-ticket'),
+                    ('create_authorized_ticket', 'Crea ticket H24 (codice)', 'fa-key'),
                     ('forward', 'Forward', 'fa-share'),
                     ('redirect', 'Redirect', 'fa-arrow-right-arrow-left'),
                     ('quarantine', 'Quarantine', 'fa-shield-virus'),
@@ -733,6 +734,57 @@
                         <option value="{{ u }}" {% if record.action_map and record.action_map.urgenza == u %}selected{% endif %}>{{ u|title }}</option>
                         {% endfor %}
                     </select>
+                </div>
+            </div>
+
+            {# create_authorized_ticket — H24 con codice in subject #}
+            <div class="rf-action-fields" id="amf_create_authorized_ticket" data-for="create_authorized_ticket"
+                 style="background:#fff7ed; border-color:#fb923c;">
+                <div style="display:flex; gap:0.7rem; align-items:flex-start; margin-bottom:0.7rem;">
+                    <i class="fas fa-key" style="font-size:1.4rem; color:#c2410c;"></i>
+                    <div style="flex:1;">
+                        <h4 style="margin:0 0 0.2rem; color:#9a3412; font-size:0.95rem;">Apre ticket H24 dopo validazione codice in subject</h4>
+                        <p style="margin:0; font-size:0.82rem; color:#7c2d12;">
+                            Estrae il codice (regex <code>AUTH-/H24-/DOMARC-/...</code>) dal subject,
+                            lo valida via <code>POST /auth-codes/validate</code> (cascade oneshot →
+                            permanente). Su successo apre ticket con <code>URGENZA=URGENTE</code> +
+                            template <code>ack</code>; su fallimento manda template <code>reject</code>.
+                        </p>
+                    </div>
+                </div>
+                <div class="rf-row">
+                    <label>Settore ticket</label>
+                    <input type="text" name="action_map_settore"
+                           value="{{ record.action_map.settore if record.action_map else 'S' }}"
+                           placeholder="S (default)">
+                </div>
+                <div class="rf-row">
+                    <label>Urgenza</label>
+                    <select name="action_map_urgenza">
+                        <option value="URGENTE" {% if record.action_map and record.action_map.urgenza == 'URGENTE' %}selected{% endif %}>URGENTE (default)</option>
+                        <option value="ALTA" {% if record.action_map and record.action_map.urgenza == 'ALTA' %}selected{% endif %}>ALTA</option>
+                        <option value="CRITICA" {% if record.action_map and record.action_map.urgenza == 'CRITICA' %}selected{% endif %}>CRITICA</option>
+                    </select>
+                </div>
+                <div class="rf-row">
+                    <label>Template ack (codice OK)</label>
+                    <select name="action_map_ack_template_id">
+                        <option value="">— scegli —</option>
+                        {% for t in templates %}
+                        <option value="{{ t.id }}" {% if record.action_map and record.action_map.ack_template_id == t.id %}selected{% endif %}>#{{ t.id }} — {{ t.name }}</option>
+                        {% endfor %}
+                    </select>
+                    <div class="help">Inviato al cliente quando il codice è valido e il ticket è creato.</div>
+                </div>
+                <div class="rf-row">
+                    <label>Template reject (codice KO)</label>
+                    <select name="action_map_reject_template_id">
+                        <option value="">— scegli —</option>
+                        {% for t in templates %}
+                        <option value="{{ t.id }}" {% if record.action_map and record.action_map.reject_template_id == t.id %}selected{% endif %}>#{{ t.id }} — {{ t.name }}</option>
+                        {% endfor %}
+                    </select>
+                    <div class="help">Inviato quando il codice non è valido / scaduto / già usato.</div>
                 </div>
             </div>
 
