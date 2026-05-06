@@ -64,14 +64,20 @@ Domarc SMTP Relay
 
 ### Server di runtime
 
-- **Produzione/operativo**: VM `da-smtp-ia` (192.168.4.25, Ubuntu 24.04). Tutti
-  i 3 servizi systemd attivi: `domarc-smtp-relay-admin`,
+- **Produzione/operativo**: VM `da-smtp-ia` (192.168.4.25, Ubuntu 24.04).
+  Tutti i 3 servizi systemd attivi: `domarc-smtp-relay-admin`,
   `stormshield-smtp-relay-listener`, `stormshield-smtp-relay-scheduler`.
-  Cert HTTPS GlobalSign wildcard `*.domarc.it`.
-- **Sviluppo/workspace**: questo path su 192.168.4.41 è **solo working
-  directory** (clone git per editing). **Nessun servizio gira qui**. Le
-  modifiche vanno: edit → `git commit` → `git push` →
-  `ssh root@192.168.4.25 "cd /opt/domarc-smtp-relay-admin && git pull && systemctl restart …"`.
+  Cert HTTPS GlobalSign wildcard `*.domarc.it`. **Tutto il flusso mail
+  vive qui**: listener SMTP, admin web, scheduler, edit codice, deploy.
+  Working directory: `/opt/domarc-smtp-relay-admin/` (admin) +
+  `/opt/stormshield-smtp-relay/` (listener+scheduler).
+- **Sistema gestionale Domarc** (192.168.4.41): server **separato**, NON
+  fa parte del relay. È solo:
+  - sorgente PostgreSQL (`solution.clienti` + `stormshield.*`) per il
+    sync periodico dei clienti
+  - destinazione dei ticket creati dal relay (`POST /api/v1/tickets/`)
+  Repo diverso, codebase diverso. Il relay non ha bisogno di SSH al
+  4.41 per il proprio workflow.
 - **Repo GitHub**: <https://github.com/grandir66/DA-SMTP> (branch `main`,
   tag `v0.9.0-pre-prod`).
 
@@ -226,31 +232,30 @@ può navigare tra tenant via dropdown header. Per ora 1 solo tenant attivo.
 ## Workflow di sviluppo
 
 ```bash
-# 1. Modifica codice qui (su 4.41, in /opt/domarc-smtp-relay-admin/)
+# Lavoro DIRETTAMENTE sul server operativo 192.168.4.25 (hostname=da-smtp-ia).
+# Le edit ai file sono già live sul filesystem — basta restart per applicare.
+
+# 1. Modifica codice in /opt/domarc-smtp-relay-admin/
 cd /opt/domarc-smtp-relay-admin
 $EDITOR ...
 
-# 2. Test syntax + commit
+# 2. Test syntax
 .venv/bin/python -c 'import py_compile; py_compile.compile("path/to/file.py", doraise=True)' || true
+
+# 3. Commit + push (backup GitHub)
 git add -A
 git commit -m "feat(...): descrizione concisa"
-
-# 3. Push
 git push origin main
 
-# 4. Deploy su VM 4.25
-ssh root@192.168.4.25 "cd /opt/domarc-smtp-relay-admin && git pull --quiet"
+# 4. Restart servizi (l'edit è già live, serve solo ricaricare il processo)
+systemctl restart domarc-smtp-relay-admin
+# Per il listener:
+# systemctl restart stormshield-smtp-relay-listener stormshield-smtp-relay-scheduler
 
-# 5. Restart servizi (nell'ordine)
-ssh root@192.168.4.25 "
-  systemctl restart domarc-smtp-relay-admin
-  systemctl restart stormshield-smtp-relay-listener
-  systemctl restart stormshield-smtp-relay-scheduler
-"
-
-# 6. Verifica
-ssh root@192.168.4.25 "systemctl is-active domarc-smtp-relay-admin stormshield-smtp-relay-listener stormshield-smtp-relay-scheduler"
-ssh root@192.168.4.25 "journalctl -u stormshield-smtp-relay-listener -n 30 --no-pager"
+# 5. Verifica
+systemctl is-active domarc-smtp-relay-admin
+journalctl -u domarc-smtp-relay-admin -p err --since "30s ago"
+curl -sk -o /dev/null -w "HTTP %{http_code}\n" https://localhost/<endpoint>
 ```
 
 ### Migrations DB

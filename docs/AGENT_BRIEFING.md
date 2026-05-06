@@ -4,7 +4,7 @@
 >
 > **Versione**: aggiornato a 2026-05-05, dopo i refactor UI v0.9.x (commit `6c42553`).
 >
-> **Setup di lavoro consigliato**: SSH diretto sul server (`ssh root@192.168.4.25`) — non serve passare per il manager Domarc su 192.168.4.41.
+> **Setup di lavoro**: si lavora direttamente sul server operativo `192.168.4.25` (hostname `da-smtp-ia`). Il manager Domarc su 192.168.4.41 è un sistema **separato** (PostgreSQL sorgente clienti + ricezione ticket); non c'entra con il workflow di edit/deploy del relay.
 
 ---
 
