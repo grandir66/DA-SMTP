@@ -423,6 +423,28 @@ def h24_targets_active():
     }), 200
 
 
+@api_bp.route("/domain-strategy/active", methods=["GET"])
+@require_api_key
+def domain_strategy_active():
+    """Strategie di resolve per domini condivisi (Migration 038).
+
+    Listener cache locale per implementare:
+      - 'auto'    → comportamento attuale (primo cliente attivo)
+      - 'primary' → forza il codcli specificato
+      - 'bypass'  → non risolve cliente per quel dominio (es. provider PEC)
+    """
+    storage = _storage()
+    items = storage.list_domain_strategies(only_non_auto=True)
+    return jsonify({
+        "synced_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "domains": [{
+            "domain": r["domain"],
+            "strategy": r["strategy"],
+            "primary_codcli": r.get("primary_codcli"),
+        } for r in items],
+    }), 200
+
+
 @api_bp.route("/recipient-groups/active", methods=["GET"])
 @require_api_key
 def recipient_groups_active():

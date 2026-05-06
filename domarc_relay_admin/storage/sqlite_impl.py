@@ -1431,6 +1431,66 @@ class SqliteStorage(Storage):
 
     # ====================================================== AGGREGATIONS ====
 
+    # ============================================ M038 — Domain resolve strategy
+
+    def list_domain_strategies(self, *, tenant_id: int = 1,
+                                only_non_auto: bool = False
+                                ) -> list[dict[str, Any]]:
+        """Lista strategy per i domini condivisi tra clienti.
+        only_non_auto=True ritorna solo i record con strategy != 'auto' (per
+        l'API listener: il listener applica solo le strategie esplicite,
+        'auto' è il default implicito).
+        """
+        sql = ["""SELECT * FROM domain_resolve_strategy WHERE tenant_id = ?"""]
+        params: list[Any] = [int(tenant_id)]
+        if only_non_auto:
+            sql.append("AND strategy != 'auto'")
+        sql.append("ORDER BY n_customers DESC, n_active DESC, domain")
+        with self._connect() as conn:
+            return [dict(r) for r in conn.execute(" ".join(sql), params).fetchall()]
+
+    def get_domain_strategy(self, domain: str, *,
+                              tenant_id: int = 1
+                              ) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            r = conn.execute(
+                "SELECT * FROM domain_resolve_strategy WHERE tenant_id=? AND domain=?",
+                (int(tenant_id), domain.lower().strip()),
+            ).fetchone()
+            return dict(r) if r else None
+
+    def upsert_domain_strategy(self, domain: str, strategy: str, *,
+                                 primary_codcli: str | None = None,
+                                 note: str | None = None,
+                                 tenant_id: int = 1, set_by: str | None = None
+                                 ) -> int:
+        if strategy not in ("auto", "primary", "bypass"):
+            raise ValueError(f"strategy non supportata: {strategy}")
+        if strategy == "primary" and not primary_codcli:
+            raise ValueError("primary_codcli obbligatorio per strategy='primary'")
+        domain = domain.lower().strip()
+        if not domain:
+            raise ValueError("domain obbligatorio")
+        with self.transaction() as conn:
+            existing = conn.execute(
+                "SELECT id FROM domain_resolve_strategy WHERE tenant_id=? AND domain=?",
+                (int(tenant_id), domain),
+            ).fetchone()
+            if existing:
+                conn.execute("""
+                    UPDATE domain_resolve_strategy
+                    SET strategy=?, primary_codcli=?, note=?,
+                        set_by=?, set_at=datetime('now')
+                    WHERE id=?
+                """, (strategy, primary_codcli, note, set_by, int(existing["id"])))
+                return int(existing["id"])
+            cur = conn.execute("""
+                INSERT INTO domain_resolve_strategy
+                    (tenant_id, domain, strategy, primary_codcli, note, set_by)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (int(tenant_id), domain, strategy, primary_codcli, note, set_by))
+            return int(cur.lastrowid or 0)
+
     def list_aggregations(self, *, tenant_id: int | None = None,
                           only_enabled: bool | None = None) -> list[dict[str, Any]]:
         where: list[str] = []

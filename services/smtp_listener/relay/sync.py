@@ -155,6 +155,17 @@ def sync_customers_and_rules(backend: ManagerBackend, storage: Storage) -> dict[
         logger.debug("Sync recipient_groups skip/fallito: %s", exc)
         result["errors"].append(f"recipient_groups: {exc}")
 
+    # M038: Domain resolve strategy
+    try:
+        domain_strategies = backend.fetch_active_domain_strategies()
+        n = storage.replace_domain_strategies(domain_strategies)
+        result["domain_strategies"] = {"count": n}
+        if n:
+            logger.info("Sync domain_strategies OK: %d domini con strategy", n)
+    except (ManagerError, AttributeError) as exc:
+        logger.debug("Sync domain_strategies skip/fallito: %s", exc)
+        result["errors"].append(f"domain_strategies: {exc}")
+
     return result
 
 

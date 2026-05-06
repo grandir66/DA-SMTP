@@ -597,6 +597,18 @@ class StormshieldManagerBackend(ManagerBackend):
             groups=list(data.get("groups", [])),
         )
 
+    def fetch_active_domain_strategies(self) -> list[dict[str, Any]]:
+        """Strategie resolve per domini condivisi (Migration 038).
+
+        Ritorna lista di {domain, strategy, primary_codcli}. Endpoint
+        ritorna solo i record con strategy != 'auto' (default implicito).
+        """
+        try:
+            data = self._get_json("/api/v1/relay/domain-strategy/active")
+        except Exception:  # noqa: BLE001
+            return []
+        return list(data.get("domains", []))
+
     def replicate_occurrence(self, agg_id: int, payload: dict[str, Any]) -> bool:
         try:
             resp = self._client.post(f"/api/v1/relay/aggregations/{agg_id}/occurrence", json=payload)

@@ -1,0 +1,115 @@
+{% extends "admin/_base.html" %}
+{% block title %}Domini condivisi (resolve strategy){% endblock %}
+
+{% block extra_head %}
+<style>
+.dom-summary { display: flex; gap: 0.6rem; margin-bottom: 1rem; flex-wrap: wrap; }
+.dom-card { flex:1; min-width: 180px; background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; padding: 0.7rem 1rem; }
+.dom-card .num { font-size: 1.6rem; font-weight: 700; color: #1e3a8a; }
+.dom-card .lab { font-size: 0.8rem; color: #475569; }
+.dom-card.bypass .num { color: #dc2626; }
+.dom-card.primary .num { color: #16a34a; }
+.dom-card.auto .num { color: #ea580c; }
+
+.dom-row { background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; padding: 0.6rem 0.8rem; margin-bottom: 0.5rem; }
+.dom-row .dom-head { display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap; }
+.dom-row .dom-name { font-weight: 600; font-family: ui-monospace, monospace; color: #0f172a; font-size: 0.95rem; }
+.dom-row .dom-count { font-size: 0.78rem; color: #64748b; padding: 1px 7px; background: #f1f5f9; border-radius: 10px; }
+.dom-row .dom-count.has-active { background: #dcfce7; color: #166534; }
+.dom-row .dom-strategy-pill { font-size: 0.75rem; font-weight: 600; padding: 2px 8px; border-radius: 10px; }
+.dom-row .dom-strategy-pill.bypass { background: #fee2e2; color: #991b1b; }
+.dom-row .dom-strategy-pill.primary { background: #dcfce7; color: #166534; }
+.dom-row .dom-strategy-pill.auto { background: #fef3c7; color: #92400e; }
+
+.dom-row .dom-customers { margin-top: 0.5rem; font-size: 0.82rem; color: #475569; }
+.dom-row .dom-customers .cust { display: inline-block; padding: 2px 7px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px; margin: 2px; }
+.dom-row .dom-customers .cust.active { background: #f0fdf4; border-color: #86efac; color: #166534; }
+.dom-row .dom-customers .cust.inactive { color: #94a3b8; }
+
+.dom-form { margin-top: 0.6rem; padding: 0.5rem 0.7rem; background: #f8fafc; border-radius: 5px; display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+.dom-form select, .dom-form input { padding: 0.3rem 0.5rem; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.85rem; }
+.dom-form button { padding: 0.3rem 0.7rem; border: 1px solid #1e3a8a; background: #1e3a8a; color: #fff; border-radius: 4px; font-size: 0.85rem; cursor: pointer; }
+.dom-note { font-size: 0.78rem; color: #64748b; font-style: italic; margin-top: 0.3rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="dr-section">
+    <h2><i class="fas fa-globe"></i> Domini condivisi — resolve strategy (M038)</h2>
+    <p style="color: #475569; font-size: 0.9rem;">
+        Quando una mail arriva da <code>*@dominio</code> e quel dominio è associato a più clienti del gestionale,
+        configura qui come il listener deve risolvere il <code>codcli</code>. Per i domini con un solo cliente
+        il problema non si pone (resolve sempre univoco).
+    </p>
+
+    <div class="dom-summary">
+        <div class="dom-card"><div class="num">{{ summary.total }}</div><div class="lab">Domini condivisi</div></div>
+        <div class="dom-card auto"><div class="num">{{ summary.auto }}</div><div class="lab">AUTO (primo attivo)</div></div>
+        <div class="dom-card primary"><div class="num">{{ summary.primary }}</div><div class="lab">PRIMARY (owner forzato)</div></div>
+        <div class="dom-card bypass"><div class="num">{{ summary.bypass }}</div><div class="lab">BYPASS (no resolve)</div></div>
+    </div>
+
+    <div style="background: #eff6ff; border-left: 3px solid #3b82f6; padding: 0.6rem 0.9rem; border-radius: 0 5px 5px 0; font-size: 0.85rem; margin-bottom: 1rem;">
+        <strong>Strategie:</strong>
+        <ul style="margin: 0.3rem 0 0; padding-left: 1.4rem;">
+            <li><strong>AUTO</strong> (default): primo cliente con <code>contract_active=1</code> tra i candidati. Compatibile con il comportamento storico.</li>
+            <li><strong>PRIMARY</strong>: forza un codcli specifico come proprietario. Tutte le mail da <code>*@dominio</code> risolveranno quel cliente.</li>
+            <li><strong>BYPASS</strong>: il listener NON risolve cliente per quel dominio (codcli=NULL → catch-all). Tipico per provider PEC condivisi.</li>
+        </ul>
+    </div>
+
+    {% for it in items %}
+    <div class="dom-row">
+        <div class="dom-head">
+            <span class="dom-name">{{ it.domain }}</span>
+            <span class="dom-count {% if it.n_active > 0 %}has-active{% endif %}">{{ it.n_customers }} clienti, {{ it.n_active }} attivi</span>
+            <span class="dom-strategy-pill {{ it.strategy }}">{{ it.strategy|upper }}</span>
+            {% if it.primary_codcli %}<span class="dom-count">primary: {{ it.primary_codcli }}</span>{% endif %}
+        </div>
+        {% if it.customers %}
+        <div class="dom-customers">
+            {% for c in it.customers %}
+            <span class="cust {% if c.contract_active %}active{% else %}inactive{% endif %}"
+                  title="{{ c.ragione_sociale or '' }}">
+                {{ c.codcli }}
+                {% if c.contract_active %} ✓{% endif %}
+                — {{ (c.ragione_sociale or '?')[:35] }}
+            </span>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if it.note %}<div class="dom-note">{{ it.note }}</div>{% endif %}
+
+        <form class="dom-form" method="post" action="{{ url_for('domain_strategy.update_view', domain=it.domain) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label>Strategy:</label>
+            <select name="strategy">
+                <option value="auto"    {% if it.strategy == 'auto' %}selected{% endif %}>AUTO</option>
+                <option value="primary" {% if it.strategy == 'primary' %}selected{% endif %}>PRIMARY</option>
+                <option value="bypass"  {% if it.strategy == 'bypass' %}selected{% endif %}>BYPASS</option>
+            </select>
+            <label>Primary codcli:</label>
+            <select name="primary_codcli">
+                <option value="">—</option>
+                {% for c in it.customers %}
+                <option value="{{ c.codcli }}" {% if it.primary_codcli == c.codcli %}selected{% endif %}>
+                    {{ c.codcli }} {% if c.contract_active %}(✓ attivo){% endif %} — {{ (c.ragione_sociale or '?')[:50] }}
+                </option>
+                {% endfor %}
+            </select>
+            <label>Nota:</label>
+            <input type="text" name="note" value="{{ it.note or '' }}" placeholder="es. provider PEC, gruppo aziendale" style="flex: 1; min-width: 200px;">
+            <button type="submit"><i class="fas fa-save"></i> Salva</button>
+        </form>
+    </div>
+    {% else %}
+    <div class="dr-empty">Nessun dominio condiviso configurato.</div>
+    {% endfor %}
+
+    <p style="font-size: 0.8rem; color: #64748b; margin-top: 1rem;">
+        Le modifiche vengono sincronizzate al listener entro 5 min (oppure restart manuale di
+        <code>stormshield-smtp-relay-scheduler</code> per applicare immediatamente).
+    </p>
+</section>
+{% endblock %}

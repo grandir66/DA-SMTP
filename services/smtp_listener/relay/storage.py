@@ -393,6 +393,28 @@ class Storage:
                 except sqlite3.OperationalError as exc:
                     if "duplicate column name" not in str(exc).lower():
                         raise
+
+            # M038 — Domain resolve strategy cache
+            try:
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS domain_resolve_strategy_cache (
+                        domain          TEXT PRIMARY KEY,
+                        strategy        TEXT NOT NULL,
+                        primary_codcli  TEXT,
+                        synced_at       TEXT NOT NULL
+                    )
+                """)
+            except sqlite3.OperationalError:
+                pass
+
+            # Loop vuoto per non rompere la struttura del codice esistente
+            for tbl, col, ddl in []:
+                try:
+                    conn.execute(ddl)
+                    logger.info("Migrazione: aggiunta colonna %s.%s", tbl, col)
+                except sqlite3.OperationalError as exc:
+                    if "duplicate column name" not in str(exc).lower():
+                        raise
             # Index su h24_targets_cache.source_email (richiede colonna esistente)
             try:
                 conn.execute(
@@ -648,13 +670,77 @@ class Storage:
         return len(customers)
 
     def find_customer_by_domain(self, domain: str) -> sqlite3.Row | None:
-        domain_low = domain.lower()
+        """Risolve cliente per dominio mittente con M038 strategy support.
+
+        Algoritmo:
+          1. Consulta domain_resolve_strategy_cache:
+             - 'bypass'  → ritorna None (no resolve, va a catch-all)
+             - 'primary' → cerca direttamente il codcli forzato
+          2. Default 'auto': itera customers_cache cercando il dominio nei
+             domains_json. Tra i candidati preferisce contract_active=1 sui =0
+             (era il bug: prendeva il primo a prescindere).
+        """
+        domain_low = domain.lower().strip()
+        if not domain_low:
+            return None
         with self._connect() as conn:
+            # 1. Strategy override (M038)
+            try:
+                strat = conn.execute(
+                    "SELECT strategy, primary_codcli FROM domain_resolve_strategy_cache "
+                    "WHERE domain = ?",
+                    (domain_low,),
+                ).fetchone()
+            except sqlite3.OperationalError:
+                strat = None  # tabella non ancora presente, fallback ad auto
+
+            if strat:
+                if strat["strategy"] == "bypass":
+                    return None
+                if strat["strategy"] == "primary" and strat["primary_codcli"]:
+                    row = conn.execute(
+                        "SELECT * FROM customers_cache WHERE codcli = ?",
+                        (str(strat["primary_codcli"]),),
+                    ).fetchone()
+                    if row is not None:
+                        return row
+                    # primary_codcli non in cache: cade su 'auto' come fallback
+
+            # 2. Auto: itera e preferisce contract_active=1
+            best_active = None
+            best_inactive = None
             for row in conn.execute("SELECT * FROM customers_cache").fetchall():
                 domains = json.loads(row["domains_json"] or "[]")
-                if domain_low in (d.lower() for d in domains):
-                    return row
-        return None
+                if domain_low not in (d.lower() for d in domains):
+                    continue
+                if row["contract_active"]:
+                    if best_active is None:
+                        best_active = row
+                else:
+                    if best_inactive is None:
+                        best_inactive = row
+            return best_active or best_inactive
+
+    def replace_domain_strategies(self, items: list[dict[str, Any]]) -> int:
+        """Aggiorna domain_resolve_strategy_cache (M038).
+        Ricevuto via /api/v1/relay/domain-strategy/active.
+        Solo strategy != 'auto' (le 'auto' sono il default implicito)."""
+        synced = _now_iso()
+        with self.transaction() as conn:
+            conn.execute("DELETE FROM domain_resolve_strategy_cache")
+            for it in items:
+                domain = (it.get("domain") or "").lower().strip()
+                strat = (it.get("strategy") or "auto").strip()
+                if not domain or strat == "auto":
+                    continue
+                conn.execute(
+                    "INSERT OR REPLACE INTO domain_resolve_strategy_cache "
+                    "(domain, strategy, primary_codcli, synced_at) "
+                    "VALUES (?, ?, ?, ?)",
+                    (domain, strat, it.get("primary_codcli"), synced),
+                )
+            self._set_sync_meta(conn, "domain_strategies", synced)
+        return len(items)
 
     def find_customer_by_alias(self, alias: str) -> sqlite3.Row | None:
         alias_low = alias.lower()
