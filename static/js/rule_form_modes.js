@@ -32,13 +32,78 @@
         document.querySelectorAll('input[name="rf_mode"]').forEach(r => {
             r.checked = r.value === mode;
         });
+        // Quando si va in Base, ricalcola quali campi avanzati hanno
+        // valore: questi restano visibili (rf-has-value) per non
+        // nascondere informazioni importanti all'utente.
+        if (mode === 'base') refreshAdvancedHasValue();
         const summary = document.getElementById('rf-mode-summary');
         if (summary) {
             summary.textContent = mode === 'base'
-                ? 'Solo i campi essenziali (gruppi cliente, gruppi destinatari, contenuto, orario, azione).'
+                ? 'Solo i campi essenziali (campi avanzati nascosti se vuoti, restano visibili se compilati).'
                 : 'Tutti i campi visibili — incluse eccezioni puntuali, tristate derivati, flag flow, scope, severity.';
         }
         try { localStorage.setItem('rf-mode', mode); } catch (e) { /* ignore */ }
+    }
+
+    /**
+     * Per ogni `.rf-advanced-only` controlla se al suo interno c'e' un
+     * input/select/textarea con valore non-default. Se sì, applica
+     * `.rf-has-value` per renderlo visibile anche in modalità Base.
+     * In più aggiorna un counter nell'intestazione di ogni `.rf-section`
+     * che mostra "N avanzati compilati" — così anche se i campi
+     * restassero nascosti, l'utente vede subito che ci sono dati.
+     *
+     * Definizione "non-default":
+     *   - input text/number/textarea: value.trim() != ''
+     *   - select: selected option has value != '' (e non 'null')
+     *   - checkbox: checked = true
+     */
+    function _hasNonDefaultValue(block) {
+        const fields = block.querySelectorAll(
+            'input[type="text"], input[type="number"], input[type="email"], textarea, select, input[type="checkbox"]'
+        );
+        for (const f of fields) {
+            if (f.disabled) continue;
+            if (f.type === 'checkbox') {
+                if (f.checked) return true;
+            } else if (f.tagName === 'SELECT') {
+                if (f.value && f.value !== '' && f.value !== 'null') return true;
+            } else {
+                if ((f.value || '').trim() !== '') return true;
+            }
+        }
+        return false;
+    }
+
+    function refreshAdvancedHasValue() {
+        // Step 1: marca i singoli .rf-advanced-only con rf-has-value
+        document.querySelectorAll('.rf-advanced-only').forEach(block => {
+            block.classList.toggle('rf-has-value', _hasNonDefaultValue(block));
+        });
+        // Step 2: per ogni sezione, conta gli avanzati con valore e
+        // aggiorna/crea un badge nell'intestazione (.rf-section-head)
+        document.querySelectorAll('.rf-section').forEach(section => {
+            const filled = section.querySelectorAll('.rf-advanced-only.rf-has-value').length;
+            const total = section.querySelectorAll('.rf-advanced-only').length;
+            const head = section.querySelector('.rf-section-head, h3');
+            if (!head) return;
+            let badge = head.querySelector('.rf-section-adv-counter');
+            if (filled === 0) {
+                if (badge) badge.remove();
+                return;
+            }
+            if (!badge) {
+                badge = document.createElement('span');
+                badge.className = 'rf-section-adv-counter';
+                head.appendChild(badge);
+            }
+            badge.innerHTML = '<i class="fas fa-circle-exclamation"></i> ' +
+                filled + ' avanzat' + (filled === 1 ? 'o compilato' : 'i compilati') +
+                (total > filled ? ' / ' + total : '');
+            badge.title = 'In questa sezione ci sono ' + filled +
+                ' campi della modalità Avanzata che hanno un valore. ' +
+                'Restano visibili anche in Base per non perderli di vista.';
+        });
     }
 
     window.rfSetMode = function (mode) { applyMode(mode); };
@@ -51,6 +116,15 @@
         let saved = 'base';
         try { saved = localStorage.getItem('rf-mode') || 'base'; } catch (e) { /* ignore */ }
         applyMode(saved);
+        // Calcola lo stato dei campi avanzati anche al primo load (sia
+        // in modalità Base sia Avanzata, così il counter è sempre fresco).
+        refreshAdvancedHasValue();
+        // Aggiorna live mentre l'utente compila: ogni cambio input
+        // dentro un .rf-advanced-only ricalcola counter + visibilità.
+        document.querySelectorAll('.rf-advanced-only input, .rf-advanced-only select, .rf-advanced-only textarea').forEach(el => {
+            el.addEventListener('change', refreshAdvancedHasValue);
+            el.addEventListener('blur', refreshAdvancedHasValue);
+        });
     }
 
     // ============================================================ Preset priority

@@ -379,6 +379,50 @@ body.rf-mode-base .rf-advanced-only { display: none !important; }
 body.rf-mode-advanced .rf-advanced-only { display: block !important; }
 body.rf-mode-advanced .rf-advanced-only.rf-row { display: grid !important; }
 
+/* In modalità Base, i campi avanzati COMPILATI restano visibili
+ * (rf-has-value impostato da rule_form_modes.js:refreshAdvancedHasValue)
+ * con un bordo arancione che li distingue come "avanzato non vuoto". */
+body.rf-mode-base .rf-advanced-only.rf-has-value {
+    display: block !important;
+    background: #fff7ed;
+    border-left: 3px solid #f97316;
+    padding-left: 8px;
+    margin-left: -10px;
+    position: relative;
+}
+body.rf-mode-base .rf-advanced-only.rf-has-value.rf-row {
+    display: grid !important;
+}
+body.rf-mode-base .rf-advanced-only.rf-has-value::before {
+    content: "🔒 avanzato compilato";
+    position: absolute;
+    top: 2px;
+    right: 6px;
+    font-size: 10px;
+    font-weight: 600;
+    color: #c2410c;
+    background: #ffedd5;
+    padding: 1px 6px;
+    border-radius: 8px;
+    pointer-events: none;
+}
+
+/* Counter avanzati nell'intestazione della sezione (creato da JS) */
+.rf-section-adv-counter {
+    margin-left: auto;
+    background: linear-gradient(90deg, #fb923c, #f97316);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 9px;
+    border-radius: 12px;
+    cursor: help;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+.rf-section-adv-counter i { font-size: 10px; }
+
 /* In modalità Avanzata, evidenzia i campi avanzati con bordo giallo */
 body.rf-mode-advanced .rf-row.rf-advanced-only,
 body.rf-mode-advanced .rf-subblock.rf-advanced-only {
