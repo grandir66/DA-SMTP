@@ -43,7 +43,7 @@
         {% set in_ops = ep.startswith('events') or ep.startswith('activity') or ep.startswith('queue') or ep.startswith('routes') %}
         {% set in_rules = ep.startswith('rules') or ep.startswith('templates') or ep.startswith('aggregations') or ep.startswith('rule_sets') %}
         {% set in_h24   = ep.startswith('h24_codes') or ep.startswith('auth_codes') or ep == 'codes_h24.index' %}
-        {% set in_anag  = ep.startswith('customers') or ep.startswith('addresses') or ep.startswith('domains') or ep.startswith('customer_groups') or ep.startswith('recipient_groups') or ep.startswith('privacy_bypass') or ep.startswith('customer_sync') or ep.startswith('group_mapping') %}
+        {% set in_anag  = ep.startswith('customers') or ep.startswith('addresses') or ep.startswith('domains') or ep.startswith('customer_groups') or ep.startswith('recipient_groups') or ep.startswith('privacy_bypass') or ep.startswith('customer_sync') or ep.startswith('group_mapping') or ep.startswith('domain_strategy') %}
         {% set in_orari = ep.startswith('service_hours') or ep.startswith('profiles') %}
         {% set in_ai    = ep.startswith('ai.') %}
         {% set in_sys   = ep.startswith('settings') or ep.startswith('connection') or ep.startswith('tenants') or ep.startswith('users') or ep.startswith('integrations') or ep.startswith('secrets_modules') or ep == 'health.system_dashboard' or ep.startswith('manual') or ep.startswith('shadow') %}
@@ -84,6 +84,7 @@
                     <a href="{{ url_for('recipient_groups.list_view') }}" class="{% if ep.startswith('recipient_groups') %}active{% endif %}"><i class="fas fa-people-group"></i> Gruppi destinatari</a>
                     <a href="{{ url_for('addresses.from_list') }}" class="{% if ep.startswith('addresses') %}active{% endif %}"><i class="fas fa-at"></i> Indirizzi (mittenti/destinatari)</a>
                     <a href="{{ url_for('domains.domains_list') }}" class="{% if ep.startswith('domains') %}active{% endif %}"><i class="fas fa-globe"></i> Domini</a>
+                    <a href="{{ url_for('domain_strategy.list_view') }}" class="{% if ep.startswith('domain_strategy') %}active{% endif %}"><i class="fas fa-share-nodes"></i> Domini condivisi</a>
                     {% if session.role in ('admin', 'superadmin') %}
                     <a href="{{ url_for('privacy_bypass.index') }}" class="{% if ep.startswith('privacy_bypass') %}active{% endif %}" style="color:#dc2626;"><i class="fas fa-user-shield"></i> Privacy bypass</a>
                     {% endif %}

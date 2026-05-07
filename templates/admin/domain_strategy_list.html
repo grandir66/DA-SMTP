@@ -30,6 +30,13 @@
 .dom-form select, .dom-form input { padding: 0.3rem 0.5rem; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.85rem; }
 .dom-form button { padding: 0.3rem 0.7rem; border: 1px solid #1e3a8a; background: #1e3a8a; color: #fff; border-radius: 4px; font-size: 0.85rem; cursor: pointer; }
 .dom-note { font-size: 0.78rem; color: #64748b; font-style: italic; margin-top: 0.3rem; }
+
+.dom-filter-bar { display: flex; gap: 0.4rem; margin-bottom: 0.9rem; flex-wrap: wrap; align-items: center; padding: 0.55rem 0.7rem; background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; }
+.dom-filter-bar > label { font-size: 0.85rem; font-weight: 600; color: #334155; }
+.dom-filter-bar a { padding: 4px 11px; border: 1px solid #cbd5e1; background: #f8fafc; color: #334155; border-radius: 14px; font-size: 0.8rem; text-decoration: none; transition: all 0.12s; }
+.dom-filter-bar a:hover { background: #e0e7ff; border-color: #6366f1; }
+.dom-filter-bar a.active { background: #1e3a8a; border-color: #1e3a8a; color: #fff; font-weight: 600; }
+.dom-filter-sep { color: #cbd5e1; margin: 0 0.3rem; }
 </style>
 {% endblock %}
 
@@ -44,9 +51,35 @@
 
     <div class="dom-summary">
         <div class="dom-card"><div class="num">{{ summary.total }}</div><div class="lab">Domini condivisi</div></div>
+        <div class="dom-card"><div class="num">{{ summary.with_active }}</div><div class="lab">Con almeno 1 cliente attivo</div></div>
         <div class="dom-card auto"><div class="num">{{ summary.auto }}</div><div class="lab">AUTO (primo attivo)</div></div>
         <div class="dom-card primary"><div class="num">{{ summary.primary }}</div><div class="lab">PRIMARY (owner forzato)</div></div>
         <div class="dom-card bypass"><div class="num">{{ summary.bypass }}</div><div class="lab">BYPASS (no resolve)</div></div>
+    </div>
+
+    {# Barra filtri #}
+    <div class="dom-filter-bar">
+        <label>Filtra clienti:</label>
+        <a href="{{ url_for('domain_strategy.list_view') }}" class="{% if filter_active == 'all' %}active{% endif %}">Tutti</a>
+        <a href="{{ url_for('domain_strategy.list_view', filter='with_active', strategy=strategy_filter) }}" class="{% if filter_active == 'with_active' %}active{% endif %}">
+            <i class="fas fa-check-circle" style="color:#16a34a;"></i> Solo domini con clienti attivi
+        </a>
+        <a href="{{ url_for('domain_strategy.list_view', filter='only_active', strategy=strategy_filter) }}" class="{% if filter_active == 'only_active' %}active{% endif %}">
+            <i class="fas fa-filter"></i> Solo clienti attivi (nasconde inattivi)
+        </a>
+        <a href="{{ url_for('domain_strategy.list_view', filter='only_inactive', strategy=strategy_filter) }}" class="{% if filter_active == 'only_inactive' %}active{% endif %}">
+            <i class="fas fa-circle-xmark"></i> Solo domini con tutti inattivi
+        </a>
+
+        <span class="dom-filter-sep">|</span>
+        <label>Filtra strategy:</label>
+        <a href="{{ url_for('domain_strategy.list_view', filter=filter_active) }}" class="{% if not strategy_filter %}active{% endif %}">Tutte</a>
+        <a href="{{ url_for('domain_strategy.list_view', filter=filter_active, strategy='auto') }}" class="{% if strategy_filter == 'auto' %}active{% endif %}">AUTO</a>
+        <a href="{{ url_for('domain_strategy.list_view', filter=filter_active, strategy='primary') }}" class="{% if strategy_filter == 'primary' %}active{% endif %}">PRIMARY</a>
+        <a href="{{ url_for('domain_strategy.list_view', filter=filter_active, strategy='bypass') }}" class="{% if strategy_filter == 'bypass' %}active{% endif %}">BYPASS</a>
+
+        <span class="dom-filter-sep">|</span>
+        <span style="font-size:0.78rem; color:#64748b;">Mostrati: <strong>{{ items|length }}</strong> di {{ summary.total }}</span>
     </div>
 
     <div style="background: #eff6ff; border-left: 3px solid #3b82f6; padding: 0.6rem 0.9rem; border-radius: 0 5px 5px 0; font-size: 0.85rem; margin-bottom: 1rem;">

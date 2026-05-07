@@ -31,6 +31,10 @@ def _storage():
 @login_required(role="operator")
 def list_view():
     storage = _storage()
+    # Filtri da query string
+    filter_active = (request.args.get("filter") or "all").lower()  # all | with_active | only_active | strategy_*
+    strategy_filter = request.args.get("strategy")  # auto | primary | bypass | None
+
     items = storage.list_domain_strategies(tenant_id=current_tenant_id())
 
     # Per ogni dominio, prepara breakdown clienti (per UI)
@@ -58,22 +62,46 @@ def list_view():
     enriched = []
     for it in items:
         cs = domain_to_customers.get(it["domain"], [])
+        n_act = sum(1 for c in cs if c.get("contract_active"))
+        # In modalità only_active filtriamo i clienti del breakdown a soli attivi
+        if filter_active == "only_active":
+            cs_view = [c for c in cs if c.get("contract_active")]
+        else:
+            cs_view = cs
         enriched.append({
             **it,
-            "customers": cs,
+            "customers": cs_view,
+            "n_active_real": n_act,  # ricalcolato live (snapshot al sync)
         })
 
-    # Aggregati per UI
+    # Aggregati per UI sul totale (NON filtrato), per i counter in cima
     summary = {
         "total": len(items),
+        "with_active": sum(1 for r in enriched if r["n_active_real"] > 0),
+        "only_inactive": sum(1 for r in enriched if r["n_active_real"] == 0),
         "auto": sum(1 for r in items if r["strategy"] == "auto"),
         "primary": sum(1 for r in items if r["strategy"] == "primary"),
         "bypass": sum(1 for r in items if r["strategy"] == "bypass"),
     }
+
+    # Applica filtri
+    filtered = enriched
+    if filter_active == "with_active":
+        filtered = [r for r in filtered if r["n_active_real"] > 0]
+    elif filter_active == "only_active":
+        # Nasconde i domini SENZA alcun cliente attivo (i breakdown già limitati sopra)
+        filtered = [r for r in filtered if r["n_active_real"] > 0]
+    elif filter_active == "only_inactive":
+        filtered = [r for r in filtered if r["n_active_real"] == 0]
+    if strategy_filter in ("auto", "primary", "bypass"):
+        filtered = [r for r in filtered if r["strategy"] == strategy_filter]
+
     return render_template(
         "admin/domain_strategy_list.html",
-        items=enriched,
+        items=filtered,
         summary=summary,
+        filter_active=filter_active,
+        strategy_filter=strategy_filter,
     )
 
 
