@@ -143,6 +143,42 @@ def _build_related_logics(storage, rule_items: list) -> list[dict]:
             "related_disabled_rules": _related_disabled_rules(a),
         })
 
+    # 2. Privacy bypass: lista indirizzi/domini esclusi dal rule engine
+    try:
+        pb = storage.list_privacy_bypass_active(tenant_id=_tid())
+    except (NotImplementedError, AttributeError):
+        pb = {}
+    n_from = len(pb.get("from") or [])
+    n_to = len(pb.get("to") or [])
+    n_from_dom = len(pb.get("from_domains") or [])
+    n_to_dom = len(pb.get("to_domains") or [])
+    n_total = n_from + n_to + n_from_dom + n_to_dom
+    if n_total > 0:
+        stats = []
+        if n_from: stats.append(f"{n_from} mittenti")
+        if n_to: stats.append(f"{n_to} destinatari")
+        if n_from_dom: stats.append(f"{n_from_dom} domini mittente")
+        if n_to_dom: stats.append(f"{n_to_dom} domini destinatari")
+        out.append({
+            "kind": "privacy_bypass",
+            "id": "list",
+            "name": f"Privacy bypass list ({n_total} entry totali)",
+            "description": ("Indirizzi e domini ESCLUSI dal rule engine + AI + body retention "
+                            "per motivi GDPR (DPO, legale, HR, dati sensibili). Il listener "
+                            "scarta queste mail PRIMA di valutare qualsiasi regola — niente "
+                            "AI classify, niente body persistito, niente ticket aperti."),
+            "match_from_regex": None,
+            "match_subject_regex": None,
+            "threshold": None,
+            "delay_minutes": None,
+            "ticket_settore": None,
+            "ticket_urgenza": None,
+            "edit_url": None,
+            "list_url": url_for("privacy_bypass.index"),
+            "related_disabled_rules": [],
+            "stats": stats,
+        })
+
     return out
 
 

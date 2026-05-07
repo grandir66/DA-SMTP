@@ -8,6 +8,7 @@
 .rl-item { background:#fff; border:1px solid #e2e8f0; border-radius:6px; padding:0.55rem 0.75rem; margin-bottom:0.45rem; }
 .rl-item > .rl-head { display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap; }
 .rl-item .rl-kind-pill { font-size:0.72rem; font-weight:600; padding:2px 7px; border-radius:10px; background:#e0e7ff; color:#3730a3; }
+.rl-item .rl-kind-pill.rl-kind-privacy { background:#fee2e2; color:#991b1b; }
 .rl-item .rl-name { font-weight:600; color:#0f172a; font-size:0.92rem; }
 .rl-item .rl-meta { font-size:0.78rem; color:#64748b; }
 .rl-item .rl-desc { font-size:0.83rem; color:#475569; margin-top:0.35rem; }
@@ -76,20 +77,22 @@
     {% for rl in related_logics %}
     <div class="rl-item">
         <div class="rl-head">
-            <span class="rl-kind-pill">
+            <span class="rl-kind-pill {% if rl.kind == 'privacy_bypass' %}rl-kind-privacy{% endif %}">
                 {% if rl.kind == 'aggregation' %}
                 <i class="fas fa-layer-group"></i> AGGREGATION
+                {% elif rl.kind == 'privacy_bypass' %}
+                <i class="fas fa-user-shield"></i> PRIVACY BYPASS (PRE-RULES)
                 {% else %}
                 <i class="fas fa-cog"></i> {{ rl.kind|upper }}
                 {% endif %}
             </span>
-            <span class="rl-name">#{{ rl.id }} {{ rl.name }}</span>
+            <span class="rl-name">{% if rl.id != 'list' %}#{{ rl.id }} {% endif %}{{ rl.name }}</span>
             {% if rl.delay_minutes %}<span class="rl-meta">⏱ delay {{ rl.delay_minutes }} min</span>{% endif %}
             {% if rl.threshold and rl.threshold > 1 %}<span class="rl-meta">threshold ≥ {{ rl.threshold }}</span>{% endif %}
             {% if rl.ticket_settore %}<span class="rl-meta">→ ticket settore <code>{{ rl.ticket_settore }}</code> {{ rl.ticket_urgenza or '' }}</span>{% endif %}
             <span class="rl-actions">
                 {% if rl.edit_url %}<a href="{{ rl.edit_url }}"><i class="fas fa-pen"></i> Modifica</a>{% endif %}
-                <a href="{{ rl.list_url }}"><i class="fas fa-arrow-up-right-from-square"></i> Lista completa</a>
+                <a href="{{ rl.list_url }}"><i class="fas fa-arrow-up-right-from-square"></i> {% if rl.kind == 'privacy_bypass' %}Gestisci lista{% else %}Lista completa{% endif %}</a>
             </span>
         </div>
         {% if rl.description %}<div class="rl-desc">{{ rl.description }}</div>{% endif %}
@@ -97,6 +100,11 @@
         <div class="rl-stats">
             {% if rl.match_from_regex %}<span>match from: <code>{{ rl.match_from_regex }}</code></span>{% endif %}
             {% if rl.match_subject_regex %}<span>match subject: <code>{{ rl.match_subject_regex|truncate(60) }}</code></span>{% endif %}
+        </div>
+        {% endif %}
+        {% if rl.stats %}
+        <div class="rl-stats">
+            {% for s in rl.stats %}<span><code>{{ s }}</code></span>{% endfor %}
         </div>
         {% endif %}
         {% if rl.related_disabled_rules %}
@@ -135,6 +143,9 @@
         <span class="count">{{ rule_set_counts.values()|sum if rule_set_counts else 0 }}</span>
     </a>
     {% for rs in rule_sets %}
+    {# Nascondiamo i set deprecati post-M035 (il filtro contratto e' via match_customer_groups). #}
+    {# Restano accessibili solo se l'utente clicca direttamente su un loro link (es. da una regola legacy). #}
+    {% if not rs.is_deprecated or active_set_id == rs.id %}
     <a class="rs-tab {% if active_set_id == rs.id %}active{% endif %} {% if not rs.enabled %}disabled{% endif %}"
        href="{{ url_for('rules.list_view', state=filter_state, set=rs.id) }}"
        title="{% if rs.is_deprecated %}DEPRECATO M035 — {% endif %}{{ rs.description or rs.name }}"
@@ -144,6 +155,7 @@
         {{ rs.name }}{% if rs.is_deprecated %} <small style="color:#dc2626;">[deprecato]</small>{% endif %}
         <span class="count">{{ rule_set_counts.get(rs.id, 0) }}</span>
     </a>
+    {% endif %}
     {% endfor %}
     <a class="rs-tab" style="margin-left:auto; color:#1e40af;"
        href="{{ url_for('rule_sets.list_view') }}"
