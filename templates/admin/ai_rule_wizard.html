@@ -1,0 +1,371 @@
+{% extends "admin/_base.html" %}
+{% block title %}AI Rule Wizard{% endblock %}
+{% block content %}
+<style>
+.aiw-card { background:#fff; border:1px solid #e2e8f0; border-radius:8px;
+            padding:1.2rem 1.4rem; margin-bottom:1rem;
+            box-shadow:0 1px 3px rgba(0,0,0,0.04); }
+.aiw-mode-toggle { display:flex; gap:0; border:1px solid #cbd5e1; border-radius:8px;
+                   overflow:hidden; margin-bottom:1rem; max-width:600px; }
+.aiw-mode-toggle label { flex:1; padding:0.7rem 1rem; cursor:pointer;
+                          background:#f8fafc; text-align:center; font-weight:600;
+                          color:#64748b; transition:all 0.15s; }
+.aiw-mode-toggle input[type=radio] { display:none; }
+.aiw-mode-toggle input[type=radio]:checked + span {
+    background:linear-gradient(90deg,#7c3aed,#3b82f6); color:#fff; }
+.aiw-mode-toggle label span { display:block; padding:0.7rem 1rem; }
+
+.aiw-pane { display:none; }
+.aiw-pane.active { display:block; }
+
+.aiw-row { display:grid; grid-template-columns:200px 1fr; gap:0.8rem;
+           align-items:start; margin-bottom:0.8rem; padding-bottom:0.6rem;
+           border-bottom:1px dashed #f1f5f9; }
+.aiw-row label { font-weight:600; color:#334155; padding-top:0.4rem; }
+.aiw-row input[type=text], .aiw-row input[type=number], .aiw-row select,
+.aiw-row textarea {
+    width:100%; padding:0.5rem; border:1px solid #cbd5e1; border-radius:6px;
+    font-family:inherit; font-size:0.9rem;
+}
+.aiw-row textarea { font-family:ui-monospace,Menlo,monospace; min-height:120px; }
+.aiw-row .help { font-size:0.78rem; color:#64748b; margin-top:0.25rem; }
+
+.aiw-banner { padding:0.7rem 1rem; border-radius:6px; margin-bottom:1rem;
+              font-size:0.88rem; }
+.aiw-banner.warn { background:#fef3c7; border:1px solid #f59e0b; color:#78350f; }
+.aiw-banner.info { background:#dbeafe; border:1px solid #3b82f6; color:#1e40af; }
+.aiw-banner.ok { background:#dcfce7; border:1px solid #22c55e; color:#15803d; }
+.aiw-banner.err { background:#fee2e2; border:1px solid #ef4444; color:#991b1b; }
+
+.aiw-preview { background:#f8fafc; border:2px solid #7c3aed; border-radius:10px;
+               padding:1.2rem 1.4rem; }
+.aiw-preview h3 { margin:0 0 0.8rem; color:#0f172a;
+                  display:flex; align-items:center; gap:0.5rem; }
+.aiw-confidence { display:inline-block; padding:0.15rem 0.6rem; border-radius:12px;
+                  font-size:0.78rem; font-weight:600; }
+.aiw-confidence.high { background:#dcfce7; color:#15803d; }
+.aiw-confidence.med { background:#fef3c7; color:#78350f; }
+.aiw-confidence.low { background:#fee2e2; color:#991b1b; }
+
+.aiw-rule-table { width:100%; border-collapse:collapse; margin:0.5rem 0; }
+.aiw-rule-table td { padding:0.4rem 0.7rem; border-bottom:1px solid #e2e8f0;
+                     vertical-align:top; font-size:0.86rem; }
+.aiw-rule-table td:first-child { font-weight:600; color:#475569;
+                                  width:240px; white-space:nowrap; }
+.aiw-rule-table td code { background:#1e293b; color:#7dd3fc; padding:0.1rem 0.4rem;
+                          border-radius:4px; font-size:0.82rem; word-break:break-all; }
+.aiw-rule-table tr.empty { color:#94a3b8; }
+.aiw-rule-table tr.empty td:last-child { font-style:italic; color:#94a3b8; }
+
+.aiw-reasoning { background:#fff; border:1px solid #cbd5e1; border-radius:6px;
+                 padding:0.8rem 1rem; margin:0.8rem 0;
+                 font-size:0.9rem; line-height:1.5; color:#1e293b; }
+.aiw-reasoning::before { content:'💡 Reasoning AI'; display:block;
+                         font-weight:600; color:#7c3aed; margin-bottom:0.4rem;
+                         font-size:0.82rem; text-transform:uppercase; letter-spacing:0.05em; }
+
+.aiw-warnings { background:#fffbeb; border:1px solid #f59e0b; border-radius:6px;
+                padding:0.7rem 1rem; margin:0.6rem 0; }
+.aiw-warnings::before { content:'⚠️ Avvertenze'; display:block; font-weight:600;
+                        color:#78350f; margin-bottom:0.4rem; font-size:0.82rem; }
+.aiw-warnings ul { margin:0; padding-left:1.2rem; font-size:0.86rem; color:#78350f; }
+
+.aiw-aggregation { background:#ede9fe; border:2px dashed #7c3aed; border-radius:8px;
+                   padding:0.9rem 1.1rem; margin:0.8rem 0; }
+.aiw-aggregation::before { content:'🔁 Aggregazione suggerita'; display:block;
+                           font-weight:700; color:#5b21b6; margin-bottom:0.5rem;
+                           font-size:0.85rem; text-transform:uppercase; letter-spacing:0.05em; }
+.aiw-aggregation .help { font-size:0.82rem; color:#5b21b6; margin-top:0.4rem; }
+
+.aiw-meta { display:flex; gap:1rem; flex-wrap:wrap; font-size:0.78rem;
+            color:#64748b; margin-top:0.6rem; padding-top:0.6rem;
+            border-top:1px solid #e2e8f0; }
+.aiw-meta span { display:inline-flex; align-items:center; gap:0.3rem; }
+
+.aiw-actions { display:flex; gap:0.6rem; margin-top:1rem; padding-top:1rem;
+               border-top:1px solid #e2e8f0; }
+.aiw-actions .spacer { flex:1; }
+</style>
+
+<section class="dr-section">
+    <div style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap;">
+        <h2 style="margin:0;">
+            <i class="fas fa-robot"></i> AI Rule Wizard
+            <span style="background:linear-gradient(90deg,#7c3aed,#3b82f6); color:#fff;
+                         padding:0.15rem 0.6rem; border-radius:10px; font-size:0.7rem;
+                         vertical-align:middle; margin-left:0.3rem;">BETA</span>
+        </h2>
+        <a href="{{ url_for('rules.wizard_view') }}" class="dr-btn" style="width:auto;">
+            <i class="fas fa-wand-magic-sparkles"></i> Wizard preset (manuale)
+        </a>
+        <a href="{{ url_for('rules.list_view') }}" class="dr-btn" style="width:auto; margin-left:auto;">
+            <i class="fas fa-times"></i> Annulla
+        </a>
+    </div>
+    <p class="dr-hint" style="margin-top:0.4rem;">
+        L'AI ti aiuta a generare una regola partendo da una descrizione testuale o
+        analizzando esempi reali del log. Particolarmente utile per i sistemi
+        automatici ripetitivi (CloudTIK, monitoring, alert) dove il riconoscimento
+        del pattern dai campioni è più preciso.
+    </p>
+</section>
+
+{% if not binding_status.configured %}
+<div class="aiw-banner warn">
+    <strong>⚙️ Setup richiesto:</strong> nessun binding AI configurato per il job
+    <code>rule_generator</code>. Vai in <a href="/ai/models">AI Models</a>
+    e crea un binding (consigliato Claude Haiku 4.5: veloce e poco costoso).
+    {% if binding_status.error %}<br><small>Errore: {{ binding_status.error }}</small>{% endif %}
+</div>
+{% endif %}
+
+<div class="aiw-card">
+    <form method="post" action="{{ url_for('ai_rule_wizard.wizard_view') }}" id="aiwForm">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div class="aiw-mode-toggle">
+            <label>
+                <input type="radio" name="mode" value="description"
+                       {% if form_state.mode == 'description' %}checked{% endif %}
+                       onchange="aiwSwitchMode('description')">
+                <span><i class="fas fa-keyboard"></i> Descrivi a parole</span>
+            </label>
+            <label>
+                <input type="radio" name="mode" value="samples"
+                       {% if form_state.mode == 'samples' %}checked{% endif %}
+                       onchange="aiwSwitchMode('samples')">
+                <span><i class="fas fa-database"></i> Da campioni reali (events)</span>
+            </label>
+        </div>
+
+        <!-- Modalità DESCRIPTION -->
+        <div class="aiw-pane {% if form_state.mode == 'description' %}active{% endif %}" id="paneDescription">
+            <div class="aiw-row">
+                <label for="description">Descrizione regola <span style="color:#ef4444">*</span></label>
+                <div>
+                    <textarea name="description" id="description" rows="6"
+                              placeholder="Es: Voglio gestire le mail da CloudTIK con subject CRITICAL aprendo un ticket urgente al settore tecnico, ma solo fuori dall'orario di servizio. Per le repliche nello stesso thread non aprire ticket nuovi.">{{ form_state.description }}</textarea>
+                    <div class="help">
+                        Descrivi cosa vuoi che succeda. Più dettagli fornisci (mittente,
+                        oggetto, orario, gruppo cliente, azione) migliore sarà la proposta.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modalità SAMPLES -->
+        <div class="aiw-pane {% if form_state.mode == 'samples' %}active{% endif %}" id="paneSamples">
+            <div class="aiw-row">
+                <label for="from_like">Filtro mittente (substring)</label>
+                <div>
+                    <input type="text" name="from_like" id="from_like"
+                           value="{{ form_state.from_like }}"
+                           placeholder="es: cloudtik, monitoring, no-reply">
+                    <div class="help">Match case-insensitive sull'indirizzo mittente. Vuoto = nessun filtro.</div>
+                </div>
+            </div>
+            <div class="aiw-row">
+                <label for="subject_like">Filtro oggetto (substring)</label>
+                <div>
+                    <input type="text" name="subject_like" id="subject_like"
+                           value="{{ form_state.subject_like }}"
+                           placeholder="es: CRITICAL, alert, down">
+                    <div class="help">Match case-insensitive sul subject. Vuoto = nessun filtro.</div>
+                </div>
+            </div>
+            <div class="aiw-row">
+                <label for="sample_hours">Finestra temporale</label>
+                <div>
+                    <select name="sample_hours" id="sample_hours">
+                        <option value="24" {% if form_state.sample_hours == 24 %}selected{% endif %}>Ultime 24h</option>
+                        <option value="72" {% if form_state.sample_hours == 72 %}selected{% endif %}>Ultime 72h (3 giorni)</option>
+                        <option value="168" {% if form_state.sample_hours == 168 %}selected{% endif %}>Ultima settimana</option>
+                        <option value="720" {% if form_state.sample_hours == 720 %}selected{% endif %}>Ultimo mese</option>
+                    </select>
+                    <div class="help">Più lunga la finestra, più contesto avrà l'AI per identificare pattern ricorrenti.</div>
+                </div>
+            </div>
+            <div class="aiw-row">
+                <label for="sample_limit">Numero campioni max</label>
+                <div>
+                    <input type="number" name="sample_limit" id="sample_limit"
+                           value="{{ form_state.sample_limit }}" min="3" max="50">
+                    <div class="help">Tipicamente 10-30 campioni bastano per identificare un pattern.</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Campi comuni -->
+        <hr style="border:none; border-top:1px solid #e2e8f0; margin:1rem 0;">
+
+        <div class="aiw-row">
+            <label for="rule_set_code">Rule set di destinazione</label>
+            <div>
+                <select name="rule_set_code" id="rule_set_code">
+                    {% for rs in rule_sets %}
+                        <option value="{{ rs.code }}"
+                                {% if form_state.rule_set_code == rs.code %}selected{% endif %}>
+                            {{ rs.name }} ({{ rs.code }})
+                        </option>
+                    {% endfor %}
+                </select>
+                <div class="help">Il set in cui salvare la regola. Default: <code>globali</code>.</div>
+            </div>
+        </div>
+
+        <div class="aiw-row">
+            <label for="user_hint">Suggerimento aggiuntivo <span style="color:#94a3b8;font-weight:normal">(opzionale)</span></label>
+            <div>
+                <input type="text" name="user_hint" id="user_hint"
+                       value="{{ form_state.user_hint }}"
+                       placeholder="es: usa aggregation per ridurre il rumore, settore S, urgenza ALTA">
+                <div class="help">Vincolo o preferenza extra che vuoi passare all'AI.</div>
+            </div>
+        </div>
+
+        <div class="aiw-actions">
+            <button type="submit" class="dr-btn dr-btn-primary"
+                    style="background:linear-gradient(90deg,#7c3aed,#3b82f6); border:none;"
+                    {% if not binding_status.configured %}disabled{% endif %}>
+                <i class="fas fa-magic"></i> Genera proposta AI
+            </button>
+            <span class="aiw-actions spacer"></span>
+            <small style="color:#64748b; align-self:center;">
+                Costo stimato: ~$0.001-0.005 per generazione (Claude Haiku 4.5)
+            </small>
+        </div>
+    </form>
+</div>
+
+{% if proposal %}
+<div class="aiw-preview">
+    <h3>
+        <i class="fas fa-check-circle" style="color:#22c55e;"></i>
+        Proposta AI
+        {% set conf = proposal.confidence %}
+        {% if conf >= 0.8 %}
+            <span class="aiw-confidence high">Confidence: {{ "%.0f"|format(conf * 100) }}%</span>
+        {% elif conf >= 0.6 %}
+            <span class="aiw-confidence med">Confidence: {{ "%.0f"|format(conf * 100) }}%</span>
+        {% else %}
+            <span class="aiw-confidence low">Confidence: {{ "%.0f"|format(conf * 100) }}%</span>
+        {% endif %}
+    </h3>
+
+    <div class="aiw-reasoning">
+        {{ proposal.reasoning }}
+    </div>
+
+    {% if proposal.warnings %}
+    <div class="aiw-warnings">
+        <ul>
+            {% for w in proposal.warnings %}
+            <li>{{ w }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    <h4 style="margin:1rem 0 0.4rem; color:#0f172a;">📋 Regola proposta</h4>
+    <table class="aiw-rule-table">
+        <tr><td>Nome</td><td><strong>{{ proposal.rule.name }}</strong></td></tr>
+        {% if proposal.rule.description %}
+        <tr><td>Descrizione</td><td>{{ proposal.rule.description }}</td></tr>
+        {% endif %}
+        <tr><td>Rule set</td><td><code>{{ proposal.rule.rule_set_code }}</code></td></tr>
+        <tr><td>Priority</td><td>{{ proposal.rule.priority }}</td></tr>
+        <tr><td>Action</td><td><code>{{ proposal.rule.action }}</code></td></tr>
+
+        {% set has_match = false %}
+        {% for f in ['match_from_regex','match_to_regex','match_subject_regex','match_body_regex',
+                     'match_from_domain','match_to_domain','match_customer_groups'] %}
+            {% if proposal.rule[f] %}
+                {% set has_match = true %}
+                <tr><td>{{ f }}</td><td><code>{{ proposal.rule[f] }}</code></td></tr>
+            {% endif %}
+        {% endfor %}
+
+        {% if proposal.rule.match_in_service is not none %}
+            <tr><td>match_in_service</td><td><code>{{ 'in orario' if proposal.rule.match_in_service else 'fuori orario' }}</code></td></tr>
+        {% endif %}
+        {% if proposal.rule.match_is_thread_continuation is not none %}
+            <tr><td>match_is_thread_continuation</td>
+                <td><code>{{ 'solo continuazioni' if proposal.rule.match_is_thread_continuation == 1 else 'solo prime mail' }}</code></td></tr>
+        {% endif %}
+
+        {% if proposal.rule.action_map %}
+        <tr><td>action_map</td>
+            <td><code>{{ proposal.rule.action_map | tojson }}</code></td></tr>
+        {% endif %}
+
+        {% if not has_match %}
+        <tr class="empty"><td colspan="2">⚠️ Nessun criterio match_* impostato — verrà segnalato anche dal validatore.</td></tr>
+        {% endif %}
+    </table>
+
+    {% if proposal.suggested_aggregation %}
+    <div class="aiw-aggregation">
+        L'AI ha riconosciuto un pattern di <strong>messaggi ripetitivi da sistema automatico</strong>
+        e suggerisce di affiancare un'aggregation per ridurre la cardinalità dei ticket:
+        <table class="aiw-rule-table" style="margin-top:0.5rem;">
+            <tr><td>Nome</td><td>{{ proposal.suggested_aggregation.name }}</td></tr>
+            {% if proposal.suggested_aggregation.match_from_regex %}
+            <tr><td>match_from_regex</td><td><code>{{ proposal.suggested_aggregation.match_from_regex }}</code></td></tr>
+            {% endif %}
+            {% if proposal.suggested_aggregation.match_subject_regex %}
+            <tr><td>match_subject_regex</td><td><code>{{ proposal.suggested_aggregation.match_subject_regex }}</code></td></tr>
+            {% endif %}
+            <tr><td>Threshold</td><td>{{ proposal.suggested_aggregation.threshold }} mail in finestra</td></tr>
+            <tr><td>Delay finestra</td><td>{{ proposal.suggested_aggregation.delay_minutes }} minuti</td></tr>
+            {% if proposal.suggested_aggregation.ticket_settore %}
+            <tr><td>Ticket settore</td><td>{{ proposal.suggested_aggregation.ticket_settore }}</td></tr>
+            {% endif %}
+            {% if proposal.suggested_aggregation.ticket_urgenza %}
+            <tr><td>Ticket urgenza</td><td>{{ proposal.suggested_aggregation.ticket_urgenza }}</td></tr>
+            {% endif %}
+        </table>
+        <div class="help">
+            Per crearla: dopo aver salvato la regola, vai in <a href="/aggregations/">Aggregations</a>
+            e usa questi parametri come base. (Auto-creazione aggregation in roadmap.)
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="aiw-meta">
+        <span><i class="fas fa-microchip"></i> Modello: <code>{{ proposal.model }}</code></span>
+        <span><i class="fas fa-server"></i> Provider: {{ proposal.provider }}</span>
+        <span><i class="fas fa-clock"></i> Latenza: {{ proposal.latency_ms }} ms</span>
+        <span><i class="fas fa-coins"></i> Costo: ${{ "%.5f"|format(proposal.cost_usd) }}</span>
+        {% if proposal.mode_used == 'samples' %}
+        <span><i class="fas fa-database"></i> Campioni analizzati: {{ proposal.samples_count }}</span>
+        {% endif %}
+    </div>
+
+    <div class="aiw-actions">
+        <form method="post" action="{{ url_for('ai_rule_wizard.save_proposal') }}" style="display:inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="text" name="name_override"
+                   placeholder="Nome regola (opzionale, default: {{ proposal.rule.name }})"
+                   style="width:300px; padding:0.5rem; border:1px solid #cbd5e1; border-radius:6px; font-size:0.9rem;">
+            <button type="submit" class="dr-btn dr-btn-primary" style="background:#15803d;">
+                <i class="fas fa-save"></i> Crea regola (DISABILITATA, da abilitare dopo review)
+            </button>
+        </form>
+        <span class="aiw-actions spacer"></span>
+        <form method="post" action="{{ url_for('ai_rule_wizard.discard_proposal') }}" style="display:inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="dr-btn">
+                <i class="fas fa-trash"></i> Scarta proposta
+            </button>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+<script>
+function aiwSwitchMode(mode) {
+    document.getElementById('paneDescription').classList.toggle('active', mode === 'description');
+    document.getElementById('paneSamples').classList.toggle('active', mode === 'samples');
+}
+</script>
+{% endblock %}

@@ -4,7 +4,65 @@
 Tutte le modifiche rilevanti a questo progetto vengono documentate in questo file.
 Il formato è basato su [Keep a Changelog](https://keepachangelog.com/it/1.1.0/).
 
-## [Unreleased] — 2026-05-06
+## [Unreleased] — 2026-05-07
+
+### Aggiunte — AI Rule Wizard: generatore di regole guidato da prompt o campioni reali
+
+Nuovo wizard `/rules/ai-wizard` che usa l'AI integrata per **generare la
+specifica di una regola** in modo guidato, complementare al wizard preset
+esistente. Particolarmente utile per i pattern di **sistemi automatici
+ripetitivi** (CloudTIK, Zabbix, Nagios, monitoring vari) dove il
+riconoscimento del pattern dai campioni reali è più preciso della
+descrizione testuale.
+
+#### Due modalità d'uso
+
+| Modalità | Input | Caso tipico |
+|---|---|---|
+| **Descrivi a parole** | Textarea libera (es. "voglio gestire le mail da CloudTIK fuori orario aprendo ticket urgente") | Regola nuova in linguaggio naturale |
+| **Da campioni reali** | Filtri su `from`/`subject` + finestra temporale → estrae N mail da `events_log` | Sistemi automatici ripetitivi: l'AI vede il pattern reale e propone regex precise + opzionale `suggested_aggregation` |
+
+#### Componenti
+
+| File | Cosa |
+|---|---|
+| `domarc_relay_admin/migrations/039_ai_rule_generator_job.sqlite.sql` | Registra il job_code `rule_generator` in `ai_jobs` |
+| `domarc_relay_admin/ai_assistant/rule_generator.py` | Orchestrator: prompt → JSON schema → normalize → return dict pronto per `upsert_rule`. `fetch_event_samples()` per modalità samples |
+| `domarc_relay_admin/ai_assistant/prompts/rule_generator.j2` | Prompt Jinja2 (system + user) con specifica completa rule engine, lista azioni valide, customer_groups/templates/recipient_groups disponibili |
+| `domarc_relay_admin/routes/ai_rule_wizard.py` | Blueprint `/rules/ai-wizard` (form), `/save` (upsert), `/discard` (clear session) |
+| `templates/admin/ai_rule_wizard.html` | UI con mode toggle, anteprima regola, reasoning AI, warnings, suggested_aggregation, meta provider/cost/latency |
+
+#### Vincoli di sicurezza (anti-fuoriuscita)
+
+- L'AI **non** scrive mai direttamente nel DB: l'output passa per
+  `upsert_rule` che applica V001-V008, regex compile check, mutex
+  match_to_regex/group_id, range priority globale.
+- Le regole create da AI Wizard nascono **DISABILITATE**: l'admin le abilita
+  manualmente dopo review nel form regola standard.
+- Output vincolato via `json_schema` del provider (Claude tool_use o
+  OpenAI response_format).
+- Validazione semantica lato Python: action whitelist, regex compile
+  pre-save, segnalazione warning se nessun `match_*` impostato.
+
+#### Setup operativo
+
+1. Migration 039 applicata automaticamente al primo restart.
+2. Vai in `/ai/models` → crea binding per job `rule_generator` (consigliato
+   Claude Haiku 4.5: ~$0.001-0.005 per generazione, latenza <5s).
+3. Vai in `/rules/ai-wizard` → genera la prima regola.
+
+#### Roadmap
+
+- Auto-creazione `aggregation` quando `suggested_aggregation` è valorizzato
+  (oggi solo proposta visiva, l'admin la crea manualmente in `/aggregations/`).
+- Pulsante "Modifica nel form" che precompila `/rules/new` (oggi va via
+  "Crea regola" → form edit).
+- Integrazione con `/rules/preview-impact` per mostrare quante mail degli
+  ultimi 7gg matcherebbero la regola proposta.
+
+---
+
+## [2026-05-06]
 
 ### Aggiunte — Form regole UX v3: Toggle Modalità Base/Avanzata + 5 opzioni di semplificazione
 
