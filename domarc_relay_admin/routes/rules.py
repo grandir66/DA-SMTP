@@ -47,6 +47,12 @@ def list_view():
     )
     sets = storage.list_rule_sets(tenant_id=_tid())
     counts = storage.count_rules_per_set(tenant_id=_tid())
+
+    # Logiche correlate altrove: aggregations attive + relazioni con
+    # regole disabilitate che hanno pattern simile (es. CloudTIK
+    # aggregation #3 sostituisce regole #47, #55 disabilitate).
+    related_logics = _build_related_logics(storage, items)
+
     return render_template(
         "admin/rules_list.html",
         items=items,
@@ -54,7 +60,98 @@ def list_view():
         rule_sets=sets,
         rule_set_counts=counts,
         active_set_id=rule_set_id,
+        related_logics=related_logics,
     )
+
+
+def _build_related_logics(storage, rule_items: list) -> list[dict]:
+    """Identifica logiche di business attive in altri sottosistemi
+    (aggregations, ecc.) che processano mail in modo correlato alle
+    regole. Per ogni logica calcola le regole disabilitate con
+    pattern simile (heuristic: substring match su match_from_regex /
+    match_from_domain / match_subject_regex).
+    """
+    out: list[dict] = []
+
+    # 1. Aggregations attive
+    try:
+        aggs = storage.list_aggregations(tenant_id=_tid(), only_enabled=True)
+    except Exception:  # noqa: BLE001
+        aggs = []
+
+    # Indicizza tutte le regole (anche disabilitate) per pattern matching rapido.
+    # list_rules_grouped restituisce {"type": "group"|"orphan", ...}. Per
+    # avere TUTTE le regole anche disabilitate facciamo un fetch dedicato
+    # quando filter_state è 'enabled' (in tal caso rule_items non contiene
+    # le disabilitate).
+    all_rules_raw = storage.list_top_level_items(tenant_id=_tid(), only_enabled=None)
+    all_rules: list[dict] = list(all_rules_raw or [])
+    # Aggiungi anche i figli dei gruppi (anche se disabilitati)
+    for r in list(all_rules):
+        if r.get("is_group"):
+            try:
+                kids = storage.list_group_children(r["id"], only_enabled=None) or []
+                all_rules.extend(kids)
+            except Exception:  # noqa: BLE001
+                pass
+
+    def _related_disabled_rules(agg: dict) -> list[dict]:
+        """Restituisce regole disabilitate con pattern simile all'aggregation."""
+        related: list[dict] = []
+        agg_from_re = (agg.get("match_from_regex") or "").lower()
+        agg_subj_re = (agg.get("match_subject_regex") or "").lower()
+        # Estrae token significativi dal pattern (es. 'cloudtik' da '^no-reply@cloudtik\\.it$')
+        import re as _re
+        tokens = set()
+        for s in (agg_from_re, agg_subj_re):
+            for t in _re.findall(r"[a-z0-9]{4,}", s):
+                if t in ("noreply", "https", "http", "html", "from", "regex"):
+                    continue
+                tokens.add(t)
+        if not tokens:
+            return []
+        for r in all_rules:
+            if not r or r.get("enabled"):
+                continue  # solo disabilitate
+            txt = " ".join([
+                (r.get("match_from_regex") or "").lower(),
+                (r.get("match_from_domain") or "").lower(),
+                (r.get("match_subject_regex") or "").lower(),
+                (r.get("name") or "").lower(),
+            ])
+            if any(t in txt for t in tokens):
+                related.append({
+                    "id": r["id"], "name": r["name"], "action": r.get("action"),
+                })
+        return related
+
+    for a in aggs:
+        out.append({
+            "kind": "aggregation",
+            "id": a["id"],
+            "name": a["name"],
+            "description": a.get("description") or "",
+            "match_from_regex": a.get("match_from_regex"),
+            "match_subject_regex": a.get("match_subject_regex"),
+            "threshold": a.get("threshold"),
+            "delay_minutes": a.get("delay_minutes"),
+            "ticket_settore": a.get("ticket_settore"),
+            "ticket_urgenza": a.get("ticket_urgenza"),
+            "edit_url": url_for("aggregations.form_view", agg_id=a["id"])
+                        if _has_agg_form() else None,
+            "list_url": "/aggregations/",
+            "related_disabled_rules": _related_disabled_rules(a),
+        })
+
+    return out
+
+
+def _has_agg_form() -> bool:
+    try:
+        url_for("aggregations.form_view", agg_id=1)
+        return True
+    except Exception:  # noqa: BLE001
+        return False
 
 
 @rules_bp.route("/rules/wizard", methods=["GET", "POST"])
