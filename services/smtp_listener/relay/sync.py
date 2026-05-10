@@ -11,6 +11,7 @@ in `manager.cache_grace_ttl_sec`. Il listener continua a operare con i dati cach
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -23,7 +24,38 @@ from relay.storage import Storage
 logger = logging.getLogger(__name__)
 
 
-def sync_customers_and_rules(backend: ManagerBackend, storage: Storage) -> dict[str, Any]:
+def _check_cache_grace(storage: Storage, cfg: RelayConfig | None) -> None:
+    """Verifica se la cache e' stale oltre cache_grace_ttl_sec.
+
+    Se tutti i sync recenti hanno fallito da piu' di N secondi, logga
+    CRITICAL e popola un flag in sync_meta consumabile da /health esterno.
+    Best-effort, non blocca il listener.
+    """
+    try:
+        if cfg is None:
+            return
+        ttl = int(getattr(cfg.manager, "cache_grace_ttl_sec", 1800) or 1800)
+        last_ok = storage.get_heartbeat("sync_last_ok")
+        if not last_ok:
+            return
+        last_dt = datetime.fromisoformat(last_ok.replace("Z", "+00:00"))
+        now = datetime.now(timezone.utc)
+        elapsed = (now - last_dt).total_seconds()
+        if elapsed > ttl:
+            storage.set_heartbeat("cache_stale", "true")
+            logger.critical(
+                "CACHE STALE: ultimo sync OK %d secondi fa (limite %ds). "
+                "Le regole/clienti potrebbero essere disallineate. Verificare admin.",
+                int(elapsed), ttl,
+            )
+        else:
+            storage.set_heartbeat("cache_stale", "false")
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("cache grace check skip: %s", exc)
+
+
+def sync_customers_and_rules(backend: ManagerBackend, storage: Storage,
+                              cfg: RelayConfig | None = None) -> dict[str, Any]:
     result: dict[str, Any] = {"customers": None, "rules": None, "routes": None, "settings": None, "domain_routing": None, "templates": None, "errors": []}
     try:
         customers_payload = backend.fetch_active_customers()
@@ -166,7 +198,22 @@ def sync_customers_and_rules(backend: ManagerBackend, storage: Storage) -> dict[
         logger.debug("Sync domain_strategies skip/fallito: %s", exc)
         result["errors"].append(f"domain_strategies: {exc}")
 
+    # Aggiorna heartbeat "sync_last_ok" se almeno una sezione e' andata bene
+    # senza errors gravi (customers + rules sono i critici). Cache grace check.
+    try:
+        ok_customers = result.get("customers") is not None
+        ok_rules = result.get("rules") is not None
+        if ok_customers and ok_rules:
+            storage.set_heartbeat("sync_last_ok", _now_iso())
+        _check_cache_grace(storage, cfg)
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("heartbeat/grace update skip: %s", exc)
+
     return result
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
 def load_routes_from_yaml(cfg: RelayConfig, storage: Storage) -> int:

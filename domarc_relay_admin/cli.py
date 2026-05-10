@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import sys
 
 from . import __version__
@@ -57,11 +58,48 @@ def main() -> int:
             cfg.bind_port = args.port
         if args.debug:
             cfg.debug = True
-        app = create_app(cfg)
-        logging.info("Domarc SMTP Relay Admin v%s avvio su %s:%d (backend=%s)",
-                     __version__, cfg.bind_host, cfg.bind_port, cfg.db_backend)
-        # Per produzione: gunicorn o uWSGI. Qui usiamo il dev server.
-        app.run(host=cfg.bind_host, port=cfg.bind_port, debug=cfg.debug, threaded=True)
+        logging.info("Domarc SMTP Relay Admin v%s avvio su %s:%d (backend=%s, mode=%s)",
+                     __version__, cfg.bind_host, cfg.bind_port, cfg.db_backend,
+                     "DEV" if cfg.debug else "PROD")
+        if cfg.debug:
+            # Dev: Werkzeug single-process (autoreload + debugger).
+            app = create_app(cfg)
+            app.run(host=cfg.bind_host, port=cfg.bind_port, debug=True, threaded=True)
+            return 0
+        # Produzione: gunicorn embeddato (BaseApplication) — multi-worker, graceful.
+        try:
+            from gunicorn.app.base import BaseApplication
+        except ImportError:
+            print("ERROR: gunicorn non installato. pip install -e '.[prod]'",
+                   file=sys.stderr)
+            return 2
+
+        class _GunicornApp(BaseApplication):
+            def __init__(self, app_factory, options):
+                self._factory = app_factory
+                self._options = options
+                super().__init__()
+            def load_config(self):
+                for k, v in self._options.items():
+                    self.cfg.set(k, v)
+            def load(self):
+                return self._factory()
+
+        workers = int(os.environ.get("DOMARC_RELAY_WORKERS", "4"))
+        threads = int(os.environ.get("DOMARC_RELAY_THREADS", "8"))
+        options = {
+            "bind": f"{cfg.bind_host}:{cfg.bind_port}",
+            "workers": workers,
+            "worker_class": "gthread",
+            "threads": threads,
+            "timeout": 60,
+            "graceful_timeout": 30,
+            "worker_tmp_dir": "/dev/shm",
+            "accesslog": "-",
+            "errorlog": "-",
+            "loglevel": "info",
+        }
+        _GunicornApp(lambda: create_app(cfg), options).run()
         return 0
     parser.print_help()
     return 2

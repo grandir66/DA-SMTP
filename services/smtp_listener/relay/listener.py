@@ -112,6 +112,21 @@ class RelayHandler:
             )
         except Exception as exc:
             logger.exception("Pipeline fallita per messaggio da %s: %s", envelope.mail_from, exc)
+            # DLQ: salva il messaggio in quarantine cosi' non si perde traccia
+            # di mail droppate per bug applicativi. Best-effort: se anche la
+            # quarantine fallisce, log + 451.
+            try:
+                import uuid as _uuid
+                self._storage.add_quarantine(
+                    event_uuid=str(_uuid.uuid4()),
+                    mime_blob=raw,
+                    reason="pipeline_exception",
+                    from_address=parsed.from_address or envelope.mail_from,
+                    to_address=parsed.primary_to,
+                )
+            except Exception:  # noqa: BLE001
+                logger.exception("DLQ quarantine fallita per messaggio da %s",
+                                  envelope.mail_from)
             return "451 4.3.0 Errore di elaborazione temporaneo"
 
         logger.info(

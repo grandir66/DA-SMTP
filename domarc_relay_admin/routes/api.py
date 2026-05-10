@@ -33,36 +33,102 @@ def _customer_source():
     return current_app.extensions["domarc_customer_source"]
 
 
-def _get_or_create_api_key() -> str:
-    """Recupera la chiave API dalla tabella settings; la crea al primo accesso."""
+def _mask_key(k: str) -> str:
+    if not k or len(k) < 12:
+        return "***"
+    return f"{k[:6]}...{k[-4:]} (len={len(k)})"
+
+
+def _get_or_create_api_key_hash() -> str:
+    """Recupera bcrypt-hash della chiave API. Al primo bootstrap:
+    1. Se esiste plaintext legacy (`relay_api_key`): calcola hash, salva
+       `relay_api_key_hash`, lascia plaintext finché l'operatore non lo
+       cancella manualmente (serve per il deploy del listener).
+    2. Altrimenti genera nuova chiave, stampa plain UNA volta nel log
+       mascherato + nei warning, salva solo l'hash.
+    """
+    import bcrypt
     storage = _storage()
     with storage._connect() as conn:
-        row = conn.execute("SELECT value FROM settings WHERE key = 'relay_api_key'").fetchone()
-        if row:
+        row = conn.execute(
+            "SELECT value FROM settings WHERE key = 'relay_api_key_hash'"
+        ).fetchone()
+        if row and row["value"]:
             return str(row["value"])
+        # Legacy migration: hash su plaintext esistente
+        legacy = conn.execute(
+            "SELECT value FROM settings WHERE key = 'relay_api_key'"
+        ).fetchone()
+        if legacy and legacy["value"]:
+            plain = str(legacy["value"])
+            h = bcrypt.hashpw(plain.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+            conn.execute(
+                """INSERT INTO settings (key, value, description)
+                   VALUES ('relay_api_key_hash', ?,
+                           'Bcrypt hash della relay_api_key. Plain in relay_api_key (deprecato).')""",
+                (h,),
+            )
+            conn.commit()
+            logger.warning("Migrato relay_api_key plaintext → hash bcrypt. "
+                            "Cancellare manualmente la riga `relay_api_key` da settings "
+                            "dopo aver copiato la chiave nel listener.")
+            return h
+        # Nessuna chiave: genera nuova
         new_key = secrets.token_urlsafe(48)
+        h = bcrypt.hashpw(new_key.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+        conn.execute(
+            """INSERT INTO settings (key, value, description)
+               VALUES ('relay_api_key_hash', ?,
+                       'Bcrypt hash della X-API-Key per il listener relay.')""",
+            (h,),
+        )
         conn.execute(
             """INSERT INTO settings (key, value, description)
                VALUES ('relay_api_key', ?,
-                       'Chiave X-API-Key per il listener relay verso questo admin standalone.')""",
+                       'Plaintext temporaneo: copiare nel secrets.env del listener e CANCELLARE da qui.')""",
             (new_key,),
         )
         conn.commit()
-        logger.warning("API key relay generata: %s — copiala nel secrets.env del listener", new_key)
-        return new_key
+        logger.warning(
+            "API key relay generata: %s — copia il plaintext da settings.relay_api_key "
+            "(visibile nel DB SQLite) e poi CANCELLA quella riga.",
+            _mask_key(new_key),
+        )
+        return h
 
 
 def require_api_key(f):
+    import bcrypt
     @functools.wraps(f)
     def wrapper(*args, **kwargs):
         provided = request.headers.get("X-API-Key", "").strip()
         if not provided:
             return jsonify({"error": "X-API-Key mancante"}), 401
-        expected = _get_or_create_api_key()
-        if not secrets.compare_digest(provided, expected):
+        try:
+            expected_hash = _get_or_create_api_key_hash()
+            ok = bcrypt.checkpw(provided.encode("utf-8"),
+                                expected_hash.encode("utf-8"))
+        except Exception as exc:  # noqa: BLE001
+            logger.error("Errore verifica X-API-Key: %s", exc)
+            return jsonify({"error": "errore interno auth"}), 500
+        if not ok:
             return jsonify({"error": "X-API-Key invalida"}), 401
         return f(*args, **kwargs)
     return wrapper
+
+
+def _get_or_create_api_key() -> str:
+    """Compat con codice legacy che ancora chiama questa funzione.
+    Forza la migrazione a hash e ritorna il plain SE ancora presente per
+    retrocompat — altrimenti placeholder (chi chiama non dovrebbe
+    aspettarsi un plain dopo la migrazione)."""
+    _get_or_create_api_key_hash()  # garantisce hash presente
+    storage = _storage()
+    with storage._connect() as conn:
+        row = conn.execute(
+            "SELECT value FROM settings WHERE key = 'relay_api_key'"
+        ).fetchone()
+        return str(row["value"]) if row and row["value"] else ""
 
 
 # ============================================================ ENDPOINTS ===

@@ -364,6 +364,14 @@ def fetch_event_samples(
         filters=filters or None,
     )
 
+    # PII redactor obbligatorio: tutto cio' che va al provider AI deve passare
+    # da pii_redactor (.claude/rules/ai-payload.md). Anonimizza email, telefoni,
+    # CF/P.IVA, IBAN, ecc. e mantiene la coerenza intra-prompt con token.
+    try:
+        from .pii_redactor import redact as _redact
+    except Exception:  # noqa: BLE001
+        _redact = lambda s: s  # noqa: E731 — fallback: meglio passare meno info che crash
+
     out: list[dict[str, Any]] = []
     sl = (subject_like or "").strip().lower()
     fl = (from_like or "").strip().lower()
@@ -376,12 +384,14 @@ def fetch_event_samples(
             # già filtrato a livello DB con "q" generico, ma stringe ulteriore
             continue
         body = (r.get("body_text") or "").strip()
+        # Redact PII PRIMA di mettere nel sample inviato all'AI
+        body_preview_redacted = _redact(body[:300]) if body else ""
         out.append({
             "received_at": r.get("received_at"),
-            "from_address": frm,
-            "to_address": r.get("to_address") or "",
-            "subject": subj,
-            "body_preview": body[:300] if body else "",
+            "from_address": _redact(frm),
+            "to_address": _redact(r.get("to_address") or ""),
+            "subject": _redact(subj),
+            "body_preview": body_preview_redacted,
         })
         if len(out) >= limit:
             break

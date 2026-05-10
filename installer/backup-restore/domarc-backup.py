@@ -86,6 +86,28 @@ def _hash_file(path: Path) -> str:
     return h.hexdigest()
 
 
+def _safe_sqlite_snapshot(src: Path) -> str:
+    """Snapshot consistente di un SQLite live (anche con WAL attivo).
+
+    Usa l'online backup API di SQLite invece di shutil.copy/tar.add raw,
+    che possono catturare stato inconsistente quando il DB e' in uso.
+    Ritorna path tempfile (caller responsibile di unlink).
+    """
+    import sqlite3
+    fd, tmp = tempfile.mkstemp(suffix=".db", prefix=f"backup-{src.stem}-")
+    os.close(fd)
+    src_conn = sqlite3.connect(f"file:{src}?mode=ro", uri=True)
+    try:
+        dst_conn = sqlite3.connect(tmp)
+        try:
+            src_conn.backup(dst_conn)
+        finally:
+            dst_conn.close()
+    finally:
+        src_conn.close()
+    return tmp
+
+
 def main():
     ap = argparse.ArgumentParser(description="Backup cifrato Domarc SMTP Relay")
     ap.add_argument("--output", required=True, help="Path bundle output (es. /root/backup.tar.gz.enc)")
@@ -125,17 +147,35 @@ def main():
             if not p.exists():
                 print(f"  [skip] {src} (non esistente)")
                 continue
-            # Cap admin.db: opzionalmente svuota body_text/html prima del backup
-            if not args.include_bodies and src.endswith("admin.db"):
-                tmp = _strip_bodies(p)
-                tar.add(tmp, arcname=arcname)
-                manifest["files"].append({
-                    "src": src, "arc": arcname,
-                    "size": Path(tmp).stat().st_size,
-                    "sha256": _hash_file(Path(tmp)),
-                    "stripped_bodies": True,
-                })
-                Path(tmp).unlink()
+            is_sqlite = src.endswith(".db")
+            tmp_to_unlink: str | None = None
+            # SQLite live (admin.db, relay.db): snapshot consistente via .backup()
+            if is_sqlite:
+                if not args.include_bodies and src.endswith("admin.db"):
+                    # snapshot + strip bodies in un solo passo
+                    snap = _safe_sqlite_snapshot(p)
+                    _strip_bodies_inplace(Path(snap))
+                    tar.add(snap, arcname=arcname)
+                    tmp_to_unlink = snap
+                    manifest["files"].append({
+                        "src": src, "arc": arcname,
+                        "size": Path(snap).stat().st_size,
+                        "sha256": _hash_file(Path(snap)),
+                        "stripped_bodies": True,
+                        "snapshot": True,
+                    })
+                else:
+                    snap = _safe_sqlite_snapshot(p)
+                    tar.add(snap, arcname=arcname)
+                    tmp_to_unlink = snap
+                    manifest["files"].append({
+                        "src": src, "arc": arcname,
+                        "size": Path(snap).stat().st_size,
+                        "sha256": _hash_file(Path(snap)),
+                        "stripped_bodies": False,
+                        "snapshot": True,
+                    })
+                print(f"  [snap] {arcname} ({Path(snap).stat().st_size:,} byte, consistent)")
             else:
                 tar.add(p, arcname=arcname)
                 manifest["files"].append({
@@ -143,8 +183,14 @@ def main():
                     "size": p.stat().st_size,
                     "sha256": _hash_file(p),
                     "stripped_bodies": False,
+                    "snapshot": False,
                 })
                 print(f"  [add ] {arcname} ({p.stat().st_size:,} byte)")
+            if tmp_to_unlink:
+                try:
+                    Path(tmp_to_unlink).unlink()
+                except Exception:  # noqa: BLE001
+                    pass
 
         # Manifest JSON
         manifest_data = json.dumps(manifest, indent=2).encode("utf-8")
@@ -179,23 +225,27 @@ def main():
     print("\n⚠ CUSTODIRE LA PASSPHRASE: senza, il backup è illeggibile.")
 
 
-def _strip_bodies(admin_db: Path) -> str:
-    """Crea copia di admin.db senza body_text/body_html negli eventi.
+def _strip_bodies_inplace(snapshot_db: Path) -> None:
+    """Svuota body_text/body_html nella copia snapshot (NON sul DB live).
 
-    Riduce dimensione + zero-PII nel backup. Il restore importa la copia.
+    Caller responsabilita': passare uno snapshot consistente, non il DB live.
     """
-    import shutil, sqlite3
-    fd, tmp = tempfile.mkstemp(suffix=".db", prefix="admin-backup-")
-    os.close(fd)
-    shutil.copy2(admin_db, tmp)
-    conn = sqlite3.connect(tmp)
+    import sqlite3
+    conn = sqlite3.connect(str(snapshot_db))
     try:
         conn.execute("UPDATE events SET body_text = NULL, body_html = NULL")
         conn.commit()
         conn.execute("VACUUM")
     finally:
         conn.close()
-    return tmp
+
+
+def _strip_bodies(admin_db: Path) -> str:
+    """DEPRECATO: usa _safe_sqlite_snapshot + _strip_bodies_inplace.
+    Mantenuto per compat se chiamato da script esterni."""
+    snap = _safe_sqlite_snapshot(admin_db)
+    _strip_bodies_inplace(Path(snap))
+    return snap
 
 
 if __name__ == "__main__":

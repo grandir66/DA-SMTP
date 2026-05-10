@@ -222,7 +222,7 @@ def attachment_upload(template_id: int):
 
 
 @templates_bp.route("/templates/<int:template_id>/attachments/<filename>", methods=["GET", "DELETE"])
-@login_required()
+@login_required(role="admin")
 def attachment_handler(template_id: int, filename: str):
     record = _storage().get_template(template_id)
     if not record:

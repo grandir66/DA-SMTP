@@ -1,0 +1,20 @@
+{% extends "admin/_base.html" %}
+{% block title %}Errore {{ code }}{% endblock %}
+{% block content %}
+<div style="max-width: 640px; margin: 4rem auto; text-align: center; padding: 2rem;">
+  <h1 style="font-size: 4rem; margin: 0; color: #c0392b;">{{ code }}</h1>
+  <p style="font-size: 1.2rem; color: #2c3e50; margin: 1rem 0 2rem;">{{ message }}</p>
+  {% if code == 403 %}
+    <p>Non hai i permessi per accedere a questa risorsa.</p>
+  {% elif code == 404 %}
+    <p>La pagina richiesta non esiste o e' stata spostata.</p>
+  {% elif code == 500 %}
+    <p>Si e' verificato un problema interno. L'incidente e' stato registrato.</p>
+  {% endif %}
+  <a href="{{ url_for('dashboard.index') }}"
+     style="display: inline-block; margin-top: 1.5rem; padding: 0.6rem 1.2rem;
+            background: #2c3e50; color: white; text-decoration: none; border-radius: 4px;">
+    Torna alla dashboard
+  </a>
+</div>
+{% endblock %}

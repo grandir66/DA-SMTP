@@ -1,0 +1,40 @@
+[Unit]
+Description=Domarc SMTP Relay — Backup cifrato giornaliero
+Documentation=file:///opt/domarc-smtp-relay-admin/installer/backup-restore/
+
+# Aspetta che i servizi siano stabili (admin running) prima del backup
+After=domarc-smtp-relay-admin.service
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/var/backups/domarc
+
+# Passphrase letta da /etc/domarc-backup-pass (chmod 600 root:root)
+# Backup di output: snapshot-YYYY-MM-DD.tar.gz.enc
+ExecStart=/bin/bash -c '\
+    set -e; \
+    mkdir -p /var/backups/domarc; \
+    PASS="$(cat /etc/domarc-backup-pass)"; \
+    OUT="/var/backups/domarc/snapshot-$(date +%%F).tar.gz.enc"; \
+    /opt/domarc-smtp-relay-admin/.venv/bin/python \
+        /opt/domarc-smtp-relay-admin/installer/backup-restore/domarc-backup.py \
+        --output "$OUT" \
+        --passphrase "$PASS"; \
+    chmod 600 "$OUT"; \
+    chown root:root "$OUT"; \
+    # Mantieni solo gli ultimi 14 backup giornalieri \
+    ls -1t /var/backups/domarc/snapshot-*.tar.gz.enc 2>/dev/null | tail -n +15 | xargs -r rm -f; \
+    echo "[backup] OK $OUT ($(stat -c%%s "$OUT") byte)"'
+
+# Hardening
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+NoNewPrivileges=true
+ReadWritePaths=/var/backups/domarc /tmp
+# Se aggiungerai rsync verso NAS, decommentare:
+# ExecStartPost=/usr/bin/rsync -az /var/backups/domarc/ rsync://NAS_HOST/domarc-backups/
+
+[Install]
+WantedBy=multi-user.target

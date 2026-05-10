@@ -36,11 +36,21 @@ def _backoff_for(attempts: int, schedule: list[int]) -> int:
     return int(schedule[idx])
 
 
+def _heartbeat(storage: Storage, loop_name: str) -> None:
+    """Aggiorna heartbeat del loop in sync_meta per monitoring esterno.
+    Best-effort: errori sul heartbeat non bloccano il loop."""
+    try:
+        storage.set_heartbeat(loop_name, _now_iso())
+    except Exception:  # noqa: BLE001
+        pass
+
+
 async def _sync_loop(cfg: RelayConfig, backend: ManagerBackend, storage: Storage, stop: asyncio.Event) -> None:
     interval = cfg.manager.sync_interval_sec
     while not stop.is_set():
+        _heartbeat(storage, "sync")
         try:
-            sync_customers_and_rules(backend, storage)
+            sync_customers_and_rules(backend, storage, cfg=cfg)
         except Exception as exc:  # noqa: BLE001
             logger.exception("Sync loop: %s", exc)
         try:
@@ -52,6 +62,7 @@ async def _sync_loop(cfg: RelayConfig, backend: ManagerBackend, storage: Storage
 async def _events_flush_loop(cfg: RelayConfig, backend: ManagerBackend, storage: Storage, stop: asyncio.Event) -> None:
     interval = cfg.scheduler.events_flush_interval_sec
     while not stop.is_set():
+        _heartbeat(storage, "events_flush")
         try:
             flush_events_to_manager(backend, storage)
         except Exception as exc:  # noqa: BLE001
@@ -64,6 +75,7 @@ async def _events_flush_loop(cfg: RelayConfig, backend: ManagerBackend, storage:
 
 async def _routes_reload_loop(cfg: RelayConfig, storage: Storage, stop: asyncio.Event) -> None:
     while not stop.is_set():
+        _heartbeat(storage, "routes_reload")
         try:
             load_routes_from_yaml(cfg, storage)
         except Exception as exc:  # noqa: BLE001
@@ -158,6 +170,7 @@ async def _outbound_drain_loop(cfg: RelayConfig, storage: Storage, stop: asyncio
     forwarder = SmtpForwarder(helo_hostname=cfg.outbound.helo_hostname, timeout_sec=cfg.outbound.timeout_sec)
     interval = cfg.scheduler.outbound_drain_interval_sec
     while not stop.is_set():
+        _heartbeat(storage, "outbound_drain")
         try:
             n = _drain_outbound_once(cfg, storage, forwarder)
             if n:
@@ -261,6 +274,7 @@ def _drain_dispatch_once(cfg: RelayConfig, backend: ManagerBackend, storage: Sto
 async def _dispatch_drain_loop(cfg: RelayConfig, backend: ManagerBackend, storage: Storage, stop: asyncio.Event) -> None:
     interval = cfg.scheduler.dispatch_drain_interval_sec
     while not stop.is_set():
+        _heartbeat(storage, "dispatch_drain")
         try:
             n = _drain_dispatch_once(cfg, backend, storage)
             if n:
@@ -350,6 +364,7 @@ async def _pending_tickets_loop(storage: Storage, stop: asyncio.Event) -> None:
     """
     interval = 60
     while not stop.is_set():
+        _heartbeat(storage, "pending_tickets")
         try:
             n = _process_pending_tickets_once(storage)
             if n:

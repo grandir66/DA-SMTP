@@ -35,6 +35,38 @@ def _scope_filter() -> int | None:
     return _user_tenant_id() or 1
 
 
+def _validate_password(pwd: str) -> str | None:
+    """Ritorna messaggio errore se la password non rispetta i requisiti, None se OK.
+
+    Requisiti minimi (NIST 800-63B semplificato):
+    - lunghezza >= 10
+    - almeno 3 tipi tra: minuscole, maiuscole, cifre, simboli
+    - no spazi a capo/inizio/fine
+    """
+    if pwd != pwd.strip():
+        return "Password: niente spazi all'inizio/fine."
+    if len(pwd) < 10:
+        return "Password troppo corta: minimo 10 caratteri."
+    if len(pwd) > 200:
+        return "Password troppo lunga: massimo 200 caratteri."
+    has_lower = any(c.islower() for c in pwd)
+    has_upper = any(c.isupper() for c in pwd)
+    has_digit = any(c.isdigit() for c in pwd)
+    has_symbol = any(not c.isalnum() for c in pwd)
+    variety = sum([has_lower, has_upper, has_digit, has_symbol])
+    if variety < 3:
+        return ("Password debole: usa almeno 3 tipi di carattere tra "
+                "minuscole, maiuscole, cifre e simboli.")
+    # Blacklist password ovvie
+    blacklisted = {
+        "admin123", "password", "password1", "domarc2026", "stormshield",
+        "qwerty123", "letmein123",
+    }
+    if pwd.lower() in blacklisted:
+        return "Password troppo ovvia: scegline una meno comune."
+    return None
+
+
 def _can_manage_user(target: dict) -> bool:
     """Un admin di tenant può gestire solo utenti del proprio tenant (no superadmin)."""
     if _is_superadmin():
@@ -105,10 +137,18 @@ def form_view(user_id: int | None = None):
             "enabled": request.form.get("enabled") in ("on", "true", "1"),
             "tenant_id": new_tenant_id,
         }
-        # Password: solo se nuovo o cambia
+        # Password: solo se nuovo o cambia, con check complessita' minima.
         pwd = (request.form.get("password") or "").strip()
         if pwd:
+            pwd_error = _validate_password(pwd)
+            if pwd_error:
+                flash(pwd_error, "error")
+                return redirect(url_for("users.form_view", user_id=user_id) if not is_new
+                                 else url_for("users.form_view"))
             data["password"] = pwd
+        elif is_new:
+            flash("Password obbligatoria per il nuovo utente.", "error")
+            return redirect(url_for("users.form_view"))
         if not is_new:
             data["id"] = user_id
         # Protezione: non rimuovere se stesso

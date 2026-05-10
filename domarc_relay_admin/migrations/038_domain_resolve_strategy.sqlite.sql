@@ -29,4 +29,4 @@ CREATE TABLE domain_resolve_strategy (
     CHECK (strategy IN ('auto', 'primary', 'bypass'))
 );
 
-CREATE INDEX idx_domain_strategy_domain ON domain_resolve_strategy(tenant_id, domain);
+CREATE INDEX IF NOT EXISTS idx_domain_strategy_domain ON domain_resolve_strategy(tenant_id, domain);

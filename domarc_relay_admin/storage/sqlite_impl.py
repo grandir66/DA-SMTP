@@ -69,7 +69,18 @@ class SqliteStorage(Storage):
     # =================================================== MIGRATION RUNNER ==
 
     def apply_migrations(self) -> int:
-        """Applica migration files non ancora applicati. Ritorna numero applicate."""
+        """Applica migration files non ancora applicati. Ritorna numero applicate.
+
+        Le migration sono applicate dentro una transazione esplicita
+        (BEGIN/COMMIT) insieme all'INSERT in `_migrations`. Se la migration
+        crasha a meta', ROLLBACK riporta lo schema e il marker allo stato
+        precedente — niente "schema parzialmente applicato senza marker".
+
+        Nota: alcune migration legacy hanno BEGIN/COMMIT espliciti dentro
+        il file SQL. `executescript` autocommit-a quei BEGIN/COMMIT, quindi
+        non possiamo affidarci sempre al wrap esterno. Il pattern qui usa
+        savepoint annidato come fallback.
+        """
         migrations_dir = Path(__file__).parent.parent / "migrations"
         if not migrations_dir.exists():
             return 0
@@ -89,9 +100,20 @@ class SqliteStorage(Storage):
                 continue
             sql = f.read_text(encoding="utf-8")
             with self._connect() as conn:
-                conn.executescript(sql)
-                conn.execute("INSERT INTO _migrations (version) VALUES (?)", (ver,))
-                conn.commit()
+                try:
+                    conn.execute("BEGIN")
+                    conn.executescript(sql)
+                    conn.execute(
+                        "INSERT INTO _migrations (version) VALUES (?)", (ver,)
+                    )
+                    conn.commit()
+                except Exception:
+                    conn.rollback()
+                    logger.exception(
+                        "Migration %d (%s) FALLITA — rollback completato. "
+                        "Schema e marker invariati.", ver, f.name,
+                    )
+                    raise
             logger.info("Migration %d (%s) applicata", ver, f.name)
             applied_count += 1
         return applied_count

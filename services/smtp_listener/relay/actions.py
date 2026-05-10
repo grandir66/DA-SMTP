@@ -329,6 +329,21 @@ def do_auto_reply(
         return ActionResult(action="auto_reply", ok=False, detail="mittente sconosciuto, no auto-reply")
     if parsed.is_auto_or_bulk:
         return ActionResult(action="auto_reply", ok=False, detail="messaggio auto/bulk, skip per evitare loop")
+    # Anti-loop: skip se il mittente e' un local-part tipicamente non gestito
+    # (bounce/postmaster/noreply). Rispondere a queste mailbox causa loop o
+    # bounce ricorsivi. Whitelist hardcoded perche' standard universali RFC.
+    NOREPLY_LOCAL_PARTS = {
+        "noreply", "no-reply", "donotreply", "do-not-reply",
+        "mailer-daemon", "postmaster", "bounce", "bounces",
+        "abuse", "spam", "phish-report",
+    }
+    try:
+        local = parsed.from_address.split("@", 1)[0].lower()
+        if local in NOREPLY_LOCAL_PARTS:
+            return ActionResult(action="auto_reply", ok=False,
+                                 detail=f"skip auto-reply a mittente di sistema ({local}@...)")
+    except Exception:  # noqa: BLE001
+        pass
 
     # Smarthost scelto in base al dominio del destinatario dell'auto-reply (mittente originale)
     rcpt_domain = parsed.from_address.split("@", 1)[-1].lower() if "@" in parsed.from_address else None

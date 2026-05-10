@@ -428,6 +428,16 @@ class Storage:
                 )
             except sqlite3.OperationalError:
                 pass
+            # M039: index su events_log.message_id per thread continuation lookup.
+            # Senza, find_thread_root fa full-scan O(N) ad ogni mail di reply.
+            try:
+                conn.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_events_log_message_id "
+                    "ON events_log(message_id) "
+                    "WHERE message_id IS NOT NULL"
+                )
+            except sqlite3.OperationalError:
+                pass
             # CREATE TABLE IF NOT EXISTS già nel _SCHEMA, ma per DB esistente è già stata creata
             # all'init e i nuovi schema vengono ignorati. La tabella templates_cache viene
             # creata dal _SCHEMA stesso (CREATE TABLE IF NOT EXISTS), quindi nessuna ALTER serve.
@@ -505,6 +515,25 @@ class Storage:
                 ),
             )
         return evt_uuid
+
+    def set_heartbeat(self, loop_name: str, ts_iso: str) -> None:
+        """Aggiorna heartbeat di un loop scheduler nella tabella sync_meta.
+        Usato da monitoring esterno per rilevare loop hangati."""
+        with self._connect() as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO sync_meta (name, last_sync_at) "
+                "VALUES (?, ?)",
+                (f"heartbeat.{loop_name}", ts_iso),
+            )
+            conn.commit()
+
+    def get_heartbeat(self, loop_name: str) -> str | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT last_sync_at FROM sync_meta WHERE name = ?",
+                (f"heartbeat.{loop_name}",),
+            ).fetchone()
+            return row["last_sync_at"] if row else None
 
     def find_thread_root(self, in_reply_to: str | None,
                           references: list[str] | None) -> dict[str, Any] | None:

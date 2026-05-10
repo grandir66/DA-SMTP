@@ -140,14 +140,34 @@ class SyncEngine:
                 existing = set(
                     self.storage.list_customer_codclis_for_source(source_id)
                 )
-                missing = list(existing - fetched_codclis)
-                if missing:
-                    if on_missing == "flag":
-                        n_flagged_missing = self.storage.flag_missing_customers(missing)
-                    elif on_missing == "delete":
-                        n_flagged_missing = self.storage.delete_customers(missing)
+                # Safety threshold: se il fetch ha riportato <50% dei record
+                # esistenti, e' probabile una blip rete / 5xx parziale →
+                # ABORT del missing-handling, lascia tutto invariato.
+                # (Nuovo seed di una sorgente nuova: existing=0, threshold non si applica.)
+                existing_count = len(existing)
+                fetched_count = len(fetched_codclis)
+                if existing_count > 0 and fetched_count < (existing_count * 0.5):
+                    logger.critical(
+                        "Sync %s ABORT safety: fetched=%d < 50%% di existing=%d. "
+                        "Skip flag/delete dei missing per evitare cancellazione massiva. "
+                        "Verificare la sorgente.",
+                        source_id, fetched_count, existing_count,
+                    )
+                    error_message = (
+                        f"safety threshold: fetched {fetched_count} < 50% "
+                        f"di existing {existing_count}, skip missing-handling"
+                    )
+                    status = "aborted_safety"
+                else:
+                    missing = list(existing - fetched_codclis)
+                    if missing:
+                        if on_missing == "flag":
+                            n_flagged_missing = self.storage.flag_missing_customers(missing)
+                        elif on_missing == "delete":
+                            n_flagged_missing = self.storage.delete_customers(missing)
 
-            status = "ok" if n_errored == 0 else "partial"
+            if status == "running":
+                status = "ok" if n_errored == 0 else "partial"
 
         except Exception as exc:  # noqa: BLE001
             logger.exception("Sync %s error: %s", source_id, exc)

@@ -1,0 +1,14 @@
+[Unit]
+Description=Domarc SMTP Relay — backup cifrato giornaliero alle 03:00
+Documentation=file:///opt/domarc-smtp-relay-admin/installer/backup-restore/
+
+[Timer]
+# Ogni giorno alle 03:00 (UTC). Persistent=true → se VM era spenta, recupera.
+OnCalendar=*-*-* 03:00:00
+Persistent=true
+# Random delay 0-30min per evitare picco contemporaneo a backup vicini.
+RandomizedDelaySec=1800
+Unit=domarc-backup.service
+
+[Install]
+WantedBy=timers.target

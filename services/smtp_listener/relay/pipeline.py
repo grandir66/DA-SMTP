@@ -578,7 +578,8 @@ def process(
     # Valutazione aggregazioni errori (in parallelo al rule engine, non sostituisce le azioni
     # standard ma può aprire ticket aggiuntivi al raggiungimento di una soglia)
     agg_summary = _process_aggregations(parsed=parsed, cfg=cfg, storage=storage,
-                                        backend=backend, codcli=ctx.codcli)
+                                        backend=backend, codcli=ctx.codcli,
+                                        event_uuid=pre_event_uuid)
     if agg_summary:
         extra["aggregations"] = agg_summary
 
@@ -805,6 +806,7 @@ def _process_aggregations(
     storage: Storage,
     backend: Any | None,
     codcli: str | None,
+    event_uuid: str | None = None,
 ) -> list[dict[str, Any]]:
     """Valuta tutte le aggregazioni errori attive sulla mail corrente.
 
@@ -956,7 +958,7 @@ def _process_aggregations(
                 }
                 ticket_qid = actions._enqueue_dispatch(
                     storage,
-                    event_uuid=pre_event_uuid,
+                    event_uuid=event_uuid,
                     payload=ticket_payload,
                 )
                 # Marca la occurrence come "ticket richiesto" usando un id placeholder;

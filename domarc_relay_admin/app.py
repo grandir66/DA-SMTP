@@ -7,7 +7,8 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
-from flask import Flask
+from flask import Flask, render_template
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from . import __version__
 from .config import AppConfig, load_config
@@ -34,16 +35,22 @@ def create_app(config: AppConfig | None = None, *, init_db: bool = True) -> Flas
         static_folder=str(static_dir),
         static_url_path="/static",
     )
+    # ProxyFix: dietro nginx (HTTPS termination). Senza, Flask vede sempre
+    # scheme=http e SESSION_COOKIE_SECURE non funziona, CSRF_SSL_STRICT fallisce.
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
     app.config["SECRET_KEY"] = cfg.secret_key
     app.config["SESSION_COOKIE_HTTPONLY"] = True
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+    # Secure cookie + CSRF SSL strict abilitati in prod (non-debug). In dev locale
+    # rimangono off altrimenti la sessione non funziona via http://localhost.
+    app.config["SESSION_COOKIE_SECURE"] = not cfg.debug
     app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=8)
     app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024  # 10 MB upload limit (allegati template)
     # CSRF Protection (Flask-WTF). Token validato su ogni POST/PUT/DELETE delle
     # blueprint UI (form HTML), esentiamo solo le route API protette da X-API-Key
     # (vedi /api/v1/relay/*). I form HTML devono includere `{{ csrf_token() }}`.
     app.config["WTF_CSRF_TIME_LIMIT"] = 8 * 3600  # 8h, allineato a session lifetime
-    app.config["WTF_CSRF_SSL_STRICT"] = False  # behind reverse proxy
+    app.config["WTF_CSRF_SSL_STRICT"] = not cfg.debug  # con ProxyFix è ora corretto
     try:
         from flask_wtf.csrf import CSRFProtect
         csrf = CSRFProtect(app)
@@ -206,11 +213,25 @@ def create_app(config: AppConfig | None = None, *, init_db: bool = True) -> Flas
                 "customer_sync scheduler non avviato: %s", exc,
             )
 
-    # First-time admin user: se non esiste alcun utente, crea 'admin' con password = DOMARC_RELAY_BOOTSTRAP_PASSWORD
-    # (env var) oppure 'admin123' come fallback con WARNING ben visibile.
+    # First-time admin user: crea 'admin' con password = DOMARC_RELAY_BOOTSTRAP_PASSWORD.
+    # In prod (cfg.debug=False) e' OBBLIGATORIA: niente fallback insicuro.
     try:
         if init_db and not storage.list_users():
-            bootstrap_pwd = os.environ.get("DOMARC_RELAY_BOOTSTRAP_PASSWORD", "admin123")
+            bootstrap_pwd = os.environ.get("DOMARC_RELAY_BOOTSTRAP_PASSWORD", "")
+            if not bootstrap_pwd:
+                if not cfg.debug:
+                    raise RuntimeError(
+                        "DOMARC_RELAY_BOOTSTRAP_PASSWORD non impostata. "
+                        "In produzione e' obbligatoria per il primo utente admin. "
+                        "Aggiungere a /etc/domarc-smtp-relay-admin/secrets.env."
+                    )
+                bootstrap_pwd = "admin123"  # solo dev locale
+                logging.warning("BOOTSTRAP DEV: usata password fallback 'admin123' (cfg.debug=True)")
+            if len(bootstrap_pwd) < 10 and not cfg.debug:
+                raise RuntimeError(
+                    "DOMARC_RELAY_BOOTSTRAP_PASSWORD troppo corta (<10 caratteri). "
+                    "Usare almeno 16 caratteri random."
+                )
             storage.upsert_user({
                 "username": "admin",
                 "password": bootstrap_pwd,
@@ -219,12 +240,39 @@ def create_app(config: AppConfig | None = None, *, init_db: bool = True) -> Flas
                 "enabled": True,
             })
             logging.warning(
-                "BOOTSTRAP: creato utente 'admin' con password '%s'. "
-                "CAMBIARE SUBITO al primo login (TODO: page change-password v1.0).",
-                bootstrap_pwd if bootstrap_pwd != "admin123" else "admin123 (DEFAULT INSICURO)",
+                "BOOTSTRAP: creato utente 'admin'. "
+                "Cambiare la password al primo login (UI: /users/me/password)."
             )
+    except RuntimeError:
+        raise  # fail-fast in prod
     except Exception as exc:  # noqa: BLE001
         logging.error("Bootstrap admin user fallito: %s", exc)
+
+    # Error handler: 404/403/500 con pagina utente generica + log strutturato.
+    @app.errorhandler(404)
+    def _not_found(exc):  # noqa: ANN001
+        try:
+            return render_template("admin/error.html", code=404,
+                                    message="Pagina non trovata"), 404
+        except Exception:  # noqa: BLE001
+            return "404 — Pagina non trovata", 404
+
+    @app.errorhandler(403)
+    def _forbidden(exc):  # noqa: ANN001
+        try:
+            return render_template("admin/error.html", code=403,
+                                    message="Accesso negato"), 403
+        except Exception:  # noqa: BLE001
+            return "403 — Accesso negato", 403
+
+    @app.errorhandler(500)
+    def _internal(exc):  # noqa: ANN001
+        logging.getLogger(__name__).exception("500 Internal Server Error")
+        try:
+            return render_template("admin/error.html", code=500,
+                                    message="Errore interno. L'incidente e' stato registrato."), 500
+        except Exception:  # noqa: BLE001
+            return "500 — Errore interno", 500
 
     @app.context_processor
     def _inject_globals() -> dict[str, Any]:
