@@ -386,6 +386,10 @@ class Storage:
                 ("events_log", "reply_to_event_uuid", "ALTER TABLE events_log ADD COLUMN reply_to_event_uuid TEXT"),
                 ("events_log", "thread_root_uuid", "ALTER TABLE events_log ADD COLUMN thread_root_uuid TEXT"),
                 ("rules_cache", "match_is_thread_continuation", "ALTER TABLE rules_cache ADD COLUMN match_is_thread_continuation INTEGER"),
+                # M039: body_text/body_html persistiti su events_log (cap 32KB/64KB applicato in insert_event).
+                # Senza queste colonne, insert_event crasha al primo evento su relay.db fresca.
+                ("events_log", "body_text", "ALTER TABLE events_log ADD COLUMN body_text TEXT"),
+                ("events_log", "body_html", "ALTER TABLE events_log ADD COLUMN body_html TEXT"),
             ):
                 try:
                     conn.execute(ddl)
