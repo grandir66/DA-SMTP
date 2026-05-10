@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "FILE=$(python3 -c 'import sys,json; d=json.load(sys.stdin); print(d.get(\"tool_input\",{}).get(\"file_path\",\"\"))' 2>/dev/null); if echo \"$FILE\" | grep -qE '\\.py$' && ! echo \"$FILE\" | grep -qE '(\\.venv/|/tests/|conftest\\.py|\\.pytest_cache/|\\.egg-info/)'; then cd /opt/domarc-smtp-relay-admin && .venv/bin/python -m py_compile \"$FILE\" 2>&1 | head -10; fi"
+          }
+        ]
+      }
+    ]
+  }
+}
