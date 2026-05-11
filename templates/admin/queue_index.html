@@ -13,14 +13,85 @@
 .q-tab .badge-err { background:#dc2626; }
 .q-pane { display:none; }
 .q-pane.active { display:block; }
-.state-pill { display:inline-block; padding:0.05rem 0.5rem; border-radius:9px;
-              font-size:0.72rem; font-weight:600; }
-.state-pill.sent { background:#d1fae5; color:#047857; }
-.state-pill.pending { background:#fef3c7; color:#92400e; }
-.state-pill.failed { background:#fee2e2; color:#dc2626; }
-.state-pill.delivered { background:#d1fae5; color:#047857; }
-.state-pill.held { background:#fef3c7; color:#92400e; }
-.state-pill.released { background:#d1fae5; color:#047857; }
+
+/* === Tabelle compatte one-row === */
+.q-table { width:100%; border-collapse:collapse; font-size:0.78rem; table-layout:auto; }
+.q-table thead th {
+    background:#f8fafc; color:#475569; padding:0.45rem 0.55rem;
+    text-align:left; font-size:0.7rem; text-transform:uppercase; letter-spacing:0.04em;
+    border-bottom:2px solid #e2e8f0; white-space:nowrap;
+}
+.q-table tbody td {
+    padding:0.35rem 0.55rem; border-bottom:1px solid #f1f5f9;
+    white-space:nowrap;            /* no wrap: 1 mail = 1 riga */
+    overflow:hidden; text-overflow:ellipsis;
+    vertical-align:middle;
+}
+.q-table tbody tr:hover { background:#fafbfc; }
+.q-table tbody tr.row-pending { background:#fffbeb; }
+.q-table tbody tr.row-error   { background:#fef2f2; }
+.q-table tbody tr.row-dead    { background:#1f2937; color:#fca5a5; }
+.q-table tbody tr.row-dead a, .q-table tbody tr.row-dead small { color:#fca5a5; }
+.q-table tbody tr.row-stuck   { background:#fee2e2; box-shadow:inset 4px 0 0 #dc2626; }
+.q-table tbody tr.row-released { background:#f0fdf4; }
+.q-table tbody tr.row-discarded { color:#94a3b8; }
+
+/* Larghezza colonne ottimizzate */
+.q-col-id { width:55px; }
+.q-col-when { width:64px; }
+.q-col-state { width:118px; }
+.q-col-attempts { width:42px; text-align:center; }
+.q-col-from, .q-col-to { max-width:200px; }
+.q-col-smarthost { max-width:170px; }
+.q-col-action { width:108px; }
+.q-col-retry { width:64px; }
+.q-col-error { max-width:280px; }
+.q-col-actions { width:38px; text-align:right; }
+.q-col-size { width:62px; text-align:right; }
+
+.q-mono { font-family:ui-monospace,Menlo,monospace; font-size:0.74rem; }
+.q-cell-trunc { max-width:0; overflow:hidden; text-overflow:ellipsis; }
+
+/* === Stato come pill grafico unificato === */
+.state-pill {
+    display:inline-flex; align-items:center; gap:0.25rem;
+    padding:0.1rem 0.5rem; border-radius:999px;
+    font-size:0.7rem; font-weight:600; white-space:nowrap;
+    line-height:1.2;
+}
+.state-pill i { font-size:0.65rem; }
+.state-pill.sent, .state-pill.delivered, .state-pill.released
+    { background:#d1fae5; color:#047857; }
+.state-pill.pending, .state-pill.held
+    { background:#fef3c7; color:#92400e; }
+.state-pill.error, .state-pill.failed
+    { background:#fee2e2; color:#b91c1c; }
+.state-pill.dead, .state-pill.discarded
+    { background:#1f2937; color:#fecaca; }
+.state-pill.shadow
+    { background:#ede9fe; color:#5b21b6; }
+.state-pill.queued, .state-pill.unknown
+    { background:#e0e7ff; color:#3730a3; }
+
+/* Smarthost alias card */
+.q-smarthost {
+    display:inline-flex; align-items:center; gap:0.25rem;
+    background:#eff6ff; color:#1e40af;
+    padding:0.1rem 0.45rem; border-radius:3px;
+    font-size:0.7rem; font-weight:600; white-space:nowrap;
+}
+.q-smarthost.internal { background:#fef3c7; color:#78350f; }
+
+.q-action-tag {
+    display:inline-block; padding:0.1rem 0.4rem; border-radius:3px;
+    font-size:0.68rem; font-weight:600; white-space:nowrap;
+}
+.q-action-tag.forward { background:#dbeafe; color:#1e40af; }
+.q-action-tag.redirect { background:#e0e7ff; color:#3730a3; }
+.q-action-tag.auto_reply { background:#fef3c7; color:#78350f; }
+.q-action-tag.default_delivery { background:#dcfce7; color:#166534; }
+.q-action-tag.create_ticket { background:#dbeafe; color:#1e40af; }
+.q-action-tag.passthrough_only { background:#fef3c7; color:#78350f; }
 </style>
 {% endblock %}
 {% block content %}
@@ -118,49 +189,79 @@
         </a>
         {% endfor %}
     </div>
-    <div class="dr-table-wrap">
-    <table class="dr-table">
+    <div class="dr-table-wrap" style="overflow-x:auto;">
+    <table class="q-table">
         <thead>
             <tr>
-                <th class="num">#</th>
-                <th>Età</th>
-                <th>Da</th>
-                <th>A</th>
-                <th>Smarthost</th>
-                <th>Action</th>
-                <th>Stato</th>
-                <th class="num">Tent.</th>
-                <th>Prossimo retry</th>
-                <th>Errore</th>
-                <th></th>
+                <th class="q-col-id">#</th>
+                <th class="q-col-when" title="Creato (HH:MM se oggi, DD/MM HH:MM se prima)">Creato</th>
+                <th class="q-col-when" title="Età dalla creazione">Età</th>
+                <th class="q-col-state">Stato</th>
+                <th class="q-col-from" title="Mittente SMTP">Da</th>
+                <th class="q-col-to" title="Destinatari (RCPT TO)">A</th>
+                <th class="q-col-action">Action</th>
+                <th class="q-col-smarthost">Smarthost</th>
+                <th class="q-col-attempts" title="Tentativi">Tent.</th>
+                <th class="q-col-retry" title="Prossimo retry">Retry</th>
+                <th class="q-col-error">Errore</th>
+                <th class="q-col-actions"></th>
             </tr>
         </thead>
         <tbody>
         {% for r in outbound %}
-        <tr {% if r.stuck %}style="background:#fee2e2;"
-            {% elif r.state == 'failed' %}style="background:#fef2f2;"
-            {% elif r.state == 'pending' %}style="background:#fffbeb;"{% endif %}>
-            <td class="num">{{ r.id }}</td>
-            <td>
-                <strong style="font-size:0.85rem;">{{ r.age_human }}</strong>
-                <br><small style="color:#94a3b8;">{{ r.created_at|truncate(19, True, '') }}</small>
+        {% set row_cls = '' %}
+        {% if r.stuck %}{% set row_cls = 'row-stuck' %}
+        {% elif r.state == 'dead' %}{% set row_cls = 'row-dead' %}
+        {% elif r.state in ('error','failed') %}{% set row_cls = 'row-error' %}
+        {% elif r.state == 'pending' %}{% set row_cls = 'row-pending' %}
+        {% endif %}
+        <tr class="{{ row_cls }}">
+            <td class="q-col-id q-mono">{{ r.id }}</td>
+            <td class="q-col-when q-mono" title="{{ r.created_at }}">{{ r.created_short }}</td>
+            <td class="q-col-when"><small>{{ r.age_human }}</small></td>
+            <td class="q-col-state">
+                {% if r.state == 'sent' %}
+                    <span class="state-pill sent"><i class="fas fa-check"></i> consegnata</span>
+                {% elif r.state == 'pending' %}
+                    <span class="state-pill pending"><i class="fas fa-clock"></i> in coda</span>
+                {% elif r.state == 'error' %}
+                    <span class="state-pill error"><i class="fas fa-rotate-right"></i> retry</span>
+                {% elif r.state == 'failed' %}
+                    <span class="state-pill error"><i class="fas fa-circle-xmark"></i> failed</span>
+                {% elif r.state == 'dead' %}
+                    <span class="state-pill dead"><i class="fas fa-skull"></i> dead-letter</span>
+                {% elif r.state == 'delivered' %}
+                    <span class="state-pill delivered"><i class="fas fa-check-double"></i> delivered</span>
+                {% else %}
+                    <span class="state-pill unknown">{{ r.state }}</span>
+                {% endif %}
+                {% if r.stuck %}<br><span style="color:#dc2626; font-size:0.65rem; font-weight:700;">⚠ BLOCCATA</span>{% endif %}
             </td>
-            <td class="mono"><small>{{ r.mail_from|default('—')|truncate(35) }}</small></td>
-            <td class="mono"><small>{{ r.recipients|join(', ')|truncate(45) }}</small></td>
-            <td class="mono"><small>{{ r.smarthost|truncate(30) }}:{{ r.smarthost_port }}</small></td>
-            <td><small>{{ r.action }}</small></td>
-            <td>
-                <span class="state-pill {{ r.state }}">{{ r.state }}</span>
-                {% if r.stuck %}<br><span style="color:#dc2626; font-size:0.7rem; font-weight:600;">⚠ BLOCCATA</span>{% endif %}
-                {% if r.delivered_at %}<br><small style="color:#16a34a;">✓ {{ r.delivered_at|truncate(19, True, '') }}</small>{% endif %}
+            <td class="q-col-from q-mono" title="{{ r.mail_from }}">{{ r.mail_from|default('—') }}</td>
+            <td class="q-col-to q-mono" title="{{ r.recipients|join(', ') }}">{{ r.recipients|join(', ') }}</td>
+            <td class="q-col-action">
+                {% if r.action %}<span class="q-action-tag {{ r.action }}">{{ r.action }}</span>{% endif %}
             </td>
-            <td class="num">{{ r.attempts }}</td>
-            <td><small>{{ r.next_attempt_at|default('—', true)|truncate(19, True, '') }}</small></td>
-            <td class="mono"><small style="color:#dc2626;">{{ (r.last_error or '')|truncate(50) }}</small></td>
-            <td><a href="{{ url_for('queue.outbound_detail', queue_id=r.id) }}" class="dr-btn" style="width:auto; padding:0.15rem 0.4rem;"><i class="fas fa-eye"></i></a></td>
+            <td class="q-col-smarthost">
+                <span class="q-smarthost{% if 'IP ' in r.smarthost_alias %} internal{% endif %}"
+                      title="{{ r.smarthost_full }}:{{ r.smarthost_port }} ({{ r.smarthost_tls }})">
+                    {{ r.smarthost_alias }}
+                </span>
+            </td>
+            <td class="q-col-attempts q-mono">{{ r.attempts }}</td>
+            <td class="q-col-retry q-mono" title="{{ r.next_attempt_at or '' }}">{{ r.next_attempt_short }}</td>
+            <td class="q-col-error" title="{{ r.last_error or '' }}">
+                {% if r.last_error %}<small style="color:#b91c1c;">{{ r.last_error|truncate(45) }}</small>{% endif %}
+            </td>
+            <td class="q-col-actions">
+                <a href="{{ url_for('queue.outbound_detail', queue_id=r.id) }}"
+                   class="dr-btn dr-btn-sm" style="padding:0.1rem 0.35rem;" title="Dettaglio">
+                    <i class="fas fa-eye"></i>
+                </a>
+            </td>
         </tr>
         {% else %}
-        <tr><td colspan="11" class="dr-empty">
+        <tr><td colspan="12" class="dr-empty">
             {% if request.args.get('state') or request.args.get('only_active') %}
             Nessuna riga corrisponde al filtro. <a href="{{ url_for('queue.index') }}">Mostra tutto</a>.
             {% else %}Coda outbound vuota.{% endif %}
@@ -177,37 +278,51 @@
         Mail messe in quarantena dal rule engine (action=<code>quarantine</code>) per review umano.
         Rimangono qui finché un operatore non decide release o discard.
     </p>
-    <div class="dr-table-wrap">
-    <table class="dr-table">
+    <div class="dr-table-wrap" style="overflow-x:auto;">
+    <table class="q-table">
         <thead>
             <tr>
-                <th class="num">#</th>
-                <th>Quando</th>
-                <th>Da</th>
-                <th>A</th>
+                <th class="q-col-id">#</th>
+                <th class="q-col-when">Creato</th>
+                <th class="q-col-state">Decisione</th>
+                <th class="q-col-from">Da</th>
+                <th class="q-col-to">A</th>
                 <th>Motivo</th>
-                <th>Decisione</th>
-                <th>Reviewed</th>
-                <th class="num">Size</th>
-                <th></th>
+                <th class="q-col-when">Reviewed</th>
+                <th class="q-col-size">Size</th>
+                <th class="q-col-actions"></th>
             </tr>
         </thead>
         <tbody>
         {% for q in quarantine %}
-        <tr {% if not q.decision %}style="background:#fef3c7;"{% endif %}>
-            <td class="num">{{ q.id }}</td>
-            <td><small>{{ q.created_at }}</small></td>
-            <td class="mono"><small>{{ q.from_address|default('—') }}</small></td>
-            <td class="mono"><small>{{ q.to_address|default('—')|truncate(40) }}</small></td>
-            <td><small>{{ q.reason|default('—') }}</small></td>
-            <td>
-                {% if q.decision == 'released' %}<span class="state-pill released">released</span>
-                {% elif q.decision == 'discarded' %}<span class="state-pill failed">discarded</span>
-                {% else %}<span class="state-pill held">in attesa</span>{% endif %}
+        {% set row_cls = '' %}
+        {% if not q.decision %}{% set row_cls = 'row-pending' %}
+        {% elif q.decision == 'released' %}{% set row_cls = 'row-released' %}
+        {% elif q.decision == 'discarded' %}{% set row_cls = 'row-discarded' %}
+        {% endif %}
+        <tr class="{{ row_cls }}">
+            <td class="q-col-id q-mono">{{ q.id }}</td>
+            <td class="q-col-when q-mono" title="{{ q.created_at }}">{{ q.created_short }}</td>
+            <td class="q-col-state">
+                {% if q.decision == 'released' %}
+                    <span class="state-pill released"><i class="fas fa-paper-plane"></i> released</span>
+                {% elif q.decision == 'discarded' %}
+                    <span class="state-pill discarded"><i class="fas fa-trash"></i> discarded</span>
+                {% else %}
+                    <span class="state-pill held"><i class="fas fa-shield-virus"></i> in attesa</span>
+                {% endif %}
             </td>
-            <td><small>{{ q.reviewed_at|default('—') }}</small></td>
-            <td class="num"><small>{{ '%.1f'|format(q.mime_size / 1024) }} KB</small></td>
-            <td><a href="{{ url_for('queue.quarantine_detail', queue_id=q.id) }}" class="dr-btn" style="width:auto; padding:0.15rem 0.4rem;"><i class="fas fa-eye"></i></a></td>
+            <td class="q-col-from q-mono" title="{{ q.from_address }}">{{ q.from_address|default('—') }}</td>
+            <td class="q-col-to q-mono" title="{{ q.to_address }}">{{ q.to_address|default('—') }}</td>
+            <td title="{{ q.reason }}"><small>{{ q.reason|default('—') }}</small></td>
+            <td class="q-col-when q-mono" title="{{ q.reviewed_at or '' }}">{{ q.reviewed_short }}</td>
+            <td class="q-col-size q-mono">{{ '%.1f'|format(q.mime_size / 1024) }}K</td>
+            <td class="q-col-actions">
+                <a href="{{ url_for('queue.quarantine_detail', queue_id=q.id) }}"
+                   class="dr-btn dr-btn-sm" style="padding:0.1rem 0.35rem;" title="Dettaglio">
+                    <i class="fas fa-eye"></i>
+                </a>
+            </td>
         </tr>
         {% else %}
         <tr><td colspan="9" class="dr-empty">Quarantena vuota — nessuna mail trattenuta.</td></tr>
@@ -223,31 +338,50 @@
         Ticket in attesa di dispatch verso il manager (action=<code>create_ticket</code>).
         Drainata periodicamente dal scheduler.
     </p>
-    <div class="dr-table-wrap">
-    <table class="dr-table">
+    <div class="dr-table-wrap" style="overflow-x:auto;">
+    <table class="q-table">
         <thead>
             <tr>
-                <th class="num">#</th>
-                <th>Quando</th>
+                <th class="q-col-id">#</th>
+                <th class="q-col-when">Creato</th>
+                <th class="q-col-state">Stato</th>
                 <th>Event UUID</th>
-                <th>Stato</th>
-                <th class="num">Tentativi</th>
-                <th>Prossimo retry</th>
-                <th>Errore</th>
+                <th class="q-col-attempts">Tent.</th>
+                <th class="q-col-retry">Retry</th>
+                <th class="q-col-error">Errore</th>
                 <th>Manager response</th>
             </tr>
         </thead>
         <tbody>
         {% for d in dispatch %}
-        <tr {% if d.state == 'failed' %}style="background:#fef2f2;"{% endif %}>
-            <td class="num">{{ d.id }}</td>
-            <td><small>{{ d.created_at }}</small></td>
-            <td class="mono"><small>{{ (d.event_uuid or '')[:12] }}…</small></td>
-            <td><span class="state-pill {{ d.state }}">{{ d.state }}</span></td>
-            <td class="num">{{ d.attempts }}</td>
-            <td><small>{{ d.next_attempt_at|default('—') }}</small></td>
-            <td><small style="color:#dc2626;">{{ (d.last_error or '')|truncate(50) }}</small></td>
-            <td><small>{{ (d.manager_response or '')|truncate(40) }}</small></td>
+        {% set row_cls = '' %}
+        {% if d.state == 'dead' %}{% set row_cls = 'row-dead' %}
+        {% elif d.state in ('failed','error') %}{% set row_cls = 'row-error' %}
+        {% elif d.state == 'pending' %}{% set row_cls = 'row-pending' %}
+        {% endif %}
+        <tr class="{{ row_cls }}">
+            <td class="q-col-id q-mono">{{ d.id }}</td>
+            <td class="q-col-when q-mono" title="{{ d.created_at }}">{{ d.created_short }}</td>
+            <td class="q-col-state">
+                {% if d.state == 'sent' %}
+                    <span class="state-pill sent"><i class="fas fa-check"></i> creato</span>
+                {% elif d.state == 'pending' %}
+                    <span class="state-pill pending"><i class="fas fa-clock"></i> in coda</span>
+                {% elif d.state in ('error','failed') %}
+                    <span class="state-pill error"><i class="fas fa-rotate-right"></i> retry</span>
+                {% elif d.state == 'dead' %}
+                    <span class="state-pill dead"><i class="fas fa-skull"></i> dead-letter</span>
+                {% else %}
+                    <span class="state-pill unknown">{{ d.state }}</span>
+                {% endif %}
+            </td>
+            <td class="q-mono" title="{{ d.event_uuid or '' }}"><small>{{ (d.event_uuid or '')[:12] }}…</small></td>
+            <td class="q-col-attempts q-mono">{{ d.attempts }}</td>
+            <td class="q-col-retry q-mono" title="{{ d.next_attempt_at or '' }}">{{ d.next_attempt_short }}</td>
+            <td class="q-col-error" title="{{ d.last_error or '' }}">
+                {% if d.last_error %}<small style="color:#b91c1c;">{{ d.last_error|truncate(45) }}</small>{% endif %}
+            </td>
+            <td title="{{ d.manager_response or '' }}"><small>{{ (d.manager_response or '')|truncate(40) }}</small></td>
         </tr>
         {% else %}
         <tr><td colspan="8" class="dr-empty">Nessun dispatch pendente.</td></tr>

@@ -59,6 +59,59 @@ def _format_age(sec: int | None) -> str:
         return f"{sec//3600}h {(sec%3600)//60}m"
     return f"{sec//86400}g {(sec%86400)//3600}h"
 
+
+# Alias compatti per smarthost noti (M365 tenants, server interni, ecc).
+# Ridotti a 1-2 parole per occupare poco spazio in tabella.
+_SMARTHOST_ALIAS_MAP = {
+    # Microsoft 365 connectors (formato: <tenant>-<tld>.mail.protection.outlook.com)
+    "mail.protection.outlook.com": "M365",
+}
+
+
+def _smarthost_alias(host: str | None) -> tuple[str, str]:
+    """Restituisce (alias_breve, host_completo_per_tooltip).
+    Estrae 'M365' dai connector outlook + tenant friendly se possibile."""
+    if not host:
+        return ("—", "")
+    h = host.strip().lower()
+    # Outlook M365: prendi tenant prefix (es. "domarc-it" da "domarc-it.mail.protection.outlook.com")
+    if h.endswith(".mail.protection.outlook.com"):
+        tenant = h.split(".mail.protection.outlook.com")[0]
+        # "domarc-it" → "M365 · domarc.it"
+        readable = tenant.replace("-", ".") if tenant else "?"
+        return (f"M365 · {readable}", host)
+    # Server interni IPv4
+    try:
+        import ipaddress
+        ipaddress.ip_address(h)
+        return (f"IP {h}", host)
+    except ValueError:
+        pass
+    # Default: dominio (rimuovi 'smtp.', 'mail.', port)
+    short = h.split(":")[0]
+    for prefix in ("smtp.", "mail.", "mx."):
+        if short.startswith(prefix):
+            short = short[len(prefix):]
+            break
+    return (short, host)
+
+
+def _format_short_ts(s: str | None, now: datetime | None = None) -> str:
+    """Data/ora compatta:
+       - oggi  → 'HH:MM'
+       - questo anno → 'DD/MM HH:MM'
+       - più vecchio → 'DD/MM/YY'
+    """
+    dt = _parse_iso(s)
+    if dt is None:
+        return "—"
+    cur = now or datetime.now(timezone.utc)
+    if dt.date() == cur.date():
+        return dt.strftime("%H:%M")
+    if dt.year == cur.year:
+        return dt.strftime("%d/%m %H:%M")
+    return dt.strftime("%d/%m/%y")
+
 from flask import (Blueprint, Response, abort, current_app, flash,
                    render_template, request)
 
@@ -163,6 +216,13 @@ def index():
                 age = _age_seconds(d.get("created_at"))
                 d["age_seconds"] = age
                 d["age_human"] = _format_age(age)
+                # Pre-compute formattazioni compatte per il template
+                alias, full = _smarthost_alias(d.get("smarthost"))
+                d["smarthost_alias"] = alias
+                d["smarthost_full"] = full
+                d["created_short"] = _format_short_ts(d.get("created_at"), now)
+                d["delivered_short"] = _format_short_ts(d.get("delivered_at"), now)
+                d["next_attempt_short"] = _format_short_ts(d.get("next_attempt_at"), now)
                 # Bucket
                 if age is not None and d.get("state") not in ("sent", "delivered"):
                     if age < 60:
@@ -208,7 +268,10 @@ def index():
                 FROM quarantine
                 ORDER BY id DESC LIMIT 200
             """):
-                quarantine.append(dict(r))
+                qd = dict(r)
+                qd["created_short"] = _format_short_ts(qd.get("created_at"), now)
+                qd["reviewed_short"] = _format_short_ts(qd.get("reviewed_at"), now)
+                quarantine.append(qd)
             stats["quarantine_count"] = conn.execute(
                 "SELECT COUNT(*) FROM quarantine"
             ).fetchone()[0]
@@ -221,7 +284,10 @@ def index():
                 FROM dispatch_queue
                 ORDER BY id DESC LIMIT 200
             """):
-                dispatch.append(dict(r))
+                dd = dict(r)
+                dd["created_short"] = _format_short_ts(dd.get("created_at"), now)
+                dd["next_attempt_short"] = _format_short_ts(dd.get("next_attempt_at"), now)
+                dispatch.append(dd)
             for r in conn.execute("""
                 SELECT state, COUNT(*) AS n FROM dispatch_queue GROUP BY state
             """):
