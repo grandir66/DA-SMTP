@@ -596,6 +596,47 @@ def process(
             detail = res.detail
             extra.update(res.extra or {})
 
+            # FIX 2026-05-11: esegui ANCHE le rule "passive" matched in cascata.
+            # Pattern d'uso: rule ai_taxonomy (passive, prio 140) +
+            # rule ai_classify (passive, prio 150) entrambe matchate.
+            # Senza questo, eseguirebbe solo la prima (winning); con questo
+            # blocco esegue anche le successive purche' siano "passive"
+            # (ai_classify/ai_taxonomy/ai_critical_check/flag_only/ignore).
+            # NON esegue active multiple (delivery, forward, ticket, quarantine).
+            _PASSIVE_ACTIONS = {
+                "ai_classify", "ai_taxonomy", "ai_critical_check",
+                "flag_only", "ignore",
+            }
+            for cascade_rule in outcome.matched_rules[1:]:
+                cr_action = str(cascade_rule.get("action") or "")
+                if cr_action not in _PASSIVE_ACTIONS:
+                    continue  # skip active rule (eseguita solo la winning)
+                cr_action_map = dict(cascade_rule.get("action_map") or {})
+                if cascade_rule.get("ai_model_id"):
+                    cr_action_map["ai_model_id"] = cascade_rule["ai_model_id"]
+                try:
+                    cascade_res = _dispatch_action(
+                        action_name=cr_action,
+                        event_uuid=pre_event_uuid,
+                        parsed=parsed,
+                        cfg=cfg,
+                        storage=storage,
+                        backend=backend,
+                        action_map=cr_action_map,
+                        route_row=route_row,
+                        ctx=ctx,
+                        rule=cascade_rule,
+                        envelope_rcpt_to=extra.get("envelope_rcpt_to"),
+                    )
+                    extra.update(cascade_res.extra or {})
+                    logger.info(
+                        "Cascade rule_id=%s action=%s eseguita (winning rimane #%s)",
+                        cascade_rule.get("id"), cr_action, outcome.rule.get("id"),
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    logger.exception("Cascade rule_id=%s fallita: %s",
+                                      cascade_rule.get("id"), exc)
+
             # Fix B (2026-05-05): se la regola create_authorized_ticket ha
             # estratto un falso positivo (codice da regex non trovato in DB),
             # ri-valuta il rule engine ESCLUDENDO la regola corrente. Permette

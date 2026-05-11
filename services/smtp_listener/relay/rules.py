@@ -79,6 +79,11 @@ class RuleOutcome:
     rule: dict[str, Any] | None
     scope: str | None
     chain: list[ChainStep] = field(default_factory=list)
+    # Tutte le rule che hanno matched in cascata (con continue_after_match=1).
+    # `rule` resta la winning (prima match), `matched_rules` include winning +
+    # tutte le successive matched. Il pipeline esegue anche le rule "passive"
+    # successive (ai_*, flag_only) come azioni aggiuntive non-conflittanti.
+    matched_rules: list[dict[str, Any]] = field(default_factory=list)
 
 
 def _row_to_dict(row: Any) -> dict[str, Any]:
@@ -126,6 +131,7 @@ class RuleEngine:
         chain: list[ChainStep] = []
         winning: dict[str, Any] | None = None
         winning_scope: str | None = None
+        matched_rules: list[dict[str, Any]] = []
         exclude = set(exclude_rule_ids or ())
         active_sets = set(active_rule_set_ids) if active_rule_set_ids is not None else None
 
@@ -178,20 +184,25 @@ class RuleEngine:
                     )
                 )
                 if match_result["matched"]:
-                    # FIX 2026-05-11: first-match-wins anche con continue_after_match.
-                    # Prima il winning veniva SOVRASCRITTO dalla rule matched successiva,
-                    # facendo perdere l'action della rule a priorità più alta (caso AI
-                    # classify + catch-all: vinceva sempre catch-all).
-                    # Ora: il winning è la PRIMA rule matched; continue_after_match=1
-                    # serve solo a popolare la chain (audit) con le rule successive
-                    # che avrebbero matchato (visibili in events_log.payload_metadata).
+                    # FIX 2026-05-11: first-match-wins per `winning` + accumulo
+                    # in `matched_rules` di TUTTE le rule matched in cascata.
+                    # Il pipeline poi esegue:
+                    #   1. `winning.action` come azione principale.
+                    #   2. Per ogni successiva matched_rule con action "passive"
+                    #      (ai_classify/ai_taxonomy/ai_critical_check/flag_only),
+                    #      esegue ANCHE quella (non sostituisce winning).
+                    # Cosi' rule 62 (ai_taxonomy, prio 140) + rule 61 (ai_classify,
+                    # prio 150) vengono entrambe eseguite quando matchano.
                     if winning is None:
                         winning = rule
                         winning_scope = scope
+                    matched_rules.append(rule)
                     if not rule.get("continue_after_match"):
-                        return RuleOutcome(rule=winning, scope=winning_scope, chain=chain)
+                        return RuleOutcome(rule=winning, scope=winning_scope,
+                                            chain=chain, matched_rules=matched_rules)
 
-        return RuleOutcome(rule=winning, scope=winning_scope, chain=chain)
+        return RuleOutcome(rule=winning, scope=winning_scope, chain=chain,
+                             matched_rules=matched_rules)
 
     @staticmethod
     def _scope_matches(rule: dict[str, Any], scope: str, context: dict[str, Any]) -> bool:
