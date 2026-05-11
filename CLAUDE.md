@@ -19,6 +19,8 @@ SMTP relay standalone (Flask + SQLite) con rule engine deterministico e AI assis
 
 Python 3.11+, Flask 3, Jinja2, SQLite (admin.db + relay.db), gunicorn :5443 dietro nginx, aiosmtpd listener :25. Package admin = `domarc_relay_admin`; listener separato in `services/smtp_listener/` (runtime `/opt/stormshield-smtp-relay/`). Tre servizi systemd: `domarc-smtp-relay-admin`, `stormshield-smtp-relay-listener`, `stormshield-smtp-relay-scheduler`. PG read-only `solution`+`stormshield` sul 192.168.4.41 per sync clienti.
 
+**Topologia rete**: VM relay su `192.168.4.25` (rete admin locale). ESVA LibraESVA antispam su `192.168.20.x` (SAMNET) — invia mail al listener :25. UFW apre :25/:443/:80 solo a `192.168.4.0/24` + `192.168.20.0/24`.
+
 ## Comandi essenziali
 
 ```bash
