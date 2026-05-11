@@ -23,6 +23,35 @@
     .top-list .name { font-family:ui-monospace,Menlo,monospace; font-size:0.78rem; max-width:75%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .top-list .count { font-weight:600; color:var(--dr-blue); }
     .top-list .empty { color:var(--dr-gray-dark); font-size:0.85rem; font-style:italic; padding:0.4rem 0; }
+
+    /* Live metrics mini-grid */
+    .dr-live-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(170px, 1fr)); gap:0.7rem; margin-bottom:1.2rem; }
+    .dr-live { background:#fff; border:1px solid var(--dr-gray); border-left:4px solid #2563eb; border-radius:8px; padding:0.7rem 0.9rem; }
+    .dr-live .label { font-size:0.72rem; color:var(--dr-gray-dark); text-transform:uppercase; letter-spacing:0.04em; }
+    .dr-live .value { font-size:1.4rem; font-weight:700; color:var(--dr-primary); line-height:1.1; margin-top:0.2rem; }
+    .dr-live .value small { font-size:0.78rem; font-weight:500; color:var(--dr-gray-dark); }
+    .dr-live .bar { height:4px; background:#e5e7eb; border-radius:2px; overflow:hidden; margin-top:0.4rem; }
+    .dr-live .bar-fill { height:100%; background:#16a34a; transition:width 0.4s ease; }
+    .dr-live .bar-fill.orange { background:#f59e0b; }
+    .dr-live .bar-fill.red { background:#dc2626; }
+    .dr-live .pulse { display:inline-block; width:6px; height:6px; border-radius:50%; background:#16a34a; animation:dr-pulse 1.4s ease-in-out infinite; margin-right:0.3rem; }
+    @keyframes dr-pulse { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
+
+    /* Recent mail table */
+    .dr-mail-table { width:100%; border-collapse:collapse; font-size:0.8rem; background:#fff; border-radius:6px; overflow:hidden; }
+    .dr-mail-table th { background:#f8fafc; color:var(--dr-gray-dark); text-transform:uppercase; font-size:0.7rem; letter-spacing:0.04em; padding:0.45rem 0.65rem; text-align:left; border-bottom:2px solid #e2e8f0; }
+    .dr-mail-table td { padding:0.4rem 0.65rem; border-bottom:1px solid #f1f5f9; font-family:ui-monospace,Menlo,monospace; font-size:0.78rem; }
+    .dr-mail-table tr:hover { background:#fafbfc; }
+    .dr-mail-table td.subj { font-family:inherit; color:var(--dr-primary); }
+    .dr-mail-action { display:inline-block; padding:0.1rem 0.45rem; border-radius:3px; font-size:0.7rem; font-weight:600; }
+    .dr-mail-action.default_delivery { background:#dcfce7; color:#166534; }
+    .dr-mail-action.create_ticket { background:#dbeafe; color:#1e40af; }
+    .dr-mail-action.auto_reply { background:#fef3c7; color:#78350f; }
+    .dr-mail-action.quarantine { background:#fee2e2; color:#991b1b; }
+    .dr-mail-action.ignore, .dr-mail-action.flag_only { background:#e5e7eb; color:#374151; }
+    .dr-mail-action.forward, .dr-mail-action.redirect { background:#e0e7ff; color:#3730a3; }
+    .dr-mail-action.ai_classify, .dr-mail-action.ai_classify_failsafe { background:#fce7f3; color:#9d174d; }
+    .dr-mail-action.passthrough_only { background:#fef3c7; color:#78350f; }
 </style>
 {% endblock %}
 
@@ -78,6 +107,50 @@
     </div>
 </div>
 
+<!-- ===== METRICHE LIVE (sotto-insieme di /metrics/) ===== -->
+<section class="dr-section" style="margin-bottom:0.6rem;">
+    <h3 style="margin:0 0 0.5rem 0; font-size:0.95rem; color:var(--dr-primary); display:flex; align-items:center; gap:0.4rem;">
+        <span class="pulse"></span>
+        <i class="fas fa-chart-line"></i> Sistema live
+        <span style="margin-left:auto; font-size:0.72rem; font-weight:400; color:var(--dr-gray-dark);">
+            aggiornato <span id="dlive-ts">—</span> ·
+            <a href="{{ url_for('metrics.index') }}" style="color:var(--dr-blue);">dashboard completa →</a>
+        </span>
+    </h3>
+</section>
+<div class="dr-live-grid">
+    <div class="dr-live">
+        <div class="label"><i class="fas fa-microchip"></i> CPU</div>
+        <div class="value" id="dlive-cpu">—<small>%</small></div>
+        <div class="bar"><div class="bar-fill" id="dlive-cpu-bar" style="width:0%"></div></div>
+    </div>
+    <div class="dr-live">
+        <div class="label"><i class="fas fa-memory"></i> RAM</div>
+        <div class="value" id="dlive-ram">—<small>%</small></div>
+        <div class="bar"><div class="bar-fill" id="dlive-ram-bar" style="width:0%"></div></div>
+    </div>
+    <div class="dr-live">
+        <div class="label"><i class="fas fa-folder-open"></i> Disco /var</div>
+        <div class="value" id="dlive-disk">—<small>%</small></div>
+        <div class="bar"><div class="bar-fill" id="dlive-disk-bar" style="width:0%"></div></div>
+    </div>
+    <div class="dr-live">
+        <div class="label"><i class="fas fa-envelope"></i> Mail / 60min</div>
+        <div class="value" id="dlive-mail">—</div>
+        <div class="label" style="margin-top:0.2rem;">5min: <span id="dlive-mail5">—</span></div>
+    </div>
+    <div class="dr-live">
+        <div class="label"><i class="fas fa-stopwatch"></i> Latenza outbound</div>
+        <div class="value" id="dlive-lat">—<small>ms</small></div>
+        <div class="label" style="margin-top:0.2rem;">max <span id="dlive-latmax">—</span> ms</div>
+    </div>
+    <div class="dr-live">
+        <div class="label"><i class="fas fa-arrow-right-from-bracket"></i> Coda outbound</div>
+        <div class="value" id="dlive-qout">—</div>
+        <div class="label" style="margin-top:0.2rem;">pending+error</div>
+    </div>
+</div>
+
 {% if kpi.dispatch_dead_24h and kpi.dispatch_dead_24h > 0 %}
 <section class="dr-section" style="margin-bottom:0.6rem;">
     <div style="background:#fee2e2; border:2px solid #dc2626; border-radius:6px; padding:0.7rem 1rem;
@@ -95,6 +168,56 @@
     </div>
 </section>
 {% endif %}
+
+<!-- ===== ULTIME 10 MAIL (flusso live dashboard) ===== -->
+<section class="dr-section" style="margin-bottom:0.6rem;">
+    <h3 style="margin:0 0 0.5rem 0; font-size:0.95rem; color:var(--dr-primary); display:flex; align-items:center; gap:0.4rem;">
+        <i class="fas fa-envelope-open-text"></i> Ultime 10 mail (24h)
+        <span style="margin-left:auto; font-size:0.72rem; font-weight:400; color:var(--dr-gray-dark);">
+            <a href="{{ url_for('events.list_view') }}" style="color:var(--dr-blue);">tutti gli eventi →</a>
+        </span>
+    </h3>
+    {% if recent_mail %}
+    <table class="dr-mail-table">
+        <thead>
+            <tr>
+                <th style="width:80px;">Quando</th>
+                <th>Mittente</th>
+                <th>Destinatario</th>
+                <th>Oggetto</th>
+                <th style="width:110px;">Azione</th>
+                <th style="width:90px;">Cliente</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for m in recent_mail %}
+            <tr>
+                <td>
+                    {% if m.event_uuid %}
+                    <a href="{{ url_for('events.detail', event_uuid=m.event_uuid) }}"
+                       style="color:var(--dr-blue); text-decoration:none;"
+                       title="{{ m.received_at }}">
+                        <span class="dlive-rel" data-ts="{{ m.received_at }}">{{ m.received_at[:16] if m.received_at }}</span>
+                    </a>
+                    {% else %}
+                        <span class="dlive-rel" data-ts="{{ m.received_at }}">{{ m.received_at[:16] if m.received_at }}</span>
+                    {% endif %}
+                </td>
+                <td title="{{ m.from_address }}">{{ m.from_address[:40] }}{% if m.from_address|length > 40 %}…{% endif %}</td>
+                <td title="{{ m.to_address }}">{{ m.to_address[:40] }}{% if m.to_address|length > 40 %}…{% endif %}</td>
+                <td class="subj" title="{{ m.subject }}">{{ m.subject or '(no subject)' }}</td>
+                <td><span class="dr-mail-action {{ m.action_taken }}">{{ m.action_taken }}</span></td>
+                <td>{{ m.codice_cliente or '—' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+        <p style="font-style:italic; color:var(--dr-gray-dark); margin:0.5rem 0;">
+            Nessuna mail nelle ultime 24h.
+        </p>
+    {% endif %}
+</section>
 
 {% if not RELAY_PASSTHROUGH_ONLY and session.get('role') in ('admin','superadmin') %}
 <section class="dr-section" style="margin-bottom:0.6rem;">
@@ -252,5 +375,66 @@ if (actionsData.length > 0) {
                  plugins:{legend:{position:'right'}}, cutout:'55%'},
     });
 }
+
+// ===== Live metrics polling (sotto-insieme di /metrics/live) =====
+(function() {
+    function setBar(elId, pct) {
+        var el = document.getElementById(elId);
+        if (!el) return;
+        var p = Math.max(0, Math.min(100, pct || 0));
+        el.style.width = p + '%';
+        el.className = 'bar-fill ' + (p < 60 ? '' : p < 85 ? 'orange' : 'red');
+    }
+    function setText(id, v, suffix) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        el.innerHTML = (v === null || v === undefined ? '—' : v) + (suffix ? '<small>' + suffix + '</small>' : '');
+    }
+    function relTime(iso) {
+        if (!iso) return '—';
+        try {
+            var d = new Date(iso.includes('Z') || iso.includes('+') ? iso : iso + 'Z');
+            var sec = Math.floor((Date.now() - d.getTime()) / 1000);
+            if (sec < 60) return sec + 's fa';
+            if (sec < 3600) return Math.floor(sec/60) + 'm fa';
+            if (sec < 86400) return Math.floor(sec/3600) + 'h fa';
+            return Math.floor(sec/86400) + 'g fa';
+        } catch(e) { return iso; }
+    }
+    function updateRelTimes() {
+        document.querySelectorAll('.dlive-rel').forEach(function(el) {
+            var ts = el.getAttribute('data-ts');
+            if (ts) el.textContent = relTime(ts);
+        });
+    }
+    async function refresh() {
+        try {
+            var r = await fetch('/metrics/live', { credentials: 'same-origin' });
+            if (!r.ok) return;
+            var d = await r.json();
+            var s = d.system || {};
+            setText('dlive-cpu', s.cpu_pct, '%');
+            setBar('dlive-cpu-bar', s.cpu_pct);
+            setText('dlive-ram', s.mem_pct, '%');
+            setBar('dlive-ram-bar', s.mem_pct);
+            var disk = (d.disk || {}).var || {};
+            setText('dlive-disk', disk.pct, '%');
+            setBar('dlive-disk-bar', disk.pct);
+            var rq = d.relay_queue || {};
+            setText('dlive-mail', rq.mail_last_hour);
+            setText('dlive-mail5', rq.mail_last_5min);
+            setText('dlive-lat', rq.outbound_latency_avg_ms, 'ms');
+            setText('dlive-latmax', rq.outbound_latency_max_ms);
+            var ob = rq.outbound_by_state || {};
+            var qout = (ob.pending || 0) + (ob.error || 0);
+            setText('dlive-qout', qout);
+            document.getElementById('dlive-ts').textContent = new Date().toLocaleTimeString('it-IT');
+        } catch (e) { /* silently fail in dashboard */ }
+    }
+    refresh();
+    updateRelTimes();
+    setInterval(refresh, 15000);  // 15s (più lento di /metrics/ che è 5s)
+    setInterval(updateRelTimes, 30000);
+})();
 </script>
 {% endblock %}

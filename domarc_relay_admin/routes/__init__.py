@@ -80,6 +80,22 @@ def index():
 
     last_event_seen = events_recent[0]["received_at"] if events_recent else None
 
+    # Ultime 10 mail per la mini-tabella "flusso email" in dashboard
+    recent_mail = []
+    for e in events_recent[:10]:
+        subj = (e.get("subject") or "")
+        if len(subj) > 60:
+            subj = subj[:57] + "..."
+        recent_mail.append({
+            "received_at": e.get("received_at"),
+            "from_address": e.get("from_address") or "",
+            "to_address": e.get("to_address") or "",
+            "subject": subj,
+            "action_taken": e.get("action_taken") or "default_delivery",
+            "codice_cliente": e.get("codice_cliente") or e.get("codcli") or "",
+            "event_uuid": e.get("event_uuid"),
+        })
+
     # Health critico: dispatch dead-letter recenti (ticket non creati malgrado retry)
     dispatch_dead_24h = 0
     try:
@@ -118,6 +134,7 @@ def index():
             "last_event_seen": last_event_seen,
             "aggregations_active": len(storage.list_aggregations(tenant_id=tid, only_enabled=True)) if hasattr(storage, "list_aggregations") else 0,
         },
+        recent_mail=recent_mail,
     )
 
 
