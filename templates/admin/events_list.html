@@ -8,8 +8,45 @@
     .ev-filters input, .ev-filters select { width:100%; padding:0.4rem 0.55rem; border:1px solid #cbd5e1; border-radius:5px; font-family:inherit; }
     .ev-filters .checks { display:flex; gap:0.7rem; flex-wrap:wrap; align-items:center; padding-top:0.4rem; }
     .ev-filters .checks label.cb { font-size:0.85rem; color:#0b2a4a; display:inline-flex; align-items:center; gap:0.3rem; margin:0; }
-    table.dr-table tr.ev-row { cursor:pointer; }
-    table.dr-table tr.ev-row:hover { background:#f4faff; }
+    /* === Tabella eventi: 1 riga per evento === */
+    table.dr-table.ev-table { table-layout:auto; }
+    table.dr-table.ev-table thead th { white-space:nowrap; font-size:0.7rem;
+        text-transform:uppercase; letter-spacing:0.04em; padding:0.4rem 0.55rem;
+        background:#f8fafc; border-bottom:2px solid #e2e8f0; color:#475569;
+    }
+    table.dr-table.ev-table tbody td {
+        white-space:nowrap;
+        overflow:hidden; text-overflow:ellipsis;
+        vertical-align:middle;
+        padding:0.35rem 0.55rem;
+        font-size:0.78rem;
+    }
+    table.dr-table.ev-table tbody tr.ev-row { cursor:pointer; }
+    table.dr-table.ev-table tbody tr.ev-row:hover { background:#f4faff; }
+    /* Larghezze fisse colonne */
+    .ev-col-id { width:48px; }
+    .ev-col-when { width:64px; }
+    .ev-col-from, .ev-col-to { max-width:180px; }
+    .ev-col-subject { max-width:260px; }
+    .ev-col-cli { width:90px; }
+    .ev-col-action { max-width:240px; }
+    .ev-col-rule { width:80px; }
+    .ev-col-ticket { width:80px; max-width:80px; }
+    .ev-col-body { width:32px; text-align:center; }
+    .ev-col-actions { width:82px; text-align:center; }
+    /* Mini-pill compatti per i marker (shadow/thread/IA/SHADOW IA) */
+    .ev-mini {
+        display:inline-flex; align-items:center; gap:0.18rem;
+        padding:0.02rem 0.32rem; border-radius:8px;
+        font-size:0.66rem; font-weight:600; margin-left:0.25rem;
+        white-space:nowrap; vertical-align:middle;
+    }
+    .ev-mini.shadow { background:#fef3c7; color:#92400e; }
+    .ev-mini.thread { background:#e0e7ff; color:#3730a3; }
+    .ev-mini.ai { background:#ede9fe; color:#7c3aed; text-decoration:none; }
+    .ev-mini.ai-failsafe { background:#fee2e2; color:#dc2626; }
+    .ev-mini.ai-skip { background:#fef3c7; color:#92400e; }
+    .ev-mini.chain-extra { background:#dcfce7; color:#14532d; }
     .action-pill { display:inline-flex; align-items:center; gap:0.25rem; padding:0.15rem 0.5rem; border-radius:11px; font-size:0.74rem; font-weight:500; white-space:nowrap; }
     .action-pill.create_ticket { background:#dbeafe; color:#1d4ed8; }
     .action-pill.auto_reply    { background:#d1fae5; color:#047857; }
@@ -97,99 +134,93 @@
 
 <section class="dr-section">
     {% if events %}
-    <div class="dr-table-wrap">
-    <table class="dr-table">
+    <div class="dr-table-wrap" style="overflow-x:auto;">
+    <table class="dr-table ev-table">
         <thead>
             <tr>
-                <th style="width:60px;">ID</th>
-                <th>Ricevuto</th>
-                <th>Da</th>
-                <th>A</th>
-                <th>Oggetto</th>
-                <th>Cliente</th>
-                <th>Azione</th>
-                <th>Regola</th>
-                <th>Ticket</th>
-                <th title="Body conservato (con TTL)" style="text-align:center; width:36px;"><i class="fas fa-envelope-open-text"></i></th>
-                <th style="width:90px; text-align:center;">Azioni</th>
+                <th class="ev-col-id">ID</th>
+                <th class="ev-col-when" title="Ricevuto (HH:MM se oggi)">Ricevuto</th>
+                <th class="ev-col-from">Da</th>
+                <th class="ev-col-to">A</th>
+                <th class="ev-col-subject">Oggetto</th>
+                <th class="ev-col-cli">Cliente</th>
+                <th class="ev-col-action">Azione</th>
+                <th class="ev-col-rule">Regola</th>
+                <th class="ev-col-ticket">Ticket</th>
+                <th class="ev-col-body" title="Body conservato (con TTL)"><i class="fas fa-envelope-open-text"></i></th>
+                <th class="ev-col-actions">Azioni</th>
             </tr>
         </thead>
         <tbody>
             {% for e in events %}
+            {% set pm = e.payload_metadata if e.payload_metadata is mapping else {} %}
             <tr class="ev-row" onclick="window.location='{{ url_for('events.detail_view', event_id=e.id) }}'">
-                <td><strong>{{ e.id }}</strong></td>
-                <td class="mono"><small>{{ e.received_at }}</small></td>
-                <td class="mono" style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ e.from_address }}">{{ e.from_address or '—' }}</td>
-                <td class="mono" style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ e.to_address }}"><small>{{ e.to_address or '—' }}</small></td>
-                <td style="max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ e.subject }}">{{ e.subject or '—' }}</td>
-                <td>{{ e.codice_cliente or '—' }}</td>
-                <td>
+                <td class="ev-col-id"><strong>{{ e.id }}</strong></td>
+                <td class="ev-col-when mono" title="{{ e.received_at }}">{{ e.received_short }}</td>
+                <td class="ev-col-from mono" title="{{ e.from_address }}">{{ e.from_address or '—' }}</td>
+                <td class="ev-col-to mono" title="{{ e.to_address }}">{{ e.to_address or '—' }}</td>
+                <td class="ev-col-subject" title="{{ e.subject }}">{{ e.subject or '—' }}</td>
+                <td class="ev-col-cli">{{ e.codice_cliente or '—' }}</td>
+                <td class="ev-col-action">
                     {% if e.action_taken %}
                     <span class="action-pill {{ e.action_taken }}">{{ e.action_taken }}</span>
                     {% else %}<span style="color:#cbd5e1;">—</span>{% endif %}
-                    {% set pm = e.payload_metadata if e.payload_metadata is mapping else {} %}
                     {% if pm.get('shadow_mode') %}
-                    <span style="display:inline-block; margin-left:0.3rem; background:#fef3c7; color:#92400e; padding:0.05rem 0.4rem; border-radius:9px; font-size:0.7rem; font-weight:600;"
-                          title="SHADOW: nessuna azione eseguita. Avrebbe fatto: {{ (pm.get('would_have_executed') or {}).get('action') or '—' }} (regola #{{ (pm.get('would_have_executed') or {}).get('rule_id') or '—' }})">
-                       🌒 SHADOW
-                    </span>
+                    <span class="ev-mini shadow"
+                          title="SHADOW: nessuna azione eseguita. Avrebbe fatto: {{ (pm.get('would_have_executed') or {}).get('action') or '—' }} (regola #{{ (pm.get('would_have_executed') or {}).get('rule_id') or '—' }})">🌒</span>
                     {% endif %}
                     {% if pm.get('is_thread_continuation') or e.reply_to_event_uuid %}
-                    <span style="display:inline-block; margin-left:0.3rem; background:#e0e7ff; color:#3730a3; padding:0.05rem 0.4rem; border-radius:9px; font-size:0.7rem; font-weight:600;"
-                          title="Risposta a thread tracked. Parent ticket: {{ pm.get('thread_parent_ticket_id') or '—' }}">
-                       🔗 thread
-                    </span>
+                    <span class="ev-mini thread"
+                          title="Risposta a thread tracked. Parent ticket: {{ pm.get('thread_parent_ticket_id') or '—' }}">🔗</span>
                     {% endif %}
                     {% if pm.get('ai_decision_id') %}
                     <a href="{{ url_for('ai.decision_detail', decision_id=pm['ai_decision_id']) }}"
                        onclick="event.stopPropagation();"
-                       title="IA: {{ pm.get('ai_classification') or '—' }} / urgenza {{ pm.get('ai_urgenza') or '—' }} ({{ '%.4f'|format(pm.get('ai_cost_usd') or 0) }}$)"
-                       style="display:inline-block; margin-left:0.3rem; background:#ede9fe; color:#7c3aed; padding:0.05rem 0.35rem; border-radius:9px; font-size:0.7rem; font-weight:600; text-decoration:none;">
-                       <i class="fas fa-robot"></i> IA
-                       {% if pm.get('ai_shadow_mode') %}<sub>shadow</sub>{% endif %}
+                       class="ev-mini ai"
+                       title="IA: {{ pm.get('ai_classification') or '—' }} / urgenza {{ pm.get('ai_urgenza') or '—' }} ({{ '%.4f'|format(pm.get('ai_cost_usd') or 0) }}$)">
+                       <i class="fas fa-robot"></i>{% if pm.get('ai_shadow_mode') %}<sub>s</sub>{% endif %}
                     </a>
                     {% elif pm.get('ai_unavailable') %}
-                    <span style="display:inline-block; margin-left:0.3rem; background:#fee2e2; color:#dc2626; padding:0.05rem 0.35rem; border-radius:9px; font-size:0.7rem; font-weight:600;"
-                          title="IA non disponibile (fail-safe attivato): {{ pm.get('ai_reason') }}">
-                       <i class="fas fa-robot"></i> IA fail-safe
+                    <span class="ev-mini ai-failsafe"
+                          title="IA non disponibile (fail-safe): {{ pm.get('ai_reason') }}">
+                       <i class="fas fa-robot"></i>!
                     </span>
                     {% elif pm.get('ai_skipped') %}
-                    <span style="display:inline-block; margin-left:0.3rem; background:#fef3c7; color:#92400e; padding:0.05rem 0.35rem; border-radius:9px; font-size:0.7rem; font-weight:600;"
+                    <span class="ev-mini ai-skip"
                           title="IA non chiamata: {{ pm.get('ai_reason') or '—' }}">
-                       <i class="fas fa-robot"></i> IA skip
+                       <i class="fas fa-robot"></i>—
                     </span>
                     {% endif %}
                 </td>
-                <td>
+                <td class="ev-col-rule">
                     {% if e.rule_id %}
                     <a href="{{ url_for('rules.form_view', rule_id=e.rule_id) }}" onclick="event.stopPropagation();">#{{ e.rule_id }}</a>
                     {% set chain = pm.get('chain') if pm else None %}
                     {% if chain %}
                         {% set extra_matched = (chain | selectattr('matched') | list | length) - 1 %}
                         {% if extra_matched > 0 %}
-                        <span title="Catena: {{ chain | length }} regole valutate, {{ extra_matched + 1 }} in match — apri il dettaglio per la lista completa"
-                              style="display:inline-block; margin-left:0.25rem; background:#dcfce7; color:#14532d; padding:0.05rem 0.4rem; border-radius:9px; font-size:0.7rem; font-weight:600; cursor:help;">
-                            +{{ extra_matched }}
-                        </span>
+                        <span class="ev-mini chain-extra"
+                              title="Catena: {{ chain | length }} regole valutate, {{ extra_matched + 1 }} in match"
+                              style="cursor:help;">+{{ extra_matched }}</span>
                         {% endif %}
                     {% endif %}
                     {% else %}<span style="color:#cbd5e1;">—</span>{% endif %}
                 </td>
-                <td class="mono"><small>{{ e.ticket_id or '—' }}</small></td>
-                <td style="text-align:center;">
+                <td class="ev-col-ticket mono" title="{{ e.ticket_id }}">{{ e.ticket_id or '—' }}</td>
+                <td class="ev-col-body">
                     {% if e.body_text or e.body_html %}
                     <i class="fas fa-envelope-open-text" title="Body disponibile" style="color:#10b981;"></i>
                     {% else %}
                     <i class="fas fa-envelope" title="Body non disponibile" style="color:#cbd5e1;"></i>
                     {% endif %}
                 </td>
-                <td onclick="event.stopPropagation();" style="text-align:center; white-space:nowrap;">
+                <td class="ev-col-actions" onclick="event.stopPropagation();">
                     <a href="{{ url_for('events.detail_view', event_id=e.id) }}"
-                       class="dr-btn" style="width:auto; padding:0.2rem 0.45rem;" title="Apri dettaglio">
+                       class="dr-btn" style="width:auto; padding:0.15rem 0.4rem;" title="Apri dettaglio">
                         <i class="fas fa-eye"></i>
                     </a>
                     <a href="{{ url_for('rules.form_view') }}?prefill_from={{ (e.from_address or '')|urlencode }}&prefill_to={{ (e.to_address or '')|urlencode }}&prefill_subject={{ (e.subject or '')|urlencode }}&from_event={{ e.id }}"
-                       class="dr-btn dr-btn-primary" style="width:auto; padding:0.2rem 0.45rem;" title="Crea regola da questo evento (precompila From/To/Subject, modificabili)">
+                       class="dr-btn dr-btn-primary" style="width:auto; padding:0.15rem 0.4rem;" title="Crea regola da questo evento">
                         <i class="fas fa-plus-circle"></i>
                     </a>
                 </td>

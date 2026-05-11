@@ -51,6 +51,10 @@ def list_view():
         tenant_id=_tid(), hours=hours,
         page=page, page_size=page_size, filters=filters,
     )
+    # Formattazione compatta data per ogni evento (HH:MM oggi / DD/MM HH:MM altrimenti)
+    _now = datetime.now(timezone.utc)
+    for e in events:
+        e["received_short"] = _format_short_ts(e.get("received_at"), _now)
     pages = max(1, (total + page_size - 1) // page_size)
     available_actions = ["create_ticket", "auto_reply", "forward", "redirect",
                          "quarantine", "flag_only", "ignore", "default_delivery"]
@@ -60,6 +64,28 @@ def list_view():
         available_actions=available_actions,
         filters={**filters, "hours": hours, "q": request.args.get("q") or ""},
     )
+
+
+def _format_short_ts(s, now: datetime | None = None) -> str:
+    """Data compatta: 'HH:MM' oggi, 'DD/MM HH:MM' anno corrente, 'DD/MM/YY' altrimenti."""
+    if not s:
+        return "—"
+    try:
+        if isinstance(s, str):
+            iso = s.replace("Z", "+00:00") if s.endswith("Z") else s
+            dt = datetime.fromisoformat(iso.replace(" ", "T"))
+        else:
+            dt = s
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+    except (ValueError, TypeError):
+        return str(s)[:16]
+    cur = now or datetime.now(timezone.utc)
+    if dt.date() == cur.date():
+        return dt.strftime("%H:%M")
+    if dt.year == cur.year:
+        return dt.strftime("%d/%m %H:%M")
+    return dt.strftime("%d/%m/%y")
 
 
 @events_bp.route("/events/<int:event_id>")
