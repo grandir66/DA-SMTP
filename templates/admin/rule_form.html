@@ -327,6 +327,37 @@
                 </div>
             </div>
 
+            {# M042: AI model override per regola (sempre visibile) #}
+            <div class="rf-row">
+                <label>🤖 Modello AI<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
+                    Override del modello AI per QUESTA regola.
+                    Lascia "Default binding job" per usare quello configurato in
+                    <a href="/ai/models">/ai/models</a> per il job_code dell'action
+                    (es. <code>classify_email</code> default = Claude Haiku 4.5).<br><br>
+                    Usa Sonnet o Opus per regole su mail critiche che richiedono
+                    accuratezza maggiore. Attenzione al costo: Opus &gt;&gt; Haiku.
+                </span></span></label>
+                <div style="display:flex; gap:0.4rem; align-items:center; flex-wrap:wrap;">
+                    <select name="ai_model_select"
+                            onchange="document.getElementById('ai_model_id').value = (this.value === '__custom__' ? document.getElementById('ai_model_id').value : this.value);"
+                            style="flex:1; min-width:280px;">
+                        <option value="" {% if not record.ai_model_id %}selected{% endif %}>— Default binding job (configurato in /ai/models) —</option>
+                        <option value="claude-haiku-4-5"  {% if record.ai_model_id == 'claude-haiku-4-5' %}selected{% endif %}>Claude Haiku 4.5  · $1 / $5 per Mtok · veloce, economico</option>
+                        <option value="claude-sonnet-4-6" {% if record.ai_model_id == 'claude-sonnet-4-6' %}selected{% endif %}>Claude Sonnet 4.6 · $3 / $15 per Mtok · bilanciato</option>
+                        <option value="claude-opus-4-7"   {% if record.ai_model_id == 'claude-opus-4-7' %}selected{% endif %}>Claude Opus 4.7   · $15 / $75 per Mtok · massima qualità</option>
+                        <option value="__custom__"        {% if record.ai_model_id and record.ai_model_id not in ['claude-haiku-4-5','claude-sonnet-4-6','claude-opus-4-7'] %}selected{% endif %}>— Custom (digita sotto) —</option>
+                    </select>
+                    <input type="text" id="ai_model_id" name="ai_model_id"
+                           value="{{ record.ai_model_id or '' }}"
+                           placeholder="es. claude-sonnet-4-6 (vuoto = default binding)"
+                           style="flex:1; min-width:220px; font-family:ui-monospace,Menlo,monospace;">
+                </div>
+                <div class="help">
+                    Vuoto = usa il modello del binding per il job (default Claude Haiku 4.5).
+                    Selezionando un modello, questa singola regola lo userà ignorando il binding.
+                </div>
+            </div>
+
             <div class="rf-row">
                 <label>Cascata<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
                     Se attivo, dopo il match continua a valutare le regole successive.

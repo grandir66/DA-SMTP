@@ -575,7 +575,10 @@ def process(
         else:
             rule_id = int(outcome.rule["id"])
             action_name = str(outcome.rule.get("action", ""))
-            action_map = outcome.rule.get("action_map") or {}
+            action_map = dict(outcome.rule.get("action_map") or {})
+            # M042: propaga rule.ai_model_id in action_map per le actions ai_*
+            if outcome.rule.get("ai_model_id"):
+                action_map["ai_model_id"] = outcome.rule["ai_model_id"]
             res = _dispatch_action(
                 action_name=action_name,
                 event_uuid=pre_event_uuid,

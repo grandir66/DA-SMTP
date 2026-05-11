@@ -94,6 +94,7 @@ def classify_email(
     event_uuid: str | None = None,
     customer_context: dict[str, Any] | None = None,
     tenant_id: int = 1,
+    model_id_override: str | None = None,
 ) -> dict[str, Any]:
     """Classifica un evento mail tramite il job ``classify_email``.
 
@@ -117,6 +118,12 @@ def classify_email(
     binding = router.pick_binding("classify_email")
     if binding is None:
         return {"error": "no_binding_configured", "skipped": True}
+    # M042: model override per singola chiamata (es. rule.ai_model_id).
+    # Sostituisce SOLO il model_id; lascia provider/prompts/temperature uguali.
+    if model_id_override:
+        binding = type(binding)(
+            **{**binding.__dict__, "model_id": model_id_override}
+        )
 
     # PII redaction
     redacted_event, redaction_result = redact_event(event, storage=storage,

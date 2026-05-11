@@ -33,7 +33,26 @@
     </div>
     <div class="dr-form-row">
         <label>Model id</label>
-        <input type="text" name="model_id" value="{{ record.model_id or 'claude-haiku-4-5' }}" required>
+        <div style="display:flex; gap:0.4rem; align-items:center; flex-wrap:wrap;">
+            <select name="model_id_select" id="model_id_select"
+                    onchange="document.getElementById('model_id').value = this.value;"
+                    style="flex:1; min-width:240px;">
+                <option value="">— custom (sotto) —</option>
+                {% set claude_models = [
+                    ('claude-haiku-4-5',  'Claude Haiku 4.5  · $1 / $5 per Mtok · veloce, economico'),
+                    ('claude-sonnet-4-6', 'Claude Sonnet 4.6 · $3 / $15 per Mtok · bilanciato'),
+                    ('claude-opus-4-7',   'Claude Opus 4.7   · $15 / $75 per Mtok · massima qualità'),
+                ] %}
+                {% for code, label in claude_models %}
+                <option value="{{ code }}" {% if record.model_id == code %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+            <input type="text" id="model_id" name="model_id"
+                   value="{{ record.model_id or 'claude-haiku-4-5' }}" required
+                   placeholder="custom model id"
+                   style="flex:1; min-width:200px; font-family:ui-monospace,Menlo,monospace;">
+        </div>
+        <div class="help">Scegli un modello dalla dropdown o digita un model id custom (es. modelli locali via OpenAI-compatible).</div>
     </div>
     <div class="dr-form-row">
         <label>Temperature</label>
@@ -58,7 +77,19 @@
     </div>
     <div class="dr-form-row">
         <label>Fallback model</label>
-        <input type="text" name="fallback_model_id" value="{{ record.fallback_model_id or '' }}" placeholder="claude-sonnet-4-6">
+        <div style="display:flex; gap:0.4rem; align-items:center; flex-wrap:wrap;">
+            <select name="fallback_model_select"
+                    onchange="document.getElementById('fallback_model_id').value = this.value;"
+                    style="flex:1; min-width:240px;">
+                <option value="">— nessuno —</option>
+                {% for code, label in claude_models %}
+                <option value="{{ code }}" {% if record.fallback_model_id == code %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+            <input type="text" id="fallback_model_id" name="fallback_model_id"
+                   value="{{ record.fallback_model_id or '' }}" placeholder="claude-sonnet-4-6"
+                   style="flex:1; min-width:200px; font-family:ui-monospace,Menlo,monospace;">
+        </div>
     </div>
     <div class="dr-form-row">
         <label>Traffic split %</label>

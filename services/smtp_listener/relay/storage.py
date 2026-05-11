@@ -403,6 +403,8 @@ class Storage:
                 ("rules_cache", "match_is_thread_continuation", "ALTER TABLE rules_cache ADD COLUMN match_is_thread_continuation INTEGER"),
                 # M041: force_live (bypass shadow cascade)
                 ("rules_cache", "force_live", "ALTER TABLE rules_cache ADD COLUMN force_live INTEGER NOT NULL DEFAULT 0"),
+                # M042: ai_model_id override per regola
+                ("rules_cache", "ai_model_id", "ALTER TABLE rules_cache ADD COLUMN ai_model_id TEXT"),
                 # M039: body_text/body_html persistiti su events_log (cap 32KB/64KB applicato in insert_event).
                 # Senza queste colonne, insert_event crasha al primo evento su relay.db fresca.
                 ("events_log", "body_text", "ALTER TABLE events_log ADD COLUMN body_text TEXT"),
@@ -944,6 +946,11 @@ class Storage:
                         "UPDATE rules_cache SET force_live = 0 WHERE id = ?",
                         (int(r["id"]),),
                     )
+                # M042: ai_model_id override
+                conn.execute(
+                    "UPDATE rules_cache SET ai_model_id = ? WHERE id = ?",
+                    (r.get("ai_model_id") or None, int(r["id"])),
+                )
             self._set_sync_meta(conn, "rules", synced)
         return len(rules)
 

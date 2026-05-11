@@ -145,6 +145,11 @@ def do_ai_classify(
         "customer_context": customer_ctx,
         "tenant_id": int(action_map.get("tenant_id") or 1),
     }
+    # M042: override modello AI per questa singola regola (vince sul binding default).
+    # Il rule engine inserisce `ai_model_id` nell'action_map quando rule.ai_model_id
+    # e' valorizzato. L'admin lo applica al provider chiamato.
+    if action_map.get("ai_model_id"):
+        payload["ai_model_id_override"] = str(action_map["ai_model_id"]).strip()
 
     base_url = cfg.manager.base_url.rstrip("/")
     api_key = cfg.manager.api_key

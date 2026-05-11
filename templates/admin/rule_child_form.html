@@ -125,6 +125,20 @@
                     </label>
                 </div>
             </div>
+
+            {# M042: AI model override per regola #}
+            <div class="rf-row">
+                <label>🤖 Modello AI</label>
+                <div>
+                    <select name="ai_model_id" style="font-family:ui-monospace,Menlo,monospace;">
+                        <option value="" {% if not record.ai_model_id %}selected{% endif %}>— Default binding job —</option>
+                        <option value="claude-haiku-4-5"  {% if record.ai_model_id == 'claude-haiku-4-5' %}selected{% endif %}>Claude Haiku 4.5  · $1 / $5</option>
+                        <option value="claude-sonnet-4-6" {% if record.ai_model_id == 'claude-sonnet-4-6' %}selected{% endif %}>Claude Sonnet 4.6 · $3 / $15</option>
+                        <option value="claude-opus-4-7"   {% if record.ai_model_id == 'claude-opus-4-7' %}selected{% endif %}>Claude Opus 4.7   · $15 / $75</option>
+                    </select>
+                    <div class="rf-help">Override del modello AI per questa regola figlia. Vuoto = default binding del job.</div>
+                </div>
+            </div>
             <div class="rf-row rf-advanced-only">
                 <label>Note shadow</label>
                 <input type="text" name="shadow_note" value="{{ record.shadow_note or '' }}"

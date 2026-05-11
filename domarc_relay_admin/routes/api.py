@@ -328,6 +328,10 @@ def rules_active():
             "shadow_note": r.get("shadow_note"),
             # M036: thread continuation matcher
             "match_is_thread_continuation": r.get("match_is_thread_continuation"),
+            # M041: force_live (bypass shadow cascade)
+            "force_live": bool(r.get("force_live")),
+            # M042: AI model override per questa regola
+            "ai_model_id": r.get("ai_model_id") or None,
         }
         # Metadata opzionali per audit (ignorati dal listener legacy).
         if r.get("_source_group_id"):
@@ -395,6 +399,10 @@ def ai_classify():
     event_uuid = payload.get("event_uuid")
     customer_ctx = payload.get("customer_context") or {}
     tid = int(payload.get("tenant_id") or 1)
+    # M042: override modello AI per questa specifica chiamata (dalla regola).
+    # Sovrascrive `binding.model_id` per QUESTA invocazione; il binding di
+    # default resta invariato in DB (utile per A/B per-regola).
+    ai_model_override = (payload.get("ai_model_id_override") or "").strip() or None
 
     storage = _storage()
     router = get_ai_router(storage, tenant_id=tid)
@@ -402,6 +410,7 @@ def ai_classify():
         storage=storage, router=router,
         event=event, event_uuid=event_uuid,
         customer_context=customer_ctx, tenant_id=tid,
+        model_id_override=ai_model_override,
     )
     return jsonify(result), 200
 

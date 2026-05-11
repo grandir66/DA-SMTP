@@ -591,6 +591,7 @@ class SqliteStorage(Storage):
                           shadow_mode = ?, shadow_note = ?,
                           match_is_thread_continuation = ?,
                           force_live = ?,
+                          ai_model_id = ?,
                           updated_at = datetime('now')
                        WHERE id = ?""",
                     (
@@ -631,6 +632,7 @@ class SqliteStorage(Storage):
                         data.get("shadow_note") or None,
                         _bint(data.get("match_is_thread_continuation")),
                         1 if data.get("force_live") else 0,
+                        (data.get("ai_model_id") or "").strip() or None,
                         int(rid),
                     ),
                 )
@@ -648,14 +650,14 @@ class SqliteStorage(Storage):
                         parent_id, is_group, group_label,
                         exclusive_match, continue_in_group, exit_group_continue,
                         rule_set_id, shadow_mode, shadow_note,
-                        match_is_thread_continuation, force_live)
+                        match_is_thread_continuation, force_live, ai_model_id)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                            ?, ?, ?,
                            ?, ?, ?,
                            ?, ?,
                            ?, ?, ?, ?, ?, ?,
                            ?, ?, ?,
-                           ?, ?)""",
+                           ?, ?, ?)""",
                 (
                     int(tenant_id),
                     (data.get("name") or "").strip(),
@@ -701,6 +703,8 @@ class SqliteStorage(Storage):
                     _bint(data.get("match_is_thread_continuation")),
                     # M041: force_live (bypass shadow cascade per questa regola)
                     1 if data.get("force_live") else 0,
+                    # M042: ai_model_id override per questa regola
+                    (data.get("ai_model_id") or "").strip() or None,
                 ),
             )
             return int(cur.lastrowid or 0)

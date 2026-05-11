@@ -934,6 +934,8 @@ def group_form_view(group_id: int | None = None):
             "shadow_note": request.form.get("shadow_note") or None,
             # M041: force_live = bypass shadow cascade
             "force_live": (request.form.get("force_live") or "").lower() in ("on", "true", "1"),
+            # M042: AI model override
+            "ai_model_id": (request.form.get("ai_model_id") or "").strip() or None,
             "action_map": action_map or None,
             "exclusive_match": (request.form.get("exclusive_match") or "").lower() in ("on", "true", "1"),
         }
@@ -1227,6 +1229,8 @@ def _parse_form(form) -> dict:
         "shadow_note": form.get("shadow_note") or None,
         # M041: force_live = bypass shadow cascade
         "force_live": (form.get("force_live") or "").lower() in ("on", "true", "1"),
+        # M042: AI model override (es. claude-sonnet-4-6 per rule critica)
+        "ai_model_id": (form.get("ai_model_id") or "").strip() or None,
     }
 
 
