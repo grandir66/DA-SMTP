@@ -160,6 +160,18 @@ def sync_customers_and_rules(backend: ManagerBackend, storage: Storage,
         logger.warning("Sync privacy bypass fallito: %s", exc)
         result["errors"].append(f"privacy_bypass: {exc}")
 
+    # M040: Relay client ACL (whitelist IP/CIDR per accesso SMTP)
+    try:
+        if hasattr(backend, "fetch_active_relay_acl"):
+            acl_payload = backend.fetch_active_relay_acl()
+            n = storage.replace_relay_acl(acl_payload.entries)
+            result["relay_acl"] = {"synced_at": acl_payload.synced_at, "count": n}
+            if n:
+                logger.info("Sync relay ACL OK: %d entries", n)
+    except (ManagerError, AttributeError) as exc:
+        logger.debug("Sync relay ACL skip/fallito: %s", exc)
+        result["errors"].append(f"relay_acl: {exc}")
+
     # H24 Fase E — sync mappatura source_domain → h24_alias (multi-brand)
     try:
         h24t_payload = backend.fetch_active_h24_targets()

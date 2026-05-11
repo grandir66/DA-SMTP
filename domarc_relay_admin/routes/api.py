@@ -133,6 +133,19 @@ def _get_or_create_api_key() -> str:
 
 # ============================================================ ENDPOINTS ===
 
+@api_bp.route("/relay-acl/active", methods=["GET"])
+@require_api_key
+def relay_acl_active():
+    """Lista IP/CIDR autorizzati a fare relay sul listener. Sync periodico."""
+    storage = _storage()
+    tenant_id = int(request.args.get("tenant_id") or 1)
+    entries = storage.list_active_relay_client_acl(tenant_id=tenant_id)
+    return jsonify({
+        "synced_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "entries": entries,
+    }), 200
+
+
 @api_bp.route("/health", methods=["GET"])
 @require_api_key
 def health():

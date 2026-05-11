@@ -321,6 +321,16 @@ CREATE TABLE IF NOT EXISTS h24_targets_cache (
 CREATE INDEX IF NOT EXISTS idx_h24_targets_active
     ON h24_targets_cache(source_domain) WHERE enabled = 1;
 -- Index su source_email creato dalla mini-migration dopo l'ALTER ADD COLUMN.
+
+-- M040: Relay client ACL — cache locale degli IP/CIDR autorizzati a consegnare
+-- mail al listener :25. Sync periodico da admin via /api/v1/relay/relay-acl/active.
+CREATE TABLE IF NOT EXISTS relay_client_acl_cache (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    ip_or_cidr      TEXT NOT NULL UNIQUE,
+    label           TEXT,
+    description     TEXT,
+    synced_at       TEXT NOT NULL
+);
 """
 
 
@@ -515,6 +525,63 @@ class Storage:
                 ),
             )
         return evt_uuid
+
+    # ============================================== RELAY CLIENT ACL ===
+
+    def replace_relay_acl(self, entries: list[dict[str, Any]]) -> int:
+        """Sostituisce atomicamente la cache delle entries ACL.
+        `entries` = lista di dict con almeno `ip_or_cidr` (str)."""
+        synced = _now_iso()
+        with self.transaction() as conn:
+            conn.execute("DELETE FROM relay_client_acl_cache")
+            for e in entries:
+                ip_or_cidr = (e.get("ip_or_cidr") or "").strip()
+                if not ip_or_cidr:
+                    continue
+                conn.execute(
+                    """INSERT INTO relay_client_acl_cache
+                           (ip_or_cidr, label, description, synced_at)
+                       VALUES (?, ?, ?, ?)""",
+                    (ip_or_cidr, e.get("label"), e.get("description"), synced),
+                )
+            self._set_sync_meta_conn(conn, "relay_acl", synced)
+        return len(entries)
+
+    def _set_sync_meta_conn(self, conn: sqlite3.Connection, name: str, ts: str) -> None:
+        conn.execute(
+            "INSERT OR REPLACE INTO sync_meta (name, last_sync_at) VALUES (?, ?)",
+            (name, ts),
+        )
+
+    def list_relay_acl_entries(self) -> list[str]:
+        """Ritorna la lista di ip_or_cidr in cache (per check enforcement)."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT ip_or_cidr FROM relay_client_acl_cache"
+            ).fetchall()
+            return [r["ip_or_cidr"] for r in rows]
+
+    def is_client_allowed(self, client_ip: str) -> tuple[bool, bool]:
+        """Ritorna (enforce, allowed):
+          - enforce=False: cache vuota → no enforcement, allowed sempre True
+          - enforce=True, allowed=True: IP nella whitelist
+          - enforce=True, allowed=False: IP NON in whitelist → reject
+        """
+        import ipaddress
+        entries = self.list_relay_acl_entries()
+        if not entries:
+            return (False, True)
+        try:
+            ip = ipaddress.ip_address(client_ip)
+        except ValueError:
+            return (True, False)
+        for ent in entries:
+            try:
+                if ip in ipaddress.ip_network(ent, strict=False):
+                    return (True, True)
+            except ValueError:
+                continue
+        return (True, False)
 
     def set_heartbeat(self, loop_name: str, ts_iso: str) -> None:
         """Aggiorna heartbeat di un loop scheduler nella tabella sync_meta.

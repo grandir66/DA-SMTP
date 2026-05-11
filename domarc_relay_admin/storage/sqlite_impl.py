@@ -68,6 +68,82 @@ class SqliteStorage(Storage):
 
     # =================================================== MIGRATION RUNNER ==
 
+    # ======================================================== RELAY ACL ====
+
+    def list_relay_client_acl(self, *, tenant_id: int = 1) -> list[dict]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """SELECT * FROM relay_client_acl
+                    WHERE tenant_id = ?
+                    ORDER BY enabled DESC, ip_or_cidr ASC""",
+                (tenant_id,),
+            ).fetchall()
+            return [dict(r) for r in rows]
+
+    def list_active_relay_client_acl(self, *, tenant_id: int = 1) -> list[dict]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """SELECT id, ip_or_cidr, label, description
+                     FROM relay_client_acl
+                    WHERE tenant_id = ? AND enabled = 1
+                    ORDER BY ip_or_cidr ASC""",
+                (tenant_id,),
+            ).fetchall()
+            return [dict(r) for r in rows]
+
+    def upsert_relay_client_acl(self, data: dict, *, tenant_id: int = 1) -> int:
+        """Inserisce o aggiorna una entry. Ritorna l'id."""
+        import ipaddress
+        ip_or_cidr = (data.get("ip_or_cidr") or "").strip()
+        if not ip_or_cidr:
+            raise ValueError("ip_or_cidr obbligatorio")
+        # Valida formato: deve essere un IP/CIDR IPv4 o IPv6 parseabile.
+        try:
+            ipaddress.ip_network(ip_or_cidr, strict=False)
+        except ValueError as exc:
+            raise ValueError(f"IP/CIDR non valido: {exc}") from exc
+        label = (data.get("label") or "").strip() or None
+        description = (data.get("description") or "").strip() or None
+        enabled = 1 if data.get("enabled", True) else 0
+        set_by = data.get("set_by") or None
+        entry_id = data.get("id")
+        with self._connect() as conn:
+            if entry_id:
+                conn.execute(
+                    """UPDATE relay_client_acl
+                          SET ip_or_cidr=?, label=?, description=?, enabled=?,
+                              set_by=COALESCE(?, set_by), updated_at=datetime('now')
+                        WHERE id=? AND tenant_id=?""",
+                    (ip_or_cidr, label, description, enabled, set_by,
+                     int(entry_id), tenant_id),
+                )
+                return int(entry_id)
+            cur = conn.execute(
+                """INSERT INTO relay_client_acl
+                       (tenant_id, ip_or_cidr, label, description, enabled, set_by)
+                   VALUES (?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(tenant_id, ip_or_cidr) DO UPDATE SET
+                       label=excluded.label,
+                       description=excluded.description,
+                       enabled=excluded.enabled,
+                       set_by=COALESCE(excluded.set_by, relay_client_acl.set_by),
+                       updated_at=datetime('now')
+                   RETURNING id""",
+                (tenant_id, ip_or_cidr, label, description, enabled, set_by),
+            )
+            row = cur.fetchone()
+            conn.commit()
+            return int(row["id"])
+
+    def delete_relay_client_acl(self, entry_id: int, *, tenant_id: int = 1) -> bool:
+        with self._connect() as conn:
+            cur = conn.execute(
+                "DELETE FROM relay_client_acl WHERE id=? AND tenant_id=?",
+                (int(entry_id), tenant_id),
+            )
+            conn.commit()
+            return cur.rowcount > 0
+
     def apply_migrations(self) -> int:
         """Applica migration files non ancora applicati. Ritorna numero applicate.
 

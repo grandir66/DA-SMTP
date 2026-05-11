@@ -48,6 +48,25 @@ class RelayHandler:
         address: str,
         mail_options: list[str],
     ) -> str:
+        # M040: enforcement Relay client ACL.
+        # session.peer = (ip, port). Se ACL ha entries, IP non whitelistati
+        # vengono rifiutati con 550 5.7.1. Lista vuota = no enforcement.
+        try:
+            peer = getattr(session, "peer", None)
+            if peer:
+                client_ip = peer[0]
+                enforce, allowed = self._storage.is_client_allowed(client_ip)
+                if enforce and not allowed:
+                    logger.warning(
+                        "Relay ACL: rifiutata connessione da %s (mail_from=%s) "
+                        "— IP non in whitelist relay_client_acl_cache",
+                        client_ip, address,
+                    )
+                    return "550 5.7.1 Relaying denied (client not authorized)"
+        except Exception as exc:  # noqa: BLE001
+            # Fail-open: errore nel check ACL non blocca consegne legittime;
+            # in pratica si torna al comportamento legacy.
+            logger.exception("Relay ACL check failed (fail-open): %s", exc)
         envelope.mail_from = address
         envelope.mail_options.extend(mail_options)
         return "250 OK"

@@ -136,6 +136,14 @@ class RecipientGroupsPayload:
 
 
 @dataclass
+class RelayAclPayload:
+    """Whitelist IP/CIDR autorizzati a consegnare mail al listener (Migration 040).
+    Cache lato listener per check applicativo in handle_MAIL."""
+    synced_at: str
+    entries: list[dict[str, Any]] = field(default_factory=list)
+
+
+@dataclass
 class PrivacyBypassPayload:
     """Lista privacy-bypass attiva (migration 011 admin).
 
@@ -595,6 +603,19 @@ class StormshieldManagerBackend(ManagerBackend):
         return RecipientGroupsPayload(
             synced_at=data.get("synced_at", ""),
             groups=list(data.get("groups", [])),
+        )
+
+    def fetch_active_relay_acl(self) -> RelayAclPayload:
+        """Whitelist IP/CIDR autorizzati al relay (Migration 040). Best-effort:
+        se l'endpoint non e' supportato dall'admin (versione vecchia), il
+        listener non applica enforcement (lista vuota)."""
+        try:
+            data = self._get_json("/api/v1/relay/relay-acl/active")
+        except Exception:  # noqa: BLE001
+            return RelayAclPayload(synced_at="", entries=[])
+        return RelayAclPayload(
+            synced_at=data.get("synced_at", ""),
+            entries=list(data.get("entries", [])),
         )
 
     def fetch_active_domain_strategies(self) -> list[dict[str, Any]]:

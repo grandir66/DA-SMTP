@@ -1,0 +1,138 @@
+{% extends "admin/_base.html" %}
+{% block title %}Relay client ACL — Domarc SMTP Relay{% endblock %}
+{% block extra_head %}
+<style>
+.acl-banner {
+    border-left: 5px solid #2563eb; background: #eff6ff;
+    padding: 0.9rem 1.1rem; border-radius: 6px; margin-bottom: 1rem;
+}
+.acl-banner.enforcing { border-left-color: #16a34a; background: #f0fdf4; }
+.acl-banner.permissive { border-left-color: #f59e0b; background: #fffbeb; }
+.acl-banner h3 { margin:0 0 0.3rem; font-size: 1rem; }
+.acl-banner p { margin:0; font-size: 0.85rem; }
+.acl-quick { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: end;
+    padding: 0.7rem 0.9rem; background: #f8fafc; border-radius: 6px;
+    border: 1px dashed #cbd5e1; margin-bottom: 0.8rem; }
+.acl-quick input { padding: 0.4rem 0.6rem; border: 1px solid #cbd5e1;
+    border-radius: 5px; font-family: inherit; font-size: 0.85rem; }
+.acl-quick input[name="ip_or_cidr"] { min-width: 180px; }
+.acl-quick input[name="label"] { min-width: 160px; }
+.acl-quick input[name="description"] { min-width: 220px; flex:1; }
+.acl-disabled { opacity: 0.55; }
+.acl-tag { display:inline-block; padding: 0.15rem 0.45rem; border-radius: 3px;
+    font-size: 0.72rem; font-weight: 600; }
+.acl-tag.on { background:#dcfce7; color:#166534; }
+.acl-tag.off { background:#fee2e2; color:#991b1b; }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="dr-section">
+    <h2><i class="fas fa-shield-halved"></i> Relay client ACL</h2>
+    {% if enforcing %}
+    <div class="acl-banner enforcing">
+        <h3><i class="fas fa-check-circle"></i> Enforcement ATTIVO ({{ n_enabled }} {{ 'entry' if n_enabled == 1 else 'entries' }})</h3>
+        <p>Il listener accetta connessioni SMTP <strong>solo</strong> dagli IP/CIDR abilitati qui sotto.
+            Tutti gli altri ricevono <code>550 5.7.1 Relaying denied (client not authorized)</code>.
+            La cache del listener si sincronizza ogni 5 minuti (forza con <code>systemctl restart stormshield-smtp-relay-scheduler</code>).</p>
+    </div>
+    {% else %}
+    <div class="acl-banner permissive">
+        <h3><i class="fas fa-exclamation-triangle"></i> Enforcement DISATTIVATO (lista vuota o nessuna entry abilitata)</h3>
+        <p>Il listener accetta connessioni da qualsiasi IP che riesce a raggiungere :25 (filtro solo via firewall di rete).
+            Aggiungi sotto almeno una entry per attivare l'enforcement applicativo.</p>
+    </div>
+    {% endif %}
+</section>
+
+<section class="dr-section">
+    <h3>Aggiungi IP / CIDR autorizzato</h3>
+    <form method="post" action="{{ url_for('relay_acl.upsert') }}" class="acl-quick">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="text" name="ip_or_cidr" required
+               placeholder="192.168.20.0/24 oppure 192.168.20.25"
+               pattern="^[0-9a-fA-F:.\/]+$">
+        <input type="text" name="label" placeholder="Es. ESVA SAMNET">
+        <input type="text" name="description" placeholder="Note opzionali (es. firewall Stormshield)">
+        <label style="display:flex; align-items:center; gap:0.3rem; font-size:0.85rem;">
+            <input type="checkbox" name="enabled" checked> Abilitata
+        </label>
+        <button type="submit" class="dr-btn dr-btn-primary" style="width:auto;">
+            <i class="fas fa-plus"></i> Aggiungi
+        </button>
+    </form>
+</section>
+
+<section class="dr-section">
+    <h3>Entries configurate ({{ entries|length }})</h3>
+    {% if entries %}
+    <table class="dr-table">
+        <thead>
+            <tr>
+                <th>IP / CIDR</th>
+                <th>Label</th>
+                <th>Descrizione</th>
+                <th>Stato</th>
+                <th>Aggiunta</th>
+                <th>Da</th>
+                <th>Azioni</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for e in entries %}
+            <tr class="{% if not e.enabled %}acl-disabled{% endif %}">
+                <td><code>{{ e.ip_or_cidr }}</code></td>
+                <td>{{ e.label or '—' }}</td>
+                <td><small>{{ e.description or '—' }}</small></td>
+                <td>
+                    {% if e.enabled %}
+                        <span class="acl-tag on">ABILITATA</span>
+                    {% else %}
+                        <span class="acl-tag off">DISABILITATA</span>
+                    {% endif %}
+                </td>
+                <td><small>{{ (e.created_at or '')[:16] }}</small></td>
+                <td><small>{{ e.set_by or '—' }}</small></td>
+                <td style="white-space: nowrap;">
+                    <form method="post" action="{{ url_for('relay_acl.toggle', entry_id=e.id) }}"
+                          style="display:inline;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="dr-btn dr-btn-sm"
+                                title="{{ 'Disabilita' if e.enabled else 'Abilita' }}">
+                            <i class="fas fa-{{ 'pause' if e.enabled else 'play' }}"></i>
+                        </button>
+                    </form>
+                    <form method="post" action="{{ url_for('relay_acl.delete', entry_id=e.id) }}"
+                          style="display:inline;"
+                          onsubmit="return confirm('Eliminare definitivamente {{ e.ip_or_cidr }}?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="dr-btn dr-btn-sm dr-btn-danger" title="Elimina">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </form>
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+        <p style="font-style: italic; color: var(--dr-gray);">
+            Nessuna entry configurata. Aggiungi una subnet sopra per iniziare.
+        </p>
+    {% endif %}
+</section>
+
+<section class="dr-section">
+    <h3>Suggerimenti subnet comuni</h3>
+    <ul style="font-size: 0.9rem;">
+        <li><code>192.168.20.0/24</code> — SAMNET (LibraESVA antispam)</li>
+        <li><code>192.168.4.0/24</code> — rete admin locale (server stessi, debug)</li>
+        <li><code>127.0.0.1/32</code> — loopback (test locali sulla VM)</li>
+    </ul>
+    <p style="font-size: 0.8rem; color: var(--dr-gray);">
+        <strong>Attenzione</strong>: il check applicativo NON sostituisce il firewall di rete.
+        UFW della VM continua a filtrare :25 a livello kernel.
+        Questa ACL e' un secondo livello di sicurezza gestibile da UI.
+    </p>
+</section>
+{% endblock %}

@@ -22,7 +22,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/var/lib/domarc-smtp-relay /var/log/domarc-smtp-relay
+ReadWritePaths=/var/lib/domarc-smtp-relay /var/log/domarc-smtp-relay /var/lib/domarc-smtp-relay-admin /dev/shm
 ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true
@@ -32,7 +32,7 @@ LockPersonality=true
 RestrictRealtime=true
 SystemCallArchitectures=native
 
-LimitNOFILE=4096
+LimitNOFILE=16384
 
 [Install]
 WantedBy=multi-user.target
