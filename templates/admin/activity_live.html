@@ -2,38 +2,87 @@
 {% block title %}Activity Live{% endblock %}
 {% block extra_head %}
 <style>
-.activity-toolbar { display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap; padding:0.6rem 0; max-width:1200px; }
+.activity-toolbar { display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap; padding:0.6rem 0; }
 .activity-toolbar .pulse { display:inline-block; width:10px; height:10px; border-radius:50%; background:#10b981; box-shadow:0 0 0 0 rgba(16,185,129,0.8); animation: pulse 2s infinite; }
 .activity-toolbar .pulse.paused { background:#9ca3af; animation:none; }
 @keyframes pulse { 0% { box-shadow:0 0 0 0 rgba(16,185,129,0.8); } 70% { box-shadow:0 0 0 8px rgba(16,185,129,0); } 100% { box-shadow:0 0 0 0 rgba(16,185,129,0); } }
 
-.activity-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:0.8rem; max-width:1400px; }
+.activity-grid { display:grid; grid-template-columns:1.5fr 1fr 1fr; gap:0.8rem; }
 @media (max-width: 1100px) { .activity-grid { grid-template-columns:1fr; } }
 
-.activity-col { background:#fff; border:1px solid var(--dr-gray); border-radius:8px; overflow:hidden; }
-.activity-col-header { background:linear-gradient(180deg, #f1f5f9 0%, #e2e8f0 100%); padding:0.6rem 0.9rem; font-weight:600; color:var(--dr-primary); border-bottom:1px solid var(--dr-gray); display:flex; align-items:center; gap:0.4rem; }
-.activity-col-header .badge-count { margin-left:auto; background:var(--dr-blue); color:#fff; padding:0.05rem 0.5rem; border-radius:9px; font-size:0.78rem; }
-.activity-col-body { max-height:calc(100vh - 250px); overflow-y:auto; }
+.activity-col { background:#fff; border:1px solid var(--dr-gray); border-radius:8px; overflow:hidden;
+                box-shadow:0 1px 2px rgba(0,0,0,0.04); }
+.activity-col-header { background:#f8fafc; padding:0.5rem 0.8rem; font-weight:600;
+                       color:var(--dr-primary); border-bottom:1px solid #e2e8f0;
+                       display:flex; align-items:center; gap:0.4rem; font-size:0.85rem; }
+.activity-col-header .badge-count { margin-left:auto; background:var(--dr-blue); color:#fff;
+                                    padding:0.1rem 0.5rem; border-radius:9px; font-size:0.72rem; }
+.activity-col-body { max-height:calc(100vh - 270px); overflow-y:auto; }
 
-.activity-row { padding:0.55rem 0.8rem; border-bottom:1px solid #eef2f7; font-size:0.82rem; transition:background 0.4s ease-out; }
+/* Riga stile tabella compatta (coerente con events/queue) */
+.activity-row { padding:0.45rem 0.7rem; border-bottom:1px solid #f1f5f9; font-size:0.78rem;
+                transition:background 0.4s ease-out; line-height:1.35; }
 .activity-row:last-child { border-bottom:none; }
-.activity-row.fresh { background:#fef9c3; }  /* yellow flash on new */
-.activity-row .ts { color:var(--dr-gray-dark); font-size:0.75rem; }
-.activity-row .badges { display:flex; gap:0.2rem; flex-wrap:wrap; margin-top:0.2rem; }
-.activity-row .badges .b { padding:0.05rem 0.35rem; border-radius:9px; font-size:0.68rem; font-weight:600; }
-.activity-row .b-action { background:#dbeafe; color:#1d4ed8; }
-.activity-row .b-rule { background:#fef3c7; color:#92400e; }
-.activity-row .b-ai { background:#ede9fe; color:#6d28d9; }
-.activity-row .b-error { background:#fee2e2; color:#dc2626; }
-.activity-row .b-shadow { background:#e0e7ff; color:#4338ca; }
-.activity-row .b-applied { background:#d1fae5; color:#047857; }
-.activity-row .b-bypass { background:#fee2e2; color:#dc2626; }
-.activity-row .b-cluster-acc { background:#fef3c7; color:#92400e; }
-.activity-row .b-cluster-tkt { background:#fee2e2; color:#dc2626; }
-.activity-row .b-cluster-rec { background:#d1fae5; color:#047857; }
+.activity-row:hover { background:#fafbfc; }
+.activity-row.fresh { background:#fef9c3; }  /* flash giallo su nuovo */
+.activity-row .when { color:var(--dr-gray-dark); font-size:0.72rem;
+                      font-family:ui-monospace,Menlo,monospace; }
+.activity-row .subj { color:var(--dr-primary); font-weight:600;
+                      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+                      display:block; max-width:100%; }
+.activity-row .addr { font-family:ui-monospace,Menlo,monospace; font-size:0.72rem;
+                      color:var(--dr-gray-dark); white-space:nowrap; overflow:hidden;
+                      text-overflow:ellipsis; display:block; max-width:100%; }
+.activity-row .badges { display:flex; gap:0.2rem; flex-wrap:wrap; margin-top:0.25rem;
+                        align-items:center; }
 
-.activity-empty { padding:1.5rem; text-align:center; color:var(--dr-gray-dark); }
-.activity-stats { display:flex; gap:1rem; font-size:0.85rem; color:var(--dr-gray-dark); margin-left:auto; }
+/* Action-pill stile uniforme con events_list */
+.activity-row .action-pill {
+    display:inline-flex; align-items:center; gap:0.18rem;
+    padding:0.05rem 0.4rem; border-radius:3px;
+    font-size:0.66rem; font-weight:600; white-space:nowrap;
+}
+.activity-row .action-pill.default_delivery { background:#dcfce7; color:#166534; }
+.activity-row .action-pill.create_ticket { background:#dbeafe; color:#1e40af; }
+.activity-row .action-pill.create_authorized_ticket { background:#bfdbfe; color:#1e3a8a; }
+.activity-row .action-pill.auto_reply { background:#fef3c7; color:#78350f; }
+.activity-row .action-pill.forward, .activity-row .action-pill.redirect { background:#e0e7ff; color:#3730a3; }
+.activity-row .action-pill.quarantine { background:#fee2e2; color:#991b1b; }
+.activity-row .action-pill.ignore, .activity-row .action-pill.flag_only { background:#e5e7eb; color:#374151; }
+.activity-row .action-pill.received_only { background:#f3f4f6; color:#6b7280; }
+.activity-row .action-pill.passthrough_only { background:#fef3c7; color:#78350f; }
+.activity-row .action-pill.ai_classify, .activity-row .action-pill.ai_classify_failsafe { background:#fce7f3; color:#9d174d; }
+
+/* Mini-pill ev-mini stile per shadow/IA/thread/rule (coerente events_list) */
+.activity-row .ev-mini {
+    display:inline-flex; align-items:center; gap:0.18rem;
+    padding:0.02rem 0.32rem; border-radius:8px;
+    font-size:0.62rem; font-weight:600;
+    white-space:nowrap;
+}
+.activity-row .ev-mini.shadow { background:#fef3c7; color:#92400e; }
+.activity-row .ev-mini.thread { background:#e0e7ff; color:#3730a3; }
+.activity-row .ev-mini.ai { background:#ede9fe; color:#7c3aed; }
+.activity-row .ev-mini.ai-failsafe { background:#fee2e2; color:#dc2626; }
+.activity-row .ev-mini.bypass { background:#fee2e2; color:#b91c1c; }
+.activity-row .ev-mini.rule { background:#f1f5f9; color:#475569; font-family:ui-monospace,Menlo,monospace; }
+.activity-row .ev-mini.urgenza { background:#fee2e2; color:#b91c1c; }
+.activity-row .ev-mini.classification { background:#ede9fe; color:#6d28d9; }
+.activity-row .ev-mini.applied { background:#dcfce7; color:#166534; }
+.activity-row .ev-mini.error { background:#fee2e2; color:#dc2626; }
+.activity-row .ev-mini.cluster-acc { background:#fef3c7; color:#92400e; }
+.activity-row .ev-mini.cluster-tkt { background:#fee2e2; color:#991b1b; }
+.activity-row .ev-mini.cluster-rec { background:#dcfce7; color:#166534; }
+
+.activity-row .open-link {
+    margin-left:auto; text-decoration:none; color:var(--dr-blue);
+    font-size:0.72rem; padding:0.05rem 0.3rem; border-radius:3px;
+}
+.activity-row .open-link:hover { background:#eff6ff; }
+
+.activity-empty { padding:1.5rem; text-align:center; color:var(--dr-gray-dark); font-size:0.85rem; }
+.activity-stats { display:flex; gap:1rem; font-size:0.78rem; color:var(--dr-gray-dark); margin-left:auto; }
+.activity-stats span strong { color:var(--dr-primary); }
 </style>
 {% endblock %}
 
@@ -127,10 +176,17 @@
     const streamUrl = '{{ url_for("activity.stream") }}';
 
     function fmtTime(iso) {
+        // Stesso formato di events/queue (HH:MM oggi, DD/MM HH:MM altrimenti)
         if (!iso) return '—';
         try {
-            const d = new Date(iso.replace(' ', 'T').replace(/\+\d\d:\d\d$/, ''));
-            return d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            const d = new Date((iso.includes('Z') || iso.includes('+')) ? iso : (iso.replace(' ', 'T') + 'Z'));
+            const now = new Date();
+            const sameDay = d.toDateString() === now.toDateString();
+            if (sameDay) return d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            const dd = String(d.getDate()).padStart(2, '0');
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const hhmm = d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+            return `${dd}/${mm} ${hhmm}`;
         } catch (e) { return iso.slice(11, 19); }
     }
 
@@ -140,50 +196,85 @@
         }[c]));
     }
 
+    function eventDetailUrl(eventId) {
+        return `/events/${eventId}`;
+    }
+
     function renderEvent(e) {
         const badges = [];
-        if (e.action_taken) badges.push(`<span class="b b-action">${escapeHtml(e.action_taken)}</span>`);
-        if (e.rule_id) badges.push(`<span class="b b-rule">rule#${e.rule_id}</span>`);
-        if (e.ai_decision_id) badges.push(`<span class="b b-ai">🤖 IA #${e.ai_decision_id}</span>`);
-        if (e.ai_unavailable) badges.push(`<span class="b b-error">IA fail-safe</span>`);
-        if (e.privacy_bypass) badges.push(`<span class="b b-bypass">privacy bypass</span>`);
-        if (e.ai_classification) badges.push(`<span class="b b-ai">${escapeHtml(e.ai_classification)}</span>`);
-        if (e.ai_urgenza) badges.push(`<span class="b b-ai">${escapeHtml(e.ai_urgenza)}</span>`);
+        // Action pill (verde/blu/giallo/rosso semantico, classe identica a events_list)
+        if (e.action_taken) {
+            badges.push(`<span class="action-pill ${escapeHtml(e.action_taken)}">${escapeHtml(e.action_taken)}</span>`);
+        }
+        // Mini-pill coerenti con events_list (rule#, shadow, thread, IA, bypass)
+        if (e.rule_id) badges.push(`<span class="ev-mini rule" title="Regola che ha matchato">#${e.rule_id}</span>`);
+        if (e.shadow_mode) badges.push(`<span class="ev-mini shadow" title="Mail in shadow mode">🌒</span>`);
+        if (e.is_thread_continuation) badges.push(`<span class="ev-mini thread" title="Risposta a thread tracciato">🔗</span>`);
+        if (e.ai_decision_id) {
+            const t = `IA${e.ai_classification ? ' · ' + escapeHtml(e.ai_classification) : ''}${e.ai_urgenza ? ' · ' + escapeHtml(e.ai_urgenza) : ''}`;
+            badges.push(`<a href="/ai/decisions/${e.ai_decision_id}" class="ev-mini ai" title="${t}"><i class="fas fa-robot"></i></a>`);
+        }
+        if (e.ai_unavailable) badges.push(`<span class="ev-mini ai-failsafe" title="IA fail-safe attivato"><i class="fas fa-robot"></i>!</span>`);
+        if (e.privacy_bypass) badges.push(`<span class="ev-mini bypass" title="Privacy bypass">🛡</span>`);
 
+        const subj = escapeHtml(e.subject || '(no subject)');
+        const from = escapeHtml(e.from_address || '?');
+        const to = escapeHtml(e.to_address || '?');
+        const link = e.id ? `<a href="${eventDetailUrl(e.id)}" class="open-link" title="Apri dettaglio evento"><i class="fas fa-eye"></i></a>` : '';
         return `
         <div class="activity-row fresh" data-id="${e.id}">
-            <div><strong>${escapeHtml(e.subject || '(no subject)')}</strong></div>
-            <div class="ts">${fmtTime(e.received_at)} · ${escapeHtml(e.from_address || '?')} → ${escapeHtml(e.to_address || '?')}</div>
+            <div style="display:flex; align-items:baseline; gap:0.4rem;">
+                <span class="when">${fmtTime(e.received_at)}</span>
+                <span class="subj" title="${subj}">${subj}</span>
+                ${link}
+            </div>
+            <div class="addr" title="${from} → ${to}">${from} → ${to}</div>
             <div class="badges">${badges.join('')}</div>
         </div>`;
     }
 
     function renderDecision(d) {
         const badges = [];
-        if (d.shadow_mode) badges.push(`<span class="b b-shadow">shadow</span>`);
-        else if (d.applied) badges.push(`<span class="b b-applied">applied</span>`);
-        if (d.error) badges.push(`<span class="b b-error">error</span>`);
-        if (d.urgenza) badges.push(`<span class="b b-ai">${escapeHtml(d.urgenza)}</span>`);
+        if (d.shadow_mode) badges.push(`<span class="ev-mini shadow" title="Decisione in shadow (non applicata)">shadow</span>`);
+        else if (d.applied) badges.push(`<span class="ev-mini applied" title="Decisione applicata al rule engine">applied</span>`);
+        if (d.error) badges.push(`<span class="ev-mini error" title="Errore provider">error</span>`);
+        if (d.classification) badges.push(`<span class="ev-mini classification" title="Classification">${escapeHtml(d.classification)}</span>`);
+        if (d.urgenza) badges.push(`<span class="ev-mini urgenza" title="Urgenza calcolata">${escapeHtml(d.urgenza)}</span>`);
 
-        const cost = d.cost_usd ? `· $${parseFloat(d.cost_usd).toFixed(5)}` : '';
-        const lat = d.latency_ms ? `· ${d.latency_ms}ms` : '';
+        const cost = d.cost_usd ? ` · $${parseFloat(d.cost_usd).toFixed(5)}` : '';
+        const lat = d.latency_ms ? ` · ${d.latency_ms}ms` : '';
+        const intent = escapeHtml(d.intent || '?');
+        const summary = escapeHtml(d.summary || '');
+        const model = escapeHtml(d.model || '');
+        const job = escapeHtml(d.job_code || '');
+        const link = d.id ? `<a href="/ai/decisions/${d.id}" class="open-link" title="Apri dettaglio decisione"><i class="fas fa-eye"></i></a>` : '';
         return `
         <div class="activity-row fresh" data-id="${d.id}">
-            <div><strong>${escapeHtml(d.intent || '?')}</strong> · ${escapeHtml(d.summary || '')}</div>
-            <div class="ts">${fmtTime(d.created_at)} · ${escapeHtml(d.job_code)} · ${escapeHtml(d.model || '')} ${lat} ${cost}</div>
+            <div style="display:flex; align-items:baseline; gap:0.4rem;">
+                <span class="when">${fmtTime(d.created_at)}</span>
+                <span class="subj" title="${intent}${summary ? ' — ' + summary : ''}">${intent}${summary ? ' · ' + summary : ''}</span>
+                ${link}
+            </div>
+            <div class="addr" title="${job} · ${model}${lat}${cost}">${job} · ${model}${lat}${cost}</div>
             <div class="badges">${badges.join('')}</div>
         </div>`;
     }
 
     function renderCluster(c) {
-        const stateClass = c.state === 'recovered' ? 'b-cluster-rec'
-                         : c.state === 'ticket_opened' ? 'b-cluster-tkt'
-                         : 'b-cluster-acc';
+        const stateClass = c.state === 'recovered' ? 'cluster-rec'
+                         : c.state === 'ticket_opened' ? 'cluster-tkt'
+                         : 'cluster-acc';
+        const subj = escapeHtml(c.subject || '?');
         return `
         <div class="activity-row fresh" data-id="${c.id}">
-            <div><strong>${escapeHtml(c.subject || '?')}</strong></div>
-            <div class="ts">${fmtTime(c.last_seen)} · count=${c.count}/${c.threshold}</div>
-            <div class="badges"><span class="b ${stateClass}">${escapeHtml(c.state)}</span></div>
+            <div style="display:flex; align-items:baseline; gap:0.4rem;">
+                <span class="when">${fmtTime(c.last_seen)}</span>
+                <span class="subj" title="${subj}">${subj}</span>
+            </div>
+            <div class="addr">count: <strong>${c.count}/${c.threshold}</strong></div>
+            <div class="badges">
+                <span class="ev-mini ${stateClass}">${escapeHtml(c.state)}</span>
+            </div>
         </div>`;
     }
 
