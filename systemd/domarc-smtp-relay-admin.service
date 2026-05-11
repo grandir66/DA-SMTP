@@ -28,11 +28,17 @@ PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
 ReadWritePaths=/var/lib/domarc-smtp-relay /var/log/domarc-smtp-relay /var/lib/domarc-smtp-relay-admin /dev/shm
-ProtectKernelTunables=true
-ProtectKernelModules=true
+# ProtectKernelTunables + ProtectKernelModules + RestrictNamespaces DISABILITATI:
+# l'admin web invoca `sudo ufw` per gestire firewall, e ufw chiama iptables
+# che richiede lettura di /proc/sys/net/... + (potenziale) caricamento di
+# moduli netfilter (xt_conntrack, ip_tables). Con queste direttive a true
+# iptables falliva con "Couldn't determine iptables version".
+# Mitigation: sudoers stretto sui comandi ufw + UI mutation solo superadmin.
+ProtectKernelTunables=false
+ProtectKernelModules=false
 ProtectControlGroups=true
-RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
-RestrictNamespaces=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+RestrictNamespaces=false
 LockPersonality=true
 RestrictRealtime=true
 SystemCallArchitectures=native
