@@ -193,7 +193,7 @@ def classify_taxonomy(
             "tenant_id": tenant_id,
             "event_uuid": event_uuid,
             "job_code": "email_taxonomy",
-            "binding_id": binding.id,
+            "binding_id": binding.binding_id,
             "provider": getattr(binding, "provider_name", None),
             "model": response.model or binding.model_id,
             "prompt_hash": prompt_hash,
