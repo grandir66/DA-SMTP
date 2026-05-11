@@ -53,32 +53,28 @@ VALID_CATEGORY_CODES = {c for c, _ in TAXONOMY_CATEGORIES}
 
 
 SCHEMA_TAXONOMY = {
-    "name": "taxonomy_output",
-    "description": "Classifica una mail in una delle categorie macro definite",
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "category": {
-                "type": "string",
-                "enum": list(VALID_CATEGORY_CODES),
-                "description": "Una delle categorie macro",
-            },
-            "subcategory": {
-                "type": "string",
-                "description": "Sub-categoria libera, max 40 char (es. 'cloudtik_backup_alert', 'preventivo_software', 'fattura_fornitore'). Vuoto se non utile.",
-            },
-            "confidence": {
-                "type": "number",
-                "minimum": 0.0,
-                "maximum": 1.0,
-            },
-            "rationale": {
-                "type": "string",
-                "description": "1-2 frasi che spiegano la scelta. Italiano.",
-            },
+    "type": "object",
+    "properties": {
+        "category": {
+            "type": "string",
+            "enum": list(VALID_CATEGORY_CODES),
+            "description": "Una delle categorie macro",
         },
-        "required": ["category", "confidence"],
+        "subcategory": {
+            "type": "string",
+            "description": "Sub-categoria libera, max 40 char (es. 'cloudtik_backup_alert', 'preventivo_software', 'fattura_fornitore'). Vuoto se non utile.",
+        },
+        "confidence": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 1.0,
+        },
+        "rationale": {
+            "type": "string",
+            "description": "1-2 frasi che spiegano la scelta. Italiano.",
+        },
     },
+    "required": ["category", "confidence"],
 }
 
 
