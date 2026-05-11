@@ -178,8 +178,16 @@ class RuleEngine:
                     )
                 )
                 if match_result["matched"]:
-                    winning = rule
-                    winning_scope = scope
+                    # FIX 2026-05-11: first-match-wins anche con continue_after_match.
+                    # Prima il winning veniva SOVRASCRITTO dalla rule matched successiva,
+                    # facendo perdere l'action della rule a priorità più alta (caso AI
+                    # classify + catch-all: vinceva sempre catch-all).
+                    # Ora: il winning è la PRIMA rule matched; continue_after_match=1
+                    # serve solo a popolare la chain (audit) con le rule successive
+                    # che avrebbero matchato (visibili in events_log.payload_metadata).
+                    if winning is None:
+                        winning = rule
+                        winning_scope = scope
                     if not rule.get("continue_after_match"):
                         return RuleOutcome(rule=winning, scope=winning_scope, chain=chain)
 
