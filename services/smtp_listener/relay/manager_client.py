@@ -472,13 +472,28 @@ class StormshieldManagerBackend(ManagerBackend):
                     ticket_id = str(src.get("tk_key") or src.get("ticket_id") or src.get("id") or "")
                 except ValueError:
                     ticket_id = ""
-                return TicketResult(ok=True, ticket_id=ticket_id or None, status_code=resp.status_code, response_body=body)
+                # Caso anomalo: manager risponde 2xx ma senza ticket_id.
+                # events_log.ticket_id resterebbe NULL silenziosamente; segnaliamo
+                # come errore per evitare data loss invisibile.
+                if not ticket_id:
+                    return TicketResult(
+                        ok=False, ticket_id=None,
+                        status_code=resp.status_code, response_body=body,
+                        error="manager_2xx_no_ticket_id (body parsed ma id mancante)",
+                    )
+                return TicketResult(ok=True, ticket_id=ticket_id, status_code=resp.status_code, response_body=body)
+            # 401 = API key cambiata/scaduta: errore esplicito (lo scheduler smettera' di ritentare in modo cieco).
+            error_tag = f"HTTP {resp.status_code}"
+            if resp.status_code == 401:
+                error_tag = "HTTP 401 — API key invalida o scaduta. Verifica relay_api_key sul manager."
+            elif resp.status_code == 403:
+                error_tag = f"HTTP 403 — accesso negato dal manager. Body: {body[:200]}"
             return TicketResult(
                 ok=False,
                 ticket_id=None,
                 status_code=resp.status_code,
                 response_body=body,
-                error=f"HTTP {resp.status_code}",
+                error=error_tag,
             )
         finally:
             if external_client is not None:

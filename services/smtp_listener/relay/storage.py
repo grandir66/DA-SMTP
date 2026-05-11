@@ -346,12 +346,17 @@ class Storage:
         self._init_db()
 
     def _connect(self) -> sqlite3.Connection:
+        # busy_timeout alzato a 30s (era 5s troppo basso sotto sync customers
+        # massivo o WAL checkpoint). wal_autocheckpoint + journal_size_limit
+        # impediscono crescita illimitata WAL sotto raffica mail.
         conn = sqlite3.connect(self._path, isolation_level=None, timeout=30)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA journal_mode = WAL;")
         conn.execute("PRAGMA synchronous = NORMAL;")
         conn.execute("PRAGMA foreign_keys = ON;")
-        conn.execute("PRAGMA busy_timeout = 5000;")
+        conn.execute("PRAGMA busy_timeout = 30000;")
+        conn.execute("PRAGMA wal_autocheckpoint = 1000;")
+        conn.execute("PRAGMA journal_size_limit = 67108864;")
         return conn
 
     def _init_db(self) -> None:

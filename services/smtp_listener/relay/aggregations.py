@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import logging
 import re
+import threading
 from datetime import datetime, timezone
 from typing import Any
 
@@ -44,14 +45,41 @@ def _normalize_subject(subject: str) -> str:
     return s.lower()[:200]
 
 
+_REGEX_HAYSTACK_MAX = 16 * 1024
+_REGEX_TIMEOUT_SEC = 0.5
+
+
 def _safe_search(pattern: str | None, haystack: str | None) -> re.Match[str] | None:
+    """Esecuzione regex con timeout (anti-ReDoS) — stesso pattern di rules._safe_search.
+    Un thread daemon viene join()-ato a 0.5s. Se ancora alive → match=None + log.
+    """
     if not pattern or haystack is None:
         return None
-    try:
-        return re.search(pattern, haystack[:16384] or "", re.IGNORECASE)
-    except re.error as exc:
-        logger.warning("Regex aggregation invalida '%s': %s", pattern, exc)
+    text = haystack[:_REGEX_HAYSTACK_MAX] if haystack else ""
+    box: list[Any] = [None, None]
+
+    def _run() -> None:
+        try:
+            box[0] = re.search(pattern, text, re.IGNORECASE)
+        except re.error as exc:
+            box[1] = exc
+        except Exception as exc:  # noqa: BLE001
+            box[1] = exc
+
+    t = threading.Thread(target=_run, daemon=True)
+    t.start()
+    t.join(_REGEX_TIMEOUT_SEC)
+    if t.is_alive():
+        logger.warning("Regex aggregation timeout (%.2fs) pattern=%r",
+                        _REGEX_TIMEOUT_SEC, pattern[:80])
         return None
+    if isinstance(box[1], re.error):
+        logger.warning("Regex aggregation invalida '%s': %s", pattern, box[1])
+        return None
+    if box[1] is not None:
+        logger.warning("Regex aggregation exception '%s': %s", pattern, box[1])
+        return None
+    return box[0]
 
 
 def aggregation_matches(agg: Any, parsed: Any) -> bool:

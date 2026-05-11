@@ -144,6 +144,7 @@ def create_app(config: AppConfig | None = None, *, init_db: bool = True) -> Flas
     from .routes.ai_rule_wizard import ai_rule_wizard_bp
     from .routes.relay_acl import relay_acl_bp
     from .routes.firewall import firewall_bp
+    from .routes.metrics import metrics_bp
     from .tenants import tenants_bp, register_tenant_middleware
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -182,6 +183,7 @@ def create_app(config: AppConfig | None = None, *, init_db: bool = True) -> Flas
     app.register_blueprint(ai_rule_wizard_bp)
     app.register_blueprint(relay_acl_bp)
     app.register_blueprint(firewall_bp)
+    app.register_blueprint(metrics_bp)
     app.register_blueprint(tenants_bp)
 
     # Manual auto-generato: rigenera all'avvio (best-effort, ignora errori).
@@ -215,6 +217,15 @@ def create_app(config: AppConfig | None = None, *, init_db: bool = True) -> Flas
         except Exception as exc:  # noqa: BLE001
             logging.getLogger(__name__).warning(
                 "customer_sync scheduler non avviato: %s", exc,
+            )
+        # Retention thread: purge body (ogni 10min) + cleanup notturno (DELETE
+        # log/audit vecchi). Evita crescita illimitata events.body_text/html.
+        try:
+            from .retention import start_retention_thread
+            start_retention_thread(storage)
+        except Exception as exc:  # noqa: BLE001
+            logging.getLogger(__name__).warning(
+                "retention thread non avviato: %s", exc,
             )
 
     # First-time admin user: crea 'admin' con password = DOMARC_RELAY_BOOTSTRAP_PASSWORD.
@@ -277,6 +288,15 @@ def create_app(config: AppConfig | None = None, *, init_db: bool = True) -> Flas
                                     message="Errore interno. L'incidente e' stato registrato."), 500
         except Exception:  # noqa: BLE001
             return "500 — Errore interno", 500
+
+    @app.errorhandler(413)
+    def _too_large(exc):  # noqa: ANN001
+        max_mb = app.config.get("MAX_CONTENT_LENGTH", 10*1024*1024) // (1024*1024)
+        try:
+            return render_template("admin/error.html", code=413,
+                                    message=f"File troppo grande (massimo {max_mb} MB). Riprova con un file piu' piccolo."), 413
+        except Exception:  # noqa: BLE001
+            return f"413 — File troppo grande (max {max_mb} MB)", 413
 
     @app.context_processor
     def _inject_globals() -> dict[str, Any]:

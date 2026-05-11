@@ -16,7 +16,7 @@
 - `[x]` fatto (verificare in codice prima di marcare)
 - `[!]` bloccato / decisione utente attesa
 
-**Ultimo aggiornamento:** 2026-05-11 (sessione standardize + cutover prep + relay ACL + firewall UI).
+**Ultimo aggiornamento:** 2026-05-11 sera (perf review + metrics dashboard + retention + BLOCKER fixes).
 
 ---
 
@@ -33,6 +33,17 @@
 - [x] **UFW finalizzato**: :25 ristretto a 192.168.4.0/24 + 192.168.20.0/24, :443/:80 Anywhere (dietro firewall aziendale).
 - [x] **Relay client ACL** (commit `786c3d5`): migration 040 + UI `/relay-acl/` + check applicativo nel listener handle_MAIL. Voce sidebar **Sistema → Relay client ACL**.
 - [x] **Relay ACL edit form** + **Firewall UFW UI** (sessione 2026-05-11 mattina): form esteso per modifica completa entry ACL (label/description/enabled); pagina `/firewall/` superadmin-only con status UFW + add/delete regole + reload, via wrapper `firewall_manager.py` + sudoers ristretto `/etc/sudoers.d/domarc-relay-ufw`.
+- [x] **Performance review + BLOCKER fixes** (sessione 2026-05-11 sera): 4 agenti su pipeline mail, DB, system resources, bug+anomalie. Fix applicati:
+  - PRAGMA admin.db: `busy_timeout=30000`, `synchronous=NORMAL`, `wal_autocheckpoint=1000`, `journal_size_limit=64MB` (era 0/default → SQLITE_BUSY immediato sotto 32 thread gunicorn).
+  - PRAGMA relay.db listener: busy_timeout 5s→30s + wal_autocheckpoint + cap WAL.
+  - `auth/_FAIL_ATTEMPTS` purge globale periodico + cap 10k key (anti memory-leak su botnet).
+  - `aggregations.py:_safe_search` con thread+timeout 0.5s (ReDoS protection, era assente).
+  - `manager_client.submit_ticket`: 401/403 → ok=False + error chiaro (era retry inutile); 2xx senza ticket_id → ok=False (era data loss silente).
+  - `scheduler._drain_dispatch_once`: 401/403 → dead-letter immediato no-retry.
+  - `forwarder.py` STARTTLS: try/finally esterno + socket_closed flag (anti-FD-leak su cert rotation O365).
+  - `app.py`: errorhandler 413 (upload >10MB).
+  - **Nuovo thread retention** (`domarc_relay_admin/retention.py`): purge_expired_bodies ogni 10min + DELETE notturno 03:30 UTC su tabelle audit/log (events>180gg, login_audit>365gg, etc.) + incremental_vacuum.
+- [x] **Dashboard metriche live** `/metrics/` (nuova): CPU/RAM/Swap/Disk + 3 servizi (RSS/CPU%/FD/threads/uptime) + mail/min + latenza outbound media/max + DB size + 4 code (outbound/dispatch/quarantine/heartbeat). Polling 5s via fetch. Endpoint `/metrics/live` JSON. Voce sidebar **Sistema → Metriche live**. Dipendenza: `psutil>=5.9` aggiunta a pyproject.
 
 ---
 
@@ -182,6 +193,27 @@
 - [x] Listener `handle_MAIL` enforce check `is_client_allowed(session.peer[0])`.
 - [x] Voce sidebar **Sistema → Relay client ACL**.
 - [ ] **Popolare con subnet di produzione** (suggerito: `192.168.20.0/24` ESVA, `192.168.4.0/24` debug locale). Finché lista vuota, enforcement OFF (backward compat).
+
+### 2.13 Performance / latency reduction (TODO da review 2026-05-11)
+- [x] PRAGMA tuning + WAL cap admin+listener.
+- [x] _FAIL_ATTEMPTS anti memory-leak.
+- [x] aggregations.py ReDoS protection.
+- [x] manager 401/403 detection + no-retry.
+- [x] forwarder FD leak safety net.
+- [x] retention thread + notturno cleanup.
+- [x] errorhandler 413 + dashboard metriche live.
+- [ ] **Cache in-memory** hot-path `(accepted_domains, relay_acl, privacy_bypass, recipient_groups)` con TTL 30s invalidato al sync — riduzione 20-40ms per mail multi-rcpt.
+- [ ] **Connection per-thread** (`threading.local`) — riduzione 15-30ms per mail (4-6 transazioni × 3-8ms setup).
+- [ ] **Regex regole pre-compilate** al sync `replace_rules` + rimozione thread+join overhead nel rule engine — riduzione 40-60ms per mail.
+- [ ] **AI classify ASINCRONO** via `dispatch_queue` (oggi è HTTP sync 5s → blocca event loop): refactor `actions.py:do_ai_classify`.
+- [ ] **Connection pool smarthost** in `forwarder.py` (riuso TCP+TLS) — 3-5× throughput drain.
+- [ ] **Batch INSERT events_log** sotto raffica (>100 mail/s) — 10ms/mail.
+- [ ] **find_customer_by_domain indicizzato**: tabella lookup `customers_domains_cache(domain, codcli)` invece di full-scan JSON.
+- [ ] **httpx.AsyncClient** nel scheduler invece di sync httpx — evita blocco loop async durante sync slow.
+- [ ] Indice `events(tenant_id, action_taken, received_at DESC)` + colonna materializzata `is_shadow` boolean → -90% latency `/events?action=`.
+- [ ] FTS5 virtual table su `events(from_address, to_address, subject)` per ricerca testuale.
+- [ ] Paginazione DB-side `/customers` `/events` `/queue` (oggi carica tutto in memoria su ~5000 record).
+- [ ] Validate H24 codes: verifica `from_address` corrisponda al `codice_cliente` legato (bug audit fatturazione segnalato).
 
 ### 2.12 Firewall UFW via UI (nuova sezione 2026-05-11)
 - [x] Modulo `firewall_manager.py`: wrapper sicuro per `ufw` con subprocess shell=False + whitelist regex su port/proto/source/comment.

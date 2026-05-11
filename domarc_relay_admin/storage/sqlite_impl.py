@@ -31,10 +31,20 @@ class SqliteStorage(Storage):
         self._init_db()
 
     def _connect(self) -> sqlite3.Connection:
+        # PRAGMA tuning: applicati a ogni nuova connessione admin.db.
+        # `busy_timeout=30000` evita SQLITE_BUSY immediato sotto contention
+        # (32 thread gunicorn + scheduler + listener possono battere il DB).
+        # `synchronous=NORMAL` ok per WAL (durabilita' OK, performance migliore
+        # del FULL default). `wal_autocheckpoint=1000` + `journal_size_limit`
+        # impediscono al WAL di crescere indefinitamente sotto carico.
         conn = sqlite3.connect(str(self._path), check_same_thread=False, timeout=30)
         conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA foreign_keys = ON")
         conn.execute("PRAGMA journal_mode = WAL")
+        conn.execute("PRAGMA synchronous = NORMAL")
+        conn.execute("PRAGMA busy_timeout = 30000")
+        conn.execute("PRAGMA foreign_keys = ON")
+        conn.execute("PRAGMA wal_autocheckpoint = 1000")
+        conn.execute("PRAGMA journal_size_limit = 67108864")
         return conn
 
     def _init_db(self) -> None:
@@ -143,6 +153,20 @@ class SqliteStorage(Storage):
             )
             conn.commit()
             return cur.rowcount > 0
+
+    # =========================================== ADMIN PRAGMA TUNING ===
+
+    # PRAGMA defaults da applicare a OGNI nuova connessione admin.db.
+    # Senza busy_timeout esplicito, 32 thread gunicorn vs scheduler causano
+    # SQLITE_BUSY immediato sotto contention.
+    _PRAGMA_ON_CONNECT = (
+        ("journal_mode", "WAL"),
+        ("synchronous", "NORMAL"),
+        ("busy_timeout", "30000"),
+        ("foreign_keys", "ON"),
+        ("wal_autocheckpoint", "1000"),
+        ("journal_size_limit", "67108864"),  # 64 MB cap WAL
+    )
 
     def apply_migrations(self) -> int:
         """Applica migration files non ancora applicati. Ritorna numero applicate.

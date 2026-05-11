@@ -225,12 +225,18 @@ def _drain_dispatch_once(cfg: RelayConfig, backend: ManagerBackend, storage: Sto
                         )
                 logger.info("Ticket creato OK: queue_id=%s ticket_id=%s", row["id"], result.ticket_id)
             else:
-                if attempts >= cfg.outbound.max_attempts:
-                    # CRITICAL log: dispatch dead = ticket non creato dopo max_attempts.
+                # 401/403 = problema auth (API key invalida/scaduta). Inutile
+                # ritentare, e su carico produce log noise + ritardo cumulato.
+                # Mandiamo subito in dead-letter con error chiaro per UI/alert.
+                is_auth_error = (getattr(result, "status_code", 0) in (401, 403))
+                if is_auth_error or attempts >= cfg.outbound.max_attempts:
+                    # CRITICAL log: dispatch dead = ticket non creato.
+                    reason = ("auth-error (401/403) → no-retry"
+                              if is_auth_error else "max_attempts raggiunto")
                     logger.critical(
-                        "DISPATCH DEAD-LETTER: queue_id=%s event_uuid=%s err=%s "
+                        "DISPATCH DEAD-LETTER (%s): queue_id=%s event_uuid=%s err=%s "
                         "→ il ticket NON è stato creato. Indagine richiesta.",
-                        row["id"], row["event_uuid"], result.error,
+                        reason, row["id"], row["event_uuid"], result.error,
                     )
                     # Marca payload_metadata in events_log + REWIND sent_to_manager_at = NULL
                     # per forzare un re-flush dell'evento all'admin (così la dashboard

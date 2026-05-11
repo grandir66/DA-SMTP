@@ -1,0 +1,271 @@
+{% extends "admin/_base.html" %}
+{% block title %}Dashboard metriche — Domarc SMTP Relay{% endblock %}
+{% block extra_head %}
+<style>
+.m-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); margin-bottom: 1rem; }
+.m-card { background:#fff; border:1px solid #cbd5e1; border-radius:8px; padding:1rem; }
+.m-card h3 { margin:0 0 0.5rem; font-size:0.92rem; color:var(--dr-primary); text-transform:uppercase; letter-spacing:0.04em; }
+.m-big { font-size:1.7rem; font-weight:700; color:var(--dr-gray-dark); line-height:1; }
+.m-big small { font-size:0.85rem; font-weight:500; color:var(--dr-gray); margin-left:0.3rem; }
+.m-meta { font-size:0.78rem; color:var(--dr-gray); margin-top:0.4rem; }
+.m-bar { height:6px; background:#e5e7eb; border-radius:3px; overflow:hidden; margin-top:0.5rem; }
+.m-bar-fill { height:100%; background:linear-gradient(90deg,#16a34a,#f59e0b 70%,#dc2626 90%); transition:width 0.4s ease; }
+.m-bar-fill.green { background:#16a34a; }
+.m-bar-fill.orange { background:#f59e0b; }
+.m-bar-fill.red { background:#dc2626; }
+.m-table { width:100%; border-collapse:collapse; font-size:0.85rem; }
+.m-table th, .m-table td { padding:0.4rem 0.6rem; border-bottom:1px solid #f1f5f9; text-align:left; }
+.m-table th { color:var(--dr-gray); font-size:0.78rem; text-transform:uppercase; }
+.m-pill { display:inline-block; padding:0.15rem 0.5rem; border-radius:3px; font-size:0.75rem; font-weight:600; }
+.m-pill.ok { background:#dcfce7; color:#166534; }
+.m-pill.warn { background:#fef3c7; color:#78350f; }
+.m-pill.err { background:#fee2e2; color:#991b1b; }
+.m-controls { display:flex; gap:0.5rem; align-items:center; margin-bottom:0.8rem; font-size:0.85rem; color:var(--dr-gray); }
+.m-pulse { width:8px; height:8px; border-radius:50%; background:#16a34a; animation:m-pulse 1s ease-in-out infinite; }
+@keyframes m-pulse { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
+.m-svc-grid { display:grid; gap:0.6rem; grid-template-columns:repeat(auto-fit, minmax(220px,1fr)); }
+.m-svc { padding:0.7rem; background:#f8fafc; border-radius:6px; border-left:4px solid #16a34a; }
+.m-svc.dead { border-left-color:#dc2626; background:#fef2f2; }
+.m-svc h4 { margin:0 0 0.4rem; font-size:0.85rem; font-weight:600; }
+.m-svc .row { font-size:0.78rem; color:var(--dr-gray-dark); display:flex; justify-content:space-between; }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="dr-section">
+    <h2><i class="fas fa-chart-line"></i> Dashboard metriche live</h2>
+    <div class="m-controls">
+        <span class="m-pulse"></span>
+        <span id="m-status">In aggiornamento ogni <strong>5s</strong>...</span>
+        <span style="margin-left:auto;">Ultimo refresh: <span id="m-last">—</span></span>
+    </div>
+</section>
+
+<!-- ===== Sistema OS ===== -->
+<div class="m-grid">
+    <div class="m-card">
+        <h3><i class="fas fa-microchip"></i> CPU</h3>
+        <div class="m-big" id="cpu-pct">—<small>%</small></div>
+        <div class="m-bar"><div class="m-bar-fill" id="cpu-bar" style="width:0%"></div></div>
+        <div class="m-meta">
+            <span id="cpu-cores">— core</span> ·
+            Load 1m <span id="load1">—</span> · 5m <span id="load5">—</span> · 15m <span id="load15">—</span>
+        </div>
+    </div>
+    <div class="m-card">
+        <h3><i class="fas fa-memory"></i> RAM</h3>
+        <div class="m-big" id="mem-pct">—<small>%</small></div>
+        <div class="m-bar"><div class="m-bar-fill" id="mem-bar" style="width:0%"></div></div>
+        <div class="m-meta">
+            <span id="mem-used">—</span> / <span id="mem-total">—</span> MB usata ·
+            disponibile <span id="mem-avail">—</span> MB
+        </div>
+    </div>
+    <div class="m-card">
+        <h3><i class="fas fa-hdd"></i> Swap</h3>
+        <div class="m-big" id="swap-pct">—<small>%</small></div>
+        <div class="m-bar"><div class="m-bar-fill" id="swap-bar" style="width:0%"></div></div>
+        <div class="m-meta"><span id="swap-used">—</span> / <span id="swap-total">—</span> MB</div>
+    </div>
+    <div class="m-card">
+        <h3><i class="fas fa-folder-open"></i> Disco /var</h3>
+        <div class="m-big" id="disk-pct">—<small>%</small></div>
+        <div class="m-bar"><div class="m-bar-fill" id="disk-bar" style="width:0%"></div></div>
+        <div class="m-meta"><span id="disk-used">—</span> / <span id="disk-total">—</span> GB usato</div>
+    </div>
+</div>
+
+<!-- ===== Servizi systemd ===== -->
+<section class="dr-section">
+    <h3 style="margin-bottom:0.5rem;">Servizi (CPU, RAM, FD, thread)</h3>
+    <div class="m-svc-grid" id="svc-grid">—</div>
+</section>
+
+<!-- ===== Mail throughput + latenza ===== -->
+<div class="m-grid">
+    <div class="m-card">
+        <h3><i class="fas fa-envelope"></i> Mail ricevute</h3>
+        <div class="m-big" id="mail-1h">—</div>
+        <div class="m-meta">ultima ora · 5min: <strong id="mail-5min">—</strong></div>
+    </div>
+    <div class="m-card">
+        <h3><i class="fas fa-stopwatch"></i> Latenza outbound</h3>
+        <div class="m-big" id="lat-avg">—<small>ms</small></div>
+        <div class="m-meta">media 30min · max <strong id="lat-max">—</strong> ms · count <strong id="lat-count">—</strong></div>
+    </div>
+    <div class="m-card">
+        <h3><i class="fas fa-database"></i> DB size</h3>
+        <div class="m-big" id="db-admin">—<small>MB admin</small></div>
+        <div class="m-meta">relay: <strong id="db-relay">—</strong> MB · WAL admin: <strong id="db-admin-wal">—</strong> MB · WAL relay: <strong id="db-relay-wal">—</strong> MB</div>
+    </div>
+    <div class="m-card">
+        <h3><i class="fas fa-list-check"></i> Eventi totali</h3>
+        <div class="m-big" id="ev-tot">—</div>
+        <div class="m-meta">non flushati al manager: <strong id="ev-unsent">—</strong></div>
+    </div>
+</div>
+
+<!-- ===== Code listener (outbound / dispatch / quarantine) ===== -->
+<div class="m-grid">
+    <div class="m-card">
+        <h3><i class="fas fa-arrow-right-from-bracket"></i> Outbound queue</h3>
+        <table class="m-table"><thead><tr><th>Stato</th><th>N</th></tr></thead>
+            <tbody id="outbound-tb"><tr><td colspan="2">—</td></tr></tbody></table>
+    </div>
+    <div class="m-card">
+        <h3><i class="fas fa-ticket"></i> Dispatch queue (ticket)</h3>
+        <table class="m-table"><thead><tr><th>Stato</th><th>N</th></tr></thead>
+            <tbody id="dispatch-tb"><tr><td colspan="2">—</td></tr></tbody></table>
+    </div>
+    <div class="m-card">
+        <h3><i class="fas fa-vault"></i> Quarantine</h3>
+        <table class="m-table"><thead><tr><th>Decisione</th><th>N</th></tr></thead>
+            <tbody id="quarantine-tb"><tr><td colspan="2">—</td></tr></tbody></table>
+    </div>
+    <div class="m-card">
+        <h3><i class="fas fa-heartbeat"></i> Heartbeat scheduler</h3>
+        <table class="m-table"><thead><tr><th>Loop</th><th>Ultimo tick</th></tr></thead>
+            <tbody id="hb-tb"><tr><td colspan="2">—</td></tr></tbody></table>
+    </div>
+</div>
+
+<script>
+(function() {
+    function setBar(id, pct) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        var clamped = Math.max(0, Math.min(100, pct || 0));
+        el.style.width = clamped + '%';
+        el.className = 'm-bar-fill ' + (clamped < 60 ? 'green' : clamped < 85 ? 'orange' : 'red');
+    }
+    function setText(id, val, suffix) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        if (val === null || val === undefined) {
+            el.innerHTML = '—' + (suffix ? '<small>' + suffix + '</small>' : '');
+        } else {
+            el.innerHTML = val + (suffix ? '<small>' + suffix + '</small>' : '');
+        }
+    }
+    function renderSvc(d) {
+        var grid = document.getElementById('svc-grid');
+        var html = '';
+        var keys = ['admin', 'listener', 'scheduler'];
+        keys.forEach(function(k) {
+            var s = d[k] || {};
+            var alive = s.alive;
+            html += '<div class="m-svc' + (alive ? '' : ' dead') + '">';
+            html += '<h4>' + k + (alive ? '' : ' — DOWN') + '</h4>';
+            if (alive) {
+                html += '<div class="row"><span>PID</span><span>' + (s.pid || '—') + '</span></div>';
+                html += '<div class="row"><span>RSS</span><span>' + (s.rss_mb || '—') + ' MB</span></div>';
+                html += '<div class="row"><span>CPU</span><span>' + (s.cpu_pct || 0).toFixed(1) + '%</span></div>';
+                html += '<div class="row"><span>Threads</span><span>' + (s.threads || '—') + '</span></div>';
+                html += '<div class="row"><span>FDs</span><span>' + (s.fds === null ? 'n/a' : s.fds) + '</span></div>';
+                var uptHr = Math.floor((s.uptime_sec || 0) / 3600);
+                html += '<div class="row"><span>Uptime</span><span>' + uptHr + 'h</span></div>';
+            } else {
+                html += '<div class="row" style="color:#dc2626;">' + (s.error || 'non disponibile') + '</div>';
+            }
+            html += '</div>';
+        });
+        grid.innerHTML = html;
+    }
+    function renderQueue(tbId, dict) {
+        var tb = document.getElementById(tbId);
+        if (!tb) return;
+        if (!dict || Object.keys(dict).length === 0) {
+            tb.innerHTML = '<tr><td colspan="2"><em>vuota</em></td></tr>';
+            return;
+        }
+        var html = '';
+        Object.keys(dict).sort().forEach(function(k) {
+            var cls = (k === 'sent' || k === 'release' || k === 'pending') ? 'ok'
+                    : (k === 'dead' || k === 'error') ? 'err' : 'warn';
+            html += '<tr><td><span class="m-pill ' + cls + '">' + k + '</span></td><td>' + dict[k] + '</td></tr>';
+        });
+        tb.innerHTML = html;
+    }
+    function renderHb(hb) {
+        var tb = document.getElementById('hb-tb');
+        if (!hb || Object.keys(hb).length === 0) {
+            tb.innerHTML = '<tr><td colspan="2"><em>nessun heartbeat</em></td></tr>';
+            return;
+        }
+        var now = Date.now();
+        var html = '';
+        Object.keys(hb).sort().forEach(function(name) {
+            var ts = hb[name];
+            var age = 'n/a';
+            var cls = 'warn';
+            if (ts && ts !== 'true' && ts !== 'false') {
+                var d = new Date(ts);
+                var deltaSec = Math.floor((now - d.getTime()) / 1000);
+                age = deltaSec + 's fa';
+                cls = deltaSec < 120 ? 'ok' : deltaSec < 600 ? 'warn' : 'err';
+            } else {
+                age = ts;
+                cls = ts === 'true' ? 'err' : 'ok';
+            }
+            html += '<tr><td>' + name + '</td><td><span class="m-pill ' + cls + '">' + age + '</span></td></tr>';
+        });
+        tb.innerHTML = html;
+    }
+    async function refresh() {
+        try {
+            var r = await fetch('/metrics/live', { credentials: 'same-origin' });
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            var d = await r.json();
+            // Sistema
+            var s = d.system || {};
+            setText('cpu-pct', s.cpu_pct, '%');
+            setBar('cpu-bar', s.cpu_pct);
+            setText('cpu-cores', (s.cpu_count || '—') + ' core');
+            setText('load1', s.load_1);
+            setText('load5', s.load_5);
+            setText('load15', s.load_15);
+            setText('mem-pct', s.mem_pct, '%');
+            setBar('mem-bar', s.mem_pct);
+            setText('mem-used', s.mem_used_mb);
+            setText('mem-total', s.mem_total_mb);
+            setText('mem-avail', s.mem_available_mb);
+            setText('swap-pct', s.swap_pct, '%');
+            setBar('swap-bar', s.swap_pct);
+            setText('swap-used', s.swap_used_mb);
+            setText('swap-total', s.swap_total_mb);
+            var disk = (d.disk || {}).var || {};
+            setText('disk-pct', disk.pct, '%');
+            setBar('disk-bar', disk.pct);
+            setText('disk-used', disk.used_gb);
+            setText('disk-total', disk.total_gb);
+            // Servizi
+            renderSvc(d.services || {});
+            // Queue
+            var rq = d.relay_queue || {};
+            setText('mail-1h', rq.mail_last_hour);
+            setText('mail-5min', rq.mail_last_5min);
+            setText('lat-avg', rq.outbound_latency_avg_ms, 'ms');
+            setText('lat-max', rq.outbound_latency_max_ms);
+            setText('lat-count', rq.outbound_count_30min);
+            setText('db-admin', (d.disk || {}).admin_db_mb, ' MB admin');
+            setText('db-relay', (d.disk || {}).relay_db_mb);
+            setText('db-admin-wal', (d.disk || {}).admin_wal_mb);
+            setText('db-relay-wal', (d.disk || {}).relay_wal_mb);
+            var aq = d.admin_queue || {};
+            setText('ev-tot', aq.events_count);
+            setText('ev-unsent', aq.events_unsent);
+            renderQueue('outbound-tb', rq.outbound_by_state);
+            renderQueue('dispatch-tb', rq.dispatch_by_state);
+            renderQueue('quarantine-tb', rq.quarantine_by_decision);
+            renderHb(rq.heartbeats);
+            document.getElementById('m-last').textContent = new Date().toLocaleTimeString('it-IT');
+            document.getElementById('m-status').innerHTML = 'In aggiornamento ogni <strong>5s</strong>...';
+        } catch (e) {
+            document.getElementById('m-status').innerHTML = '<span style="color:#dc2626;">Errore: ' + e.message + '</span>';
+        }
+    }
+    refresh();
+    setInterval(refresh, 5000);
+})();
+</script>
+{% endblock %}

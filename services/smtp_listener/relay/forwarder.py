@@ -94,6 +94,10 @@ class SmtpForwarder:
             else:
                 conn = smtplib.SMTP(smarthost, smarthost_port, timeout=self._timeout, local_hostname=self._helo)
 
+            # Try/finally esterno: garantisce close() del socket anche su
+            # eccezioni che fuggono al finally interno (es. STARTTLS strict
+            # fallito + fallback fallito) — anti-FD-leak.
+            socket_closed = False
             try:
                 conn.ehlo(self._helo)
                 if tls_mode in ("starttls", "opportunistic"):
@@ -137,8 +141,26 @@ class SmtpForwarder:
             finally:
                 try:
                     conn.quit()
+                    socket_closed = True
                 except smtplib.SMTPException:
+                    try:
+                        conn.close()
+                    except Exception:  # noqa: BLE001
+                        pass
+                    socket_closed = True
+                except Exception:  # noqa: BLE001
+                    # Catch-all: garantisce che il socket NON resti aperto.
+                    try:
+                        conn.close()
+                    except Exception:  # noqa: BLE001
+                        pass
+                    socket_closed = True
+            if not socket_closed:
+                # Path teoricamente irraggiungibile, ma defensive.
+                try:
                     conn.close()
+                except Exception:  # noqa: BLE001
+                    pass
         except smtplib.SMTPResponseException as exc:
             duration = int((time.monotonic() - start) * 1000)
             return RelayResult(

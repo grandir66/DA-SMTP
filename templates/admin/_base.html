@@ -108,6 +108,7 @@
                     <a href="{{ url_for('users.list_view') }}" class="{% if ep.startswith('users') %}active{% endif %}"><i class="fas fa-user-shield"></i> Utenti</a>
                     <a href="{{ url_for('shadow.dashboard') }}" class="{% if ep.startswith('shadow') %}active{% endif %}" style="color:#92400e;"><i class="fas fa-moon"></i> Shadow mode</a>
                     <a href="{{ url_for('health.system_dashboard') }}" class="{% if ep == 'health.system_dashboard' %}active{% endif %}"><i class="fas fa-heart-pulse"></i> Health sistema</a>
+                    <a href="{{ url_for('metrics.index') }}" class="{% if ep.startswith('metrics') %}active{% endif %}" style="color:#2563eb;"><i class="fas fa-chart-line"></i> Metriche live</a>
                     <a href="{{ url_for('integrations.index') }}" class="{% if ep.startswith('integrations') %}active{% endif %}" style="color:#2563eb;"><i class="fas fa-plug"></i> Integrazioni</a>
                     <a href="{{ url_for('settings.settings_view') }}" class="{% if ep.startswith('settings') %}active{% endif %}"><i class="fas fa-sliders"></i> Settings</a>
                     <a href="{{ url_for('secrets_modules.api_keys_list') }}" class="{% if ep.startswith('secrets_modules.api') %}active{% endif %}"><i class="fas fa-key"></i> Chiavi API</a>

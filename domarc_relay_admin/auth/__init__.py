@@ -32,14 +32,33 @@ _FAIL_ATTEMPTS: dict[tuple[str, str], list[float]] = defaultdict(list)
 _FAIL_WINDOW_SEC = 15 * 60
 _FAIL_MAX = 5
 _LOCKOUT_SEC = 15 * 60
+# Anti-leak: cap dimensione dict per evitare crescita illimitata su brute-force
+# distribuito con N username diversi. Quando supera, purge globale dei key scaduti.
+_FAIL_MAX_KEYS = 10000
+_FAIL_LAST_PURGE = 0.0
+_FAIL_PURGE_INTERVAL_SEC = 300  # globale ogni 5 min
+
+
+def _purge_expired_global(now: float) -> None:
+    """Purge entries scadute dall'intero dict. Mantiene cap."""
+    global _FAIL_LAST_PURGE
+    expired_keys = [k for k, attempts in _FAIL_ATTEMPTS.items()
+                     if not attempts or (now - max(attempts)) > _FAIL_WINDOW_SEC]
+    for k in expired_keys:
+        _FAIL_ATTEMPTS.pop(k, None)
+    _FAIL_LAST_PURGE = now
 
 
 def _is_locked(key: tuple[str, str]) -> tuple[bool, int]:
     """Ritorna (locked, seconds_remaining). Lock se >= _FAIL_MAX fail in finestra."""
     now = time.monotonic()
     with _FAIL_LOCK:
+        # Purge globale periodica o se cap superato (anti memory-leak)
+        if (now - _FAIL_LAST_PURGE) > _FAIL_PURGE_INTERVAL_SEC \
+                or len(_FAIL_ATTEMPTS) > _FAIL_MAX_KEYS:
+            _purge_expired_global(now)
         attempts = _FAIL_ATTEMPTS.get(key, [])
-        # purge entries fuori finestra
+        # purge entries fuori finestra per la chiave corrente
         attempts = [t for t in attempts if (now - t) < _FAIL_WINDOW_SEC]
         _FAIL_ATTEMPTS[key] = attempts
         if len(attempts) < _FAIL_MAX:
