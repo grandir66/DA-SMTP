@@ -763,6 +763,7 @@
                     ('redirect', 'Redirect', 'fa-arrow-right-arrow-left'),
                     ('quarantine', 'Quarantine', 'fa-shield-virus'),
                     ('ai_classify', 'IA classifica', 'fa-robot'),
+                    ('ai_taxonomy', 'IA tassonomia', 'fa-tags'),
                 ] %}
                 {% for code, label, icon in actions %}
                 <div class="rf-action-card {% if record.action == code %}selected{% endif %}" data-action="{{ code }}" onclick="selectAction('{{ code }}')">

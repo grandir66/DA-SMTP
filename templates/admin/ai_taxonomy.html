@@ -1,0 +1,203 @@
+{% extends "admin/_base.html" %}
+{% block title %}AI Taxonomy — KPI categorie email{% endblock %}
+{% block extra_head %}
+<style>
+.tax-period { display:flex; gap:0.3rem; margin: 0.5rem 0 1rem;
+    border-bottom: 1px solid #e2e8f0; padding-bottom: 0.5rem; flex-wrap: wrap; }
+.tax-period a { padding: 0.35rem 0.8rem; text-decoration: none; border-radius: 4px;
+    font-size: 0.82rem; color: var(--dr-gray-dark); }
+.tax-period a.active { background: var(--dr-blue); color: #fff; font-weight: 600; }
+.tax-period a:not(.active):hover { background: #eff6ff; color: var(--dr-blue); }
+
+.tax-stats-row {
+    display: grid; gap: 0.7rem;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    margin-bottom: 1.2rem;
+}
+.tax-stat-card {
+    background: #fff; border: 1px solid #e2e8f0; border-radius: 8px;
+    padding: 0.7rem 0.9rem; box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+}
+.tax-stat-card .label { font-size: 0.72rem; color: var(--dr-gray-dark);
+    text-transform: uppercase; letter-spacing: 0.05em; }
+.tax-stat-card .value { font-size: 1.7rem; font-weight: 700;
+    color: var(--dr-primary); line-height: 1.1; margin-top: 0.2rem; }
+.tax-stat-card .sub { font-size: 0.74rem; color: var(--dr-gray-dark); margin-top: 0.3rem; }
+
+.tax-cat-grid { display: grid; gap: 0.6rem;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+.tax-cat {
+    background: #fff; border: 1px solid #e2e8f0; border-radius: 8px;
+    padding: 0.7rem 0.9rem; box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    border-left: 4px solid var(--cat-color, #94a3b8);
+}
+.tax-cat .head {
+    display: flex; align-items: baseline; gap: 0.5rem; margin-bottom: 0.3rem;
+}
+.tax-cat .head .code {
+    font-family: ui-monospace, Menlo, monospace; font-size: 0.78rem;
+    font-weight: 700; color: var(--cat-color, var(--dr-primary));
+}
+.tax-cat .head .count {
+    margin-left: auto; font-size: 1.1rem; font-weight: 700; color: var(--dr-primary);
+}
+.tax-cat .head .pct {
+    font-size: 0.78rem; color: var(--dr-gray-dark);
+    background: #f1f5f9; padding: 0.05rem 0.4rem; border-radius: 3px;
+}
+.tax-cat .desc { font-size: 0.78rem; color: var(--dr-gray-dark); margin-bottom: 0.4rem; }
+.tax-cat .bar { height: 6px; background: #e5e7eb; border-radius: 3px; overflow: hidden; }
+.tax-cat .bar-fill { height: 100%; background: var(--cat-color, #2563eb);
+    transition: width 0.4s ease; }
+.tax-cat .subs { margin-top: 0.5rem; font-size: 0.74rem; }
+.tax-cat .sub-row { display: flex; justify-content: space-between;
+    padding: 0.15rem 0; border-bottom: 1px solid #f1f5f9; }
+.tax-cat .sub-row:last-child { border-bottom: none; }
+.tax-cat .sub-row .sub-name {
+    font-family: ui-monospace, Menlo, monospace; font-size: 0.72rem;
+    color: var(--dr-primary); overflow: hidden; text-overflow: ellipsis; max-width: 70%; white-space: nowrap;
+}
+.tax-cat .sub-row .sub-n { font-weight: 600; color: var(--dr-blue);
+    font-family: ui-monospace, Menlo, monospace; font-size: 0.72rem; }
+
+.tax-empty { padding: 2rem; text-align: center; color: var(--dr-gray-dark); font-style: italic; }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="dr-section">
+    <h2><i class="fas fa-tags"></i> AI Taxonomy — KPI categorie email</h2>
+    <p style="color: var(--dr-gray-dark); font-size: 0.85rem;">
+        Distribuzione delle mail in arrivo per categoria macro (job <code>email_taxonomy</code>).
+        L'AI classifica ogni mail ma <strong>non applica azioni</strong>: serve solo a osservare
+        la composizione del traffico per pianificare regole statiche future.
+        <a href="{{ url_for('rules.list_view') }}">/rules</a> — crea una regola con action
+        <code>ai_taxonomy</code> + match generico (es. <code>match_subject_regex=.*</code>) per
+        iniziare a popolare questa pagina.
+    </p>
+</section>
+
+<section class="dr-section">
+    <div class="tax-period">
+        <span style="align-self: center; font-size: 0.78rem; color: var(--dr-gray-dark);">Periodo:</span>
+        {% for h, label in [(24, '24h'), (72, '3g'), (168, '7g'), (720, '30g')] %}
+        <a href="?hours={{ h }}" class="{% if hours == h %}active{% endif %}">{{ label }}</a>
+        {% endfor %}
+    </div>
+
+    <div class="tax-stats-row">
+        <div class="tax-stat-card">
+            <div class="label"><i class="fas fa-envelope"></i> Mail classificate</div>
+            <div class="value">{{ stats.total }}</div>
+            <div class="sub">nel periodo</div>
+        </div>
+        <div class="tax-stat-card">
+            <div class="label"><i class="fas fa-coins"></i> Costo AI</div>
+            <div class="value">${{ '%.4f'|format(stats.total_cost or 0) }}</div>
+            <div class="sub">media ${{ '%.5f'|format((stats.total_cost or 0) / (stats.total or 1)) }}/mail</div>
+        </div>
+        <div class="tax-stat-card">
+            <div class="label"><i class="fas fa-stopwatch"></i> Latenza media</div>
+            <div class="value">{{ stats.avg_latency_ms }}<small style="font-size:0.85rem;"> ms</small></div>
+            <div class="sub">per classificazione</div>
+        </div>
+        <div class="tax-stat-card">
+            <div class="label"><i class="fas fa-shapes"></i> Categorie distinte</div>
+            <div class="value">{{ stats.categories|length }}</div>
+            <div class="sub">di {{ stats.max_categories }} possibili</div>
+        </div>
+    </div>
+</section>
+
+<section class="dr-section">
+    {% if stats.categories %}
+    <h3 style="margin: 0 0 0.6rem; font-size: 0.95rem; color: var(--dr-primary);">
+        Distribuzione per categoria
+    </h3>
+    {% set palette = {
+        'newsletter_marketing': '#f59e0b',
+        'notifica_automatica': '#3b82f6',
+        'transazionale': '#10b981',
+        'richiesta_assistenza': '#dc2626',
+        'comunicazione_commerciale': '#a855f7',
+        'comunicazione_personale': '#06b6d4',
+        'documento_allegato': '#0891b2',
+        'pec_legale': '#7c3aed',
+        'phishing_spam_sospetto': '#b91c1c',
+        'bounce_dsn': '#64748b',
+        'autoresponder': '#94a3b8',
+        'altro': '#9ca3af'
+    } %}
+    <div class="tax-cat-grid">
+        {% for cat in stats.categories %}
+        <div class="tax-cat" style="--cat-color: {{ palette.get(cat.code, '#94a3b8') }};">
+            <div class="head">
+                <span class="code">{{ cat.code }}</span>
+                <span class="pct">{{ '%.1f'|format(cat.pct) }}%</span>
+                <span class="count">{{ cat.n }}</span>
+            </div>
+            <div class="desc">{{ cat.label }}</div>
+            <div class="bar"><div class="bar-fill" style="width:{{ cat.pct }}%;"></div></div>
+            {% if cat.top_subs %}
+            <div class="subs">
+                {% for s, n in cat.top_subs %}
+                <div class="sub-row">
+                    <span class="sub-name" title="{{ s }}">{{ s }}</span>
+                    <span class="sub-n">{{ n }}</span>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="tax-empty">
+        <i class="fas fa-tags" style="font-size: 1.6rem; margin-bottom: 0.5rem; color: #cbd5e1;"></i>
+        <div>Nessuna classificazione tassonomica nelle ultime {{ hours }}h.</div>
+        <div style="margin-top: 0.5rem; font-size: 0.8rem;">
+            Crea una regola con <code>action=ai_taxonomy</code> e match generico
+            (es. <code>match_subject_regex=.*</code>) per iniziare a popolare questa pagina.
+            La regola dovrebbe avere <code>continue_after_match=1</code> per non bloccare
+            le rule successive.
+        </div>
+    </div>
+    {% endif %}
+</section>
+
+<section class="dr-section">
+    <h3 style="margin: 0 0 0.5rem; font-size: 0.9rem; color: var(--dr-primary);">
+        Ultimi 20 eventi tassonomici
+    </h3>
+    {% if recent %}
+    <table class="dr-table">
+        <thead>
+            <tr>
+                <th style="width:60px;">ID</th>
+                <th style="width:80px;">Quando</th>
+                <th style="width:180px;">Categoria</th>
+                <th style="width:180px;">Subcategoria</th>
+                <th>Rationale</th>
+                <th style="width:60px; text-align:right;">Conf.</th>
+                <th style="width:90px; text-align:right;">Costo</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for d in recent %}
+        <tr>
+            <td><a href="{{ url_for('ai.decision_detail', decision_id=d.id) }}">#{{ d.id }}</a></td>
+            <td><small style="font-family:ui-monospace,Menlo,monospace;">{{ d.created_short }}</small></td>
+            <td><code style="color: {{ palette.get(d.classification, '#475569') }};">{{ d.classification or '—' }}</code></td>
+            <td><small>{{ d.intent or '—' }}</small></td>
+            <td><small title="{{ d.summary }}">{{ d.summary|default('—', true)|truncate(80) }}</small></td>
+            <td style="text-align:right;"><small>{{ '%.2f'|format(d.confidence or 0) }}</small></td>
+            <td style="text-align:right;"><small style="font-family:ui-monospace,Menlo,monospace;">${{ '%.5f'|format(d.cost_usd or 0) }}</small></td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="font-style: italic; color: var(--dr-gray);">— nessun evento recente —</p>
+    {% endif %}
+</section>
+{% endblock %}

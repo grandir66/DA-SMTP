@@ -415,6 +415,37 @@ def ai_classify():
     return jsonify(result), 200
 
 
+@api_bp.route("/ai/taxonomy", methods=["POST"])
+@require_api_key
+def ai_taxonomy_classify():
+    """Classificazione tassonomica delle mail (job_code='email_taxonomy').
+
+    A differenza di /ai/classify, NON applica azioni e NON ritorna
+    suggested_action: serve SOLO ad assegnare una categoria macro per
+    KPI di osservazione. La decisione viene loggata in ai_decisions con
+    `job_code='email_taxonomy'`, `applied=0`, `shadow_mode=1`.
+    """
+    from ..ai_assistant.taxonomy import classify_taxonomy
+    from ..ai_assistant.router import get_ai_router
+
+    payload = request.get_json(silent=True) or {}
+    event = payload.get("event") or {}
+    event_uuid = payload.get("event_uuid")
+    customer_ctx = payload.get("customer_context") or {}
+    tid = int(payload.get("tenant_id") or 1)
+    ai_model_override = (payload.get("ai_model_id_override") or "").strip() or None
+
+    storage = _storage()
+    router = get_ai_router(storage, tenant_id=tid)
+    result = classify_taxonomy(
+        storage=storage, router=router,
+        event=event, event_uuid=event_uuid,
+        customer_context=customer_ctx, tenant_id=tid,
+        model_id_override=ai_model_override,
+    )
+    return jsonify(result), 200
+
+
 @api_bp.route("/ai-bindings/active", methods=["GET"])
 @require_api_key
 def ai_bindings_active():

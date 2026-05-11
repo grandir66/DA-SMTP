@@ -250,6 +250,94 @@ def do_ai_classify(
                          extra={**extra, "ai_applied": True})
 
 
+def do_ai_taxonomy(
+    *,
+    event_uuid: str,
+    parsed: ParsedMessage,
+    cfg: RelayConfig,
+    storage: Storage,
+    backend: Any | None,
+    action_map: dict[str, Any],
+    ctx: Any,
+) -> ActionResult:
+    """Action `ai_taxonomy`: classifica la mail in una categoria macro per KPI.
+
+    Mai applicata: registra la decisione in ai_decisions con job_code=
+    'email_taxonomy' e ritorna sempre flag_only. Il pipeline applica
+    keep_original_delivery=True quindi la mail arriva al destinatario.
+    """
+    import httpx
+    customer_ctx = {}
+    if ctx is not None:
+        customer_ctx = {
+            "codcli": getattr(ctx, "codcli", None),
+            "contract_active": getattr(ctx, "contract_active", False),
+            "in_service": getattr(ctx, "in_service", None),
+            "sector": getattr(ctx, "sector", None),
+        }
+    payload = {
+        "event": {
+            "from_address": parsed.from_address,
+            "to_address": parsed.primary_to,
+            "to_domain": parsed.primary_to_domain,
+            "subject": parsed.subject,
+            "body_text": (parsed.body_text or "")[:2000],
+        },
+        "event_uuid": event_uuid,
+        "customer_context": customer_ctx,
+        "tenant_id": int(action_map.get("tenant_id") or 1),
+    }
+    if action_map.get("ai_model_id"):
+        payload["ai_model_id_override"] = str(action_map["ai_model_id"]).strip()
+
+    base_url = cfg.manager.base_url.rstrip("/")
+    api_key = cfg.manager.api_key
+    timeout_sec = float(action_map.get("timeout_ms", 5000) or 5000) / 1000.0
+
+    decision: dict[str, Any] = {}
+    error_msg: str | None = None
+    try:
+        with httpx.Client(timeout=timeout_sec, verify=cfg.manager.verify_tls) as cli:
+            resp = cli.post(
+                f"{base_url}/api/v1/relay/ai/taxonomy",
+                json=payload,
+                headers={"X-API-Key": api_key},
+            )
+        if resp.status_code >= 400:
+            error_msg = f"HTTP {resp.status_code}: {resp.text[:200]}"
+        else:
+            decision = resp.json() or {}
+            if decision.get("error"):
+                error_msg = decision["error"]
+    except httpx.HTTPError as exc:
+        error_msg = f"network: {exc}"
+
+    extra = {
+        "ai_taxonomy_decision_id": decision.get("decision_id"),
+        "ai_taxonomy_category": decision.get("category"),
+        "ai_taxonomy_subcategory": decision.get("subcategory"),
+        "ai_taxonomy_confidence": decision.get("confidence"),
+        "ai_taxonomy_model": decision.get("model"),
+        "ai_taxonomy_cost_usd": decision.get("cost_usd"),
+        "ai_taxonomy_error": error_msg,
+    }
+    if error_msg:
+        logger.warning("ai_taxonomy fallita: %s — taxonomy non assegnata", error_msg)
+        return ActionResult(
+            action="ai_taxonomy_error", ok=True,
+            detail=f"taxonomy classification failed: {error_msg}",
+            extra=extra,
+        )
+    logger.info("ai_taxonomy: category=%s sub=%s confidence=%.2f",
+                 decision.get("category"), decision.get("subcategory") or "—",
+                 float(decision.get("confidence") or 0))
+    return ActionResult(
+        action="ai_taxonomy", ok=True,
+        detail=f"category={decision.get('category')} sub={decision.get('subcategory') or '-'}",
+        extra=extra,
+    )
+
+
 def _ai_failsafe(
     *,
     event_uuid: str,

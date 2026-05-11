@@ -98,10 +98,17 @@
                 </div>
             </div>
             {% if session.role in ('admin', 'superadmin') %}
-            <a href="{{ url_for('ai.dashboard') }}" class="{% if in_ai %}active{% endif %}"
-               style="display:inline-flex; align-items:center; gap:0.4rem; color:#7c3aed;">
-                <i class="fas fa-robot"></i> AI Assistant
-            </a>
+            <div class="dr-nav-dropdown {% if in_ai %}active{% endif %}">
+                <button type="button" class="dr-nav-btn" style="color:#7c3aed;"><i class="fas fa-robot"></i> AI <i class="fas fa-caret-down"></i></button>
+                <div class="dr-nav-menu">
+                    <a href="{{ url_for('ai.dashboard') }}" class="{% if ep == 'ai.dashboard' %}active{% endif %}"><i class="fas fa-gauge"></i> Dashboard AI</a>
+                    <a href="{{ url_for('ai.decisions_list') }}" class="{% if ep.startswith('ai.decision') %}active{% endif %}"><i class="fas fa-list-check"></i> Decisioni</a>
+                    <a href="{{ url_for('ai.taxonomy_kpi') }}" class="{% if ep == 'ai.taxonomy_kpi' %}active{% endif %}"><i class="fas fa-tags"></i> Taxonomy KPI</a>
+                    <a href="{{ url_for('ai.proposals_list') }}" class="{% if ep.startswith('ai.proposal') %}active{% endif %}"><i class="fas fa-lightbulb"></i> Proposte regole</a>
+                    <a href="{{ url_for('ai.models_list') }}" class="{% if ep.startswith('ai.model') %}active{% endif %}"><i class="fas fa-microchip"></i> Bindings (modelli)</a>
+                    <a href="{{ url_for('ai.providers_list') }}" class="{% if ep.startswith('ai.provider') %}active{% endif %}"><i class="fas fa-plug"></i> Providers</a>
+                </div>
+            </div>
             <div class="dr-nav-dropdown {% if in_sys %}active{% endif %}">
                 <button type="button" class="dr-nav-btn"><i class="fas fa-gear"></i> Sistema <i class="fas fa-caret-down"></i></button>
                 <div class="dr-nav-menu">

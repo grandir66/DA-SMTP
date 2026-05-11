@@ -248,6 +248,88 @@ def decision_detail(decision_id: int):
     return render_template("admin/ai_decision_detail.html", decision=decision)
 
 
+@ai_bp.route("/taxonomy")
+@login_required(role="admin")
+def taxonomy_kpi():
+    """KPI distribuzione categorie tassonomiche (job_code='email_taxonomy').
+
+    Mostra:
+    - Card riassunto: totale mail classificate, costo, latency, n categorie.
+    - Per ciascuna delle ~12 categorie macro: count + %, top sub-categorie.
+    - Ultimi 20 eventi tassonomici con link al dettaglio decisione.
+
+    Periodo: default 24h, selezionabile 24h/3g/7g/30g via query ?hours=N.
+    """
+    from collections import Counter
+    from datetime import datetime, timezone
+    from ..ai_assistant.taxonomy import TAXONOMY_CATEGORIES
+    from .events import _format_short_ts
+
+    storage = _storage()
+    tid = _tid()
+    try:
+        hours = max(1, min(int(request.args.get("hours") or 24), 8760))
+    except (TypeError, ValueError):
+        hours = 24
+
+    decisions = storage.list_ai_decisions(
+        tenant_id=tid, job_code="email_taxonomy",
+        hours=hours, limit=10000,
+    )
+
+    cat_counter: Counter[str] = Counter()
+    sub_counters: dict[str, Counter[str]] = {}
+    total_cost = 0.0
+    total_latency = 0
+    for d in decisions:
+        cat = (d.get("classification") or "altro").strip() or "altro"
+        cat_counter[cat] += 1
+        sub_counters.setdefault(cat, Counter())
+        sub_label = (d.get("intent") or "").strip()
+        if sub_label:
+            sub_counters[cat][sub_label] += 1
+        try:
+            total_cost += float(d.get("cost_usd") or 0)
+        except (TypeError, ValueError):
+            pass
+        try:
+            total_latency += int(d.get("latency_ms") or 0)
+        except (TypeError, ValueError):
+            pass
+
+    total = sum(cat_counter.values())
+    cat_meta = dict(TAXONOMY_CATEGORIES)
+    categories_view = [
+        {
+            "code": code,
+            "label": cat_meta.get(code, code),
+            "n": n,
+            "pct": (n / total * 100) if total else 0,
+            "top_subs": sub_counters.get(code, Counter()).most_common(5),
+        }
+        for code, n in cat_counter.most_common()
+    ]
+    stats = {
+        "total": total,
+        "total_cost": total_cost,
+        "avg_latency_ms": int(total_latency / total) if total else 0,
+        "categories": categories_view,
+        "max_categories": len(TAXONOMY_CATEGORIES),
+    }
+
+    now = datetime.now(timezone.utc)
+    recent = []
+    for d in decisions[:20]:
+        d2 = dict(d)
+        d2["created_short"] = _format_short_ts(d2.get("created_at"), now)
+        recent.append(d2)
+
+    return render_template(
+        "admin/ai_taxonomy.html",
+        stats=stats, recent=recent, hours=hours,
+    )
+
+
 @ai_bp.route("/proposals")
 @login_required(role="admin")
 def proposals_list():

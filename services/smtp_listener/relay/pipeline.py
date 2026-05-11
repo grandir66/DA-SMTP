@@ -792,6 +792,11 @@ def _dispatch_action(
             event_uuid=event_uuid, parsed=parsed, cfg=cfg, storage=storage,
             backend=backend, action_map=action_map, ctx=ctx,
         )
+    elif action_name == "ai_taxonomy":
+        result = actions.do_ai_taxonomy(
+            event_uuid=event_uuid, parsed=parsed, cfg=cfg, storage=storage,
+            backend=backend, action_map=action_map, ctx=ctx,
+        )
     else:
         logger.warning("Action sconosciuta '%s', fallback a flag_only", action_name)
         result = actions.do_flag_only(event_uuid=event_uuid, parsed=parsed)
@@ -805,12 +810,12 @@ def _dispatch_action(
     # Per ai_classify*: in shadow mode la mail deve comunque recapitarsi al
     # destinatario originale (la decisione IA è solo audit). Forziamo
     # keep_original_delivery=true di default su action_name='ai_classify'.
-    if action_name in ("ai_classify", "ai_critical_check"):
+    if action_name in ("ai_classify", "ai_critical_check", "ai_taxonomy"):
         keep_original = True
     if keep_original and action_name in (
         "auto_reply", "redirect", "forward", "create_ticket",
         "create_authorized_ticket",
-        "ai_classify", "ai_critical_check",
+        "ai_classify", "ai_critical_check", "ai_taxonomy",
     ):
         try:
             ko_action_taken, ko_detail, ko_extra = _do_default_delivery(parsed, storage, f"keep_original_after_{action_name}", event_uuid=event_uuid, envelope_rcpt_to=envelope_rcpt_to)

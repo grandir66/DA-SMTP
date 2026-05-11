@@ -58,7 +58,8 @@ def list_view():
     pages = max(1, (total + page_size - 1) // page_size)
     available_actions = ["create_ticket", "auto_reply", "forward", "redirect",
                          "quarantine", "flag_only", "ignore", "default_delivery",
-                         "create_authorized_ticket", "received_only", "passthrough_only"]
+                         "create_authorized_ticket", "received_only", "passthrough_only",
+                         "ai_classify", "ai_taxonomy", "ai_classify_failsafe"]
 
     # KPI/stats aggregati su dataset ALLARGATO (non solo pagina corrente, ma
     # con cap a 2000 eventi per evitare costo eccessivo). Le statistiche
