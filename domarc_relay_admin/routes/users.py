@@ -137,6 +137,13 @@ def form_view(user_id: int | None = None):
             "enabled": request.form.get("enabled") in ("on", "true", "1"),
             "tenant_id": new_tenant_id,
         }
+        # Self-edit safety: il template rende il checkbox "enabled" come
+        # disabled per il proprio account, quindi il browser NON lo invia
+        # nel POST e `data["enabled"]` finirebbe a False bloccando il save.
+        # Forziamo True per impedire auto-disable e per non rompere la
+        # modifica password / altri campi sul proprio account.
+        if not is_new and user_id == session.get("user_id"):
+            data["enabled"] = True
         # Password: solo se nuovo o cambia, con check complessita' minima.
         pwd = (request.form.get("password") or "").strip()
         if pwd:
