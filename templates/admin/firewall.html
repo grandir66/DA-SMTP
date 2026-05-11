@@ -1,0 +1,170 @@
+{% extends "admin/_base.html" %}
+{% block title %}Firewall UFW — Domarc SMTP Relay{% endblock %}
+{% block extra_head %}
+<style>
+.fw-banner { border-left: 5px solid #2563eb; background: #eff6ff;
+    padding: 0.9rem 1.1rem; border-radius: 6px; margin-bottom: 1rem; }
+.fw-banner.active { border-left-color: #16a34a; background: #f0fdf4; }
+.fw-banner.inactive { border-left-color: #dc2626; background: #fef2f2; }
+.fw-banner.error { border-left-color: #f59e0b; background: #fffbeb; }
+.fw-banner h3 { margin:0 0 0.3rem; font-size: 1rem; }
+.fw-banner p { margin:0; font-size: 0.85rem; }
+.fw-add { display: grid; gap: 0.5rem; grid-template-columns: 130px 100px 200px 1fr 120px;
+    align-items: end; padding: 0.7rem 0.9rem; background: #f8fafc;
+    border-radius: 6px; border: 1px dashed #cbd5e1; margin-bottom: 0.8rem; }
+.fw-add input, .fw-add select { padding: 0.4rem 0.6rem;
+    border: 1px solid #cbd5e1; border-radius: 5px;
+    font-family: inherit; font-size: 0.85rem; }
+.fw-add label { font-size:0.75rem; font-weight:600; color:var(--dr-gray-dark); }
+.fw-meta { font-size: 0.8rem; color: var(--dr-gray); margin: 0.5rem 0; }
+.fw-action-allow { background:#dcfce7; color:#166534; padding:0.15rem 0.45rem;
+    border-radius: 3px; font-size: 0.72rem; font-weight: 600; }
+.fw-action-deny { background:#fee2e2; color:#991b1b; padding:0.15rem 0.45rem;
+    border-radius: 3px; font-size: 0.72rem; font-weight: 600; }
+.fw-warn { padding: 0.6rem 0.8rem; border-radius: 6px;
+    background: #fef3c7; border: 1px solid #fbbf24; color: #78350f;
+    font-size: 0.85rem; margin-top: 1rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="dr-section">
+    <h2><i class="fas fa-fire"></i> Firewall UFW</h2>
+    {% if not available %}
+    <div class="fw-banner error">
+        <h3><i class="fas fa-circle-xmark"></i> UFW non disponibile</h3>
+        <p>Il wrapper UFW non può eseguire <code>sudo ufw</code> — verificare
+            <code>/etc/sudoers.d/domarc-relay-ufw</code> e installazione UFW
+            sulla VM (<code>apt install ufw</code>).</p>
+    </div>
+    {% elif error %}
+    <div class="fw-banner error">
+        <h3><i class="fas fa-circle-xmark"></i> Errore UFW</h3>
+        <p>{{ error }}</p>
+    </div>
+    {% elif info.active %}
+    <div class="fw-banner active">
+        <h3><i class="fas fa-shield-check"></i> UFW ATTIVO</h3>
+        <p>Default policy: <code>{{ info.default or '—' }}</code> ·
+           Logging: <code>{{ info.logging or '—' }}</code> ·
+           Regole attive: {{ rules|length }}</p>
+    </div>
+    {% else %}
+    <div class="fw-banner inactive">
+        <h3><i class="fas fa-circle-exclamation"></i> UFW INATTIVO</h3>
+        <p>Il firewall non sta filtrando il traffico. Abilita con
+            <code>sudo ufw enable</code> dalla VM (da CLI per sicurezza,
+            non da qui — rischio lock-out SSH).</p>
+    </div>
+    {% endif %}
+</section>
+
+{% if available and not error %}
+<section class="dr-section">
+    <h3>Aggiungi regola ALLOW</h3>
+    <form method="post" action="{{ url_for('firewall.add') }}" class="fw-add">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div>
+            <label>Porta *</label>
+            <input type="text" name="port" required pattern="^\d{1,5}$"
+                   placeholder="es. 443" title="1-65535">
+        </div>
+        <div>
+            <label>Protocollo</label>
+            <select name="proto">
+                <option value="tcp" selected>TCP</option>
+                <option value="udp">UDP</option>
+            </select>
+        </div>
+        <div>
+            <label>Sorgente (IP o CIDR, vuoto = Anywhere)</label>
+            <input type="text" name="source"
+                   placeholder="es. 192.168.20.0/24"
+                   pattern="^[0-9a-fA-F:.\/]*$">
+        </div>
+        <div>
+            <label>Commento</label>
+            <input type="text" name="comment" maxlength="80"
+                   placeholder="Es. SMTP ESVA SAMNET">
+        </div>
+        <div>
+            <button type="submit" class="dr-btn dr-btn-primary" style="width:auto;">
+                <i class="fas fa-plus"></i> Aggiungi
+            </button>
+        </div>
+    </form>
+    <p class="fw-meta">
+        Validation server-side: porta 1-65535, IP/CIDR parseabile da <code>ipaddress.ip_network()</code>,
+        commento solo caratteri alfanumerici + <code>. - , / : ( ) @ _</code>.
+        Le modifiche sono auditate (vedi log systemd).
+    </p>
+</section>
+
+<section class="dr-section">
+    <h3>Regole correnti ({{ rules|length }})</h3>
+    {% if rules %}
+    <table class="dr-table">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Verso</th>
+                <th>Proto</th>
+                <th>Azione</th>
+                <th>Sorgente</th>
+                <th>Commento</th>
+                <th>Azioni</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for r in rules %}
+            <tr>
+                <td><code>{{ r.number }}</code></td>
+                <td><code>{{ r.to }}</code></td>
+                <td>{{ r.proto or '—' }}</td>
+                <td>
+                    {% if r.is_allow %}
+                        <span class="fw-action-allow">{{ r.action }}</span>
+                    {% else %}
+                        <span class="fw-action-deny">{{ r.action }}</span>
+                    {% endif %}
+                </td>
+                <td><code>{{ r.from_ }}</code></td>
+                <td><small>{{ r.comment or '—' }}</small></td>
+                <td style="white-space: nowrap;">
+                    <form method="post" action="{{ url_for('firewall.delete', rule_number=r.number) }}"
+                          style="display:inline;"
+                          onsubmit="return confirm('Eliminare regola #{{ r.number }} ({{ r.to }}/{{ r.proto or '' }} {{ r.action }} from {{ r.from_ }})?\n\nATTENZIONE: se elimini la regola SSH (porta 22), perderai accesso alla VM.');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="dr-btn dr-btn-sm dr-btn-danger"
+                                title="Elimina regola #{{ r.number }}">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </form>
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+        <p style="font-style: italic; color: var(--dr-gray);">
+            Nessuna regola attiva. Tutto il traffico in entrata viene filtrato
+            dalla default policy (<code>{{ info.default or 'deny' }}</code>).
+        </p>
+    {% endif %}
+
+    <form method="post" action="{{ url_for('firewall.reload') }}" style="margin-top: 1rem;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="dr-btn">
+            <i class="fas fa-rotate"></i> Ricarica UFW (applica modifiche pending)
+        </button>
+    </form>
+</section>
+
+<div class="fw-warn">
+    <strong><i class="fas fa-triangle-exclamation"></i> Attenzione</strong> —
+    eliminando la regola della porta SSH (22/tcp), <strong>perdi l'accesso SSH alla VM</strong>.
+    Per riprendere accesso, dovresti accedere via console fisica/Proxmox e disabilitare UFW.
+    Le modifiche al firewall hanno effetto immediato (non serve reload per allow/delete singoli).
+</div>
+{% endif %}
+{% endblock %}

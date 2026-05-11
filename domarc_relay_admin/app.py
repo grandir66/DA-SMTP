@@ -143,6 +143,7 @@ def create_app(config: AppConfig | None = None, *, init_db: bool = True) -> Flas
     from .routes.domains import domain_strategy_bp
     from .routes.ai_rule_wizard import ai_rule_wizard_bp
     from .routes.relay_acl import relay_acl_bp
+    from .routes.firewall import firewall_bp
     from .tenants import tenants_bp, register_tenant_middleware
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -180,6 +181,7 @@ def create_app(config: AppConfig | None = None, *, init_db: bool = True) -> Flas
     app.register_blueprint(domain_strategy_bp)
     app.register_blueprint(ai_rule_wizard_bp)
     app.register_blueprint(relay_acl_bp)
+    app.register_blueprint(firewall_bp)
     app.register_blueprint(tenants_bp)
 
     # Manual auto-generato: rigenera all'avvio (best-effort, ignora errori).

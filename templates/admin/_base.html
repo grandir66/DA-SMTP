@@ -114,6 +114,9 @@
                     <a href="{{ url_for('secrets_modules.modules_list') }}" class="{% if ep.startswith('secrets_modules.module') %}active{% endif %}"><i class="fas fa-cube"></i> Moduli Python</a>
                     <a href="{{ url_for('connection.connection_view') }}" class="{% if ep.startswith('connection') %}active{% endif %}"><i class="fas fa-plug"></i> Connessione &amp; API</a>
                     <a href="{{ url_for('relay_acl.index') }}" class="{% if ep.startswith('relay_acl') %}active{% endif %}"><i class="fas fa-shield-halved"></i> Relay client ACL</a>
+                    {% if session.role == 'superadmin' %}
+                    <a href="{{ url_for('firewall.index') }}" class="{% if ep.startswith('firewall') %}active{% endif %}" style="color:#dc2626;"><i class="fas fa-fire"></i> Firewall UFW</a>
+                    {% endif %}
                     <a href="{{ url_for('manual.user_manual') }}" class="{% if ep.startswith('manual') %}active{% endif %}"><i class="fas fa-book"></i> Documentazione</a>
                     {% if session.role == 'superadmin' %}
                     <a href="{{ url_for('tenants.list_view') }}" class="{% if ep.startswith('tenants') %}active{% endif %}"><i class="fas fa-users-rectangle"></i> Tenant</a>

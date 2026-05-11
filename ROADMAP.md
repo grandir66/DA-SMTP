@@ -16,7 +16,7 @@
 - `[x]` fatto (verificare in codice prima di marcare)
 - `[!]` bloccato / decisione utente attesa
 
-**Ultimo aggiornamento:** 2026-05-11 (sessione standardize + cutover prep + relay ACL).
+**Ultimo aggiornamento:** 2026-05-11 (sessione standardize + cutover prep + relay ACL + firewall UI).
 
 ---
 
@@ -32,6 +32,7 @@
 - [x] **Topologia rete documentata** (commit `e02ccd7`): ESVA su SAMNET 192.168.20.x, notebook utente su 192.168.99.x.
 - [x] **UFW finalizzato**: :25 ristretto a 192.168.4.0/24 + 192.168.20.0/24, :443/:80 Anywhere (dietro firewall aziendale).
 - [x] **Relay client ACL** (commit `786c3d5`): migration 040 + UI `/relay-acl/` + check applicativo nel listener handle_MAIL. Voce sidebar **Sistema → Relay client ACL**.
+- [x] **Relay ACL edit form** + **Firewall UFW UI** (sessione 2026-05-11 mattina): form esteso per modifica completa entry ACL (label/description/enabled); pagina `/firewall/` superadmin-only con status UFW + add/delete regole + reload, via wrapper `firewall_manager.py` + sudoers ristretto `/etc/sudoers.d/domarc-relay-ufw`.
 
 ---
 
@@ -177,9 +178,19 @@
 ### 2.10 Relay client ACL (nuova sezione 2026-05-11)
 - [x] Migration 040 + tabella `relay_client_acl` + cache `relay_client_acl_cache` lato listener.
 - [x] UI `/relay-acl/` con quick-add + toggle + delete + validation IP/CIDR via `ipaddress`.
+- [x] **Form esteso `/relay-acl/new` e `/relay-acl/<id>/edit`** per modifica completa (label, description, ip_or_cidr, enabled).
 - [x] Listener `handle_MAIL` enforce check `is_client_allowed(session.peer[0])`.
 - [x] Voce sidebar **Sistema → Relay client ACL**.
 - [ ] **Popolare con subnet di produzione** (suggerito: `192.168.20.0/24` ESVA, `192.168.4.0/24` debug locale). Finché lista vuota, enforcement OFF (backward compat).
+
+### 2.12 Firewall UFW via UI (nuova sezione 2026-05-11)
+- [x] Modulo `firewall_manager.py`: wrapper sicuro per `ufw` con subprocess shell=False + whitelist regex su port/proto/source/comment.
+- [x] Sudoers `/etc/sudoers.d/domarc-relay-ufw`: NOPASSWD per `domarc-relay` su `ufw status/allow/--force delete/reload/enable/disable`.
+- [x] Blueprint `firewall_bp` (route `/firewall/`) — solo `superadmin`. Parse di `ufw status numbered`, add/delete regole, reload.
+- [x] Template `firewall.html` con status banner (active/inactive), form add + tabella regole + reload + warning lock-out SSH.
+- [x] Voce sidebar **Sistema → Firewall UFW** (rosso, visibile solo a superadmin).
+- [ ] Confirmation modal JS più robusto (oggi `confirm()` nativo).
+- [ ] Audit log persistente in admin.db (oggi solo `logger.warning` → journal).
 
 ### 2.11 Mailbox interne domarc.it (da verificare)
 - [ ] `h24@domarc.it` — mailbox di rientro autorizzazioni urgenti.

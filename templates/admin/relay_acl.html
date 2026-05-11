@@ -46,7 +46,12 @@
 </section>
 
 <section class="dr-section">
-    <h3>Aggiungi IP / CIDR autorizzato</h3>
+    <div style="display:flex; align-items:center; gap:0.8rem; margin-bottom:0.5rem;">
+        <h3 style="margin:0;">Aggiungi IP / CIDR autorizzato</h3>
+        <a href="{{ url_for('relay_acl.new_view') }}" class="dr-btn dr-btn-sm" style="margin-left:auto;">
+            <i class="fas fa-pen-to-square"></i> Form esteso
+        </a>
+    </div>
     <form method="post" action="{{ url_for('relay_acl.upsert') }}" class="acl-quick">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="text" name="ip_or_cidr" required
@@ -94,6 +99,10 @@
                 <td><small>{{ (e.created_at or '')[:16] }}</small></td>
                 <td><small>{{ e.set_by or '—' }}</small></td>
                 <td style="white-space: nowrap;">
+                    <a href="{{ url_for('relay_acl.edit_view', entry_id=e.id) }}"
+                       class="dr-btn dr-btn-sm" title="Modifica entry">
+                        <i class="fas fa-pen"></i>
+                    </a>
                     <form method="post" action="{{ url_for('relay_acl.toggle', entry_id=e.id) }}"
                           style="display:inline;">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

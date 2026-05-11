@@ -45,6 +45,24 @@ def index():
     )
 
 
+@relay_acl_bp.route("/new", methods=["GET"])
+@login_required(role="admin")
+def new_view():
+    return render_template("admin/relay_acl_form.html", entry=None)
+
+
+@relay_acl_bp.route("/<int:entry_id>/edit", methods=["GET"])
+@login_required(role="admin")
+def edit_view(entry_id: int):
+    storage = _storage()
+    entries = storage.list_relay_client_acl(tenant_id=_tid())
+    entry = next((e for e in entries if int(e["id"]) == entry_id), None)
+    if not entry:
+        flash("Entry non trovata.", "error")
+        return redirect(url_for("relay_acl.index"))
+    return render_template("admin/relay_acl_form.html", entry=entry)
+
+
 @relay_acl_bp.route("/upsert", methods=["POST"])
 @login_required(role="admin")
 def upsert():

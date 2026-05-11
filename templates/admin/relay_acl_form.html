@@ -1,0 +1,89 @@
+{% extends "admin/_base.html" %}
+{% block title %}{{ 'Modifica' if entry else 'Nuova' }} entry ACL — Domarc SMTP Relay{% endblock %}
+{% block extra_head %}
+<style>
+.aclf-card { max-width: 720px; background: #fff; border: 1px solid #cbd5e1;
+    border-radius: 8px; padding: 1.5rem; margin: 1rem 0; }
+.aclf-row { display: grid; grid-template-columns: 180px 1fr; gap: 0.8rem;
+    align-items: center; margin-bottom: 0.9rem; }
+.aclf-row label { font-weight: 600; color: var(--dr-gray-dark); }
+.aclf-row input[type="text"] { width: 100%; padding: 0.5rem 0.7rem;
+    border: 1px solid #cbd5e1; border-radius: 5px; font-family: inherit; }
+.aclf-help { font-size: 0.78rem; color: var(--dr-gray);
+    margin-top: -0.5rem; margin-bottom: 0.9rem; padding-left: 180px; }
+.aclf-actions { display:flex; gap:0.5rem; margin-top: 1rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="dr-section">
+    <h2><i class="fas fa-shield-halved"></i>
+        {{ 'Modifica' if entry else 'Nuova' }} entry Relay ACL
+    </h2>
+    <p style="margin-top: -0.5rem;">
+        <a href="{{ url_for('relay_acl.index') }}">
+            <i class="fas fa-arrow-left"></i> Torna alla lista
+        </a>
+    </p>
+</section>
+
+<form method="post" action="{{ url_for('relay_acl.upsert') }}" class="aclf-card">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% if entry %}<input type="hidden" name="id" value="{{ entry.id }}">{% endif %}
+
+    <div class="aclf-row">
+        <label for="ip_or_cidr">IP / CIDR *</label>
+        <input type="text" id="ip_or_cidr" name="ip_or_cidr" required
+               value="{{ entry.ip_or_cidr if entry else '' }}"
+               placeholder="192.168.20.0/24"
+               pattern="^[0-9a-fA-F:.\/]+$">
+    </div>
+    <p class="aclf-help">
+        IPv4 singolo (es. <code>192.168.20.25</code>) o CIDR (es. <code>192.168.20.0/24</code>).
+        Validato server-side con <code>ipaddress.ip_network()</code>.
+    </p>
+
+    <div class="aclf-row">
+        <label for="label">Label</label>
+        <input type="text" id="label" name="label" maxlength="120"
+               value="{{ entry.label if entry else '' }}"
+               placeholder="Es. ESVA SAMNET">
+    </div>
+
+    <div class="aclf-row">
+        <label for="description">Descrizione</label>
+        <input type="text" id="description" name="description" maxlength="500"
+               value="{{ entry.description if entry else '' }}"
+               placeholder="Note opzionali (es. firewall Stormshield)">
+    </div>
+
+    <div class="aclf-row">
+        <label for="enabled">Stato</label>
+        <label style="font-weight: normal; display:flex; align-items:center; gap: 0.4rem;">
+            <input type="checkbox" id="enabled" name="enabled"
+                   {% if not entry or entry.enabled %}checked{% endif %}>
+            Abilitata (subito attiva nel listener al prossimo sync ≤5min)
+        </label>
+    </div>
+
+    <div class="aclf-actions">
+        <button type="submit" class="dr-btn dr-btn-primary">
+            <i class="fas fa-{{ 'save' if entry else 'plus' }}"></i>
+            {{ 'Salva modifiche' if entry else 'Aggiungi' }}
+        </button>
+        <a href="{{ url_for('relay_acl.index') }}" class="dr-btn">
+            Annulla
+        </a>
+        {% if entry %}
+        <form method="post" action="{{ url_for('relay_acl.delete', entry_id=entry.id) }}"
+              style="display:inline; margin-left:auto;"
+              onsubmit="return confirm('Eliminare definitivamente {{ entry.ip_or_cidr }}?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="dr-btn dr-btn-danger">
+                <i class="fas fa-trash"></i> Elimina entry
+            </button>
+        </form>
+        {% endif %}
+    </div>
+</form>
+{% endblock %}
