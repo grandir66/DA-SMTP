@@ -1,12 +1,32 @@
 {% extends "admin/_base.html" %}
 {% block title %}Gruppi clienti — Domarc SMTP Relay{% endblock %}
 
+{% block extra_head %}
+<style>
+    /* Header: niente wrap del titolo/pulsanti, padding-friendly */
+    .cg-header { display:flex; align-items:center; gap:0.8rem; flex-wrap:wrap; }
+    .cg-header h2 { margin:0; white-space:nowrap; }
+    .cg-header .cg-spacer { flex:1; min-width:1rem; }
+    .cg-header .dr-btn { white-space:nowrap; }
+    /* Tabella: codice + nome no-wrap (inclusi badge "automatico"/"built-in"),
+       descrizione resta wrappable */
+    .fw-table td.cg-code { white-space:nowrap; }
+    .fw-table td.cg-name { white-space:nowrap; }
+    .fw-table td.cg-name .pill { white-space:nowrap; display:inline-flex; align-items:center; gap:0.25rem; }
+    .fw-table td.cg-desc { white-space:normal; min-width:24ch; }
+    @media (min-width: 1100px) {
+        .fw-table td.cg-name { max-width:none; }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <section class="dr-section">
-    <div style="display:flex; justify-content:space-between; align-items:center; gap:1rem;">
-        <h2 style="margin:0;"><i class="fas fa-layer-group"></i> Gruppi clienti
+    <div class="cg-header">
+        <h2><i class="fas fa-layer-group"></i> Gruppi clienti
             <small style="color:#64748b; font-weight:400;">{{ groups|length }}</small>
         </h2>
+        <div class="cg-spacer"></div>
         <a href="{{ url_for('group_mapping.list_view') }}" class="dr-btn"
            style="background:linear-gradient(90deg,#15803d,#3b82f6); color:#fff; border:none;"
            title="Auto-assegna i clienti ai gruppi via mapping di campi del gestionale">
@@ -39,13 +59,13 @@
             <tbody>
                 {% for g in groups %}
                 <tr {% if g.is_system %}style="background:#f8fafc;"{% endif %}>
-                    <td>
+                    <td class="cg-code">
                         {% if g.color %}
                         <span style="display:inline-block; width:0.7rem; height:0.7rem; background:{{ g.color }}; border-radius:50%; margin-right:0.4rem; vertical-align:middle;"></span>
                         {% endif %}
                         <code>{{ g.code }}</code>
                     </td>
-                    <td>
+                    <td class="cg-name">
                         <strong>{{ g.name }}</strong>
                         {% if g.is_system %}
                         <span class="pill pill-muted" title="Gruppo automatico, non modificabile" style="margin-left:0.4rem;">
@@ -59,7 +79,7 @@
                         </span>
                         {% endif %}
                     </td>
-                    <td style="color:#64748b; font-size:0.85rem;">{{ g.description or '—' }}</td>
+                    <td class="cg-desc" style="color:#64748b; font-size:0.85rem;">{{ g.description or '—' }}</td>
                     <td style="text-align:center;">
                         <span class="pill pill-info">{{ g.member_count }}</span>
                     </td>
