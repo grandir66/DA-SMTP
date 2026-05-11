@@ -160,11 +160,50 @@ def health():
 @api_bp.route("/customers/active", methods=["GET"])
 @require_api_key
 def customers_active():
-    """Anagrafica clienti attivi dal customer source configurato."""
+    """Anagrafica clienti attivi dal customer source configurato.
+
+    Per ogni cliente, oltre a `profile` (es. STD/EXT/H24/NO), includiamo
+    SEMPRE `timezone` + `schedule` dal `service_hours_profiles` corrispondente,
+    cosi' il listener puo' calcolare `is_in_service` correttamente.
+    Senza questo, schedule arrivava come {profile: STD} senza ore → listener
+    sempre fuori servizio per tutti i clienti.
+    """
     cs = _customer_source()
+    storage = _storage()
+
+    # Pre-fetch profili per code (STD/EXT/H24/NO/custom...). Costo: 1 SELECT.
+    profiles_by_code: dict[str, dict] = {}
+    try:
+        with storage._connect() as conn:
+            rows = conn.execute(
+                "SELECT code, timezone, schedule, holidays FROM service_hours_profiles WHERE enabled = 1"
+            ).fetchall()
+            for r in rows:
+                if r["code"]:
+                    try:
+                        sched = json.loads(r["schedule"] or "{}")
+                    except (TypeError, ValueError):
+                        sched = {}
+                    try:
+                        prof_holidays = json.loads(r["holidays"] or "[]")
+                    except (TypeError, ValueError):
+                        prof_holidays = []
+                    profiles_by_code[r["code"]] = {
+                        "timezone": r["timezone"] or "Europe/Rome",
+                        "schedule": sched,
+                        "holidays": prof_holidays,
+                    }
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Lettura service_hours_profiles fallita (orari saltati): %s", exc)
+
     customers = cs.list_customers()
     out = []
     for c in customers:
+        profile_code = c.tipologia_servizio or "STD"
+        prof = profiles_by_code.get(profile_code) or {}
+        # I customer-level holidays sovrascrivono quelli del profilo se non vuoti
+        cust_holidays = c.holidays or []
+        merged_holidays = list({*(prof.get("holidays") or []), *cust_holidays})
         out.append({
             "codcli": c.codice_cliente,
             "ragione_sociale": c.ragione_sociale,
@@ -172,8 +211,10 @@ def customers_active():
             "aliases": list(c.aliases or []),
             "contract_active": bool(c.contract_active),
             "service_hours": {
-                "profile": c.tipologia_servizio,
-                "holidays": c.holidays or [],
+                "profile": profile_code,
+                "timezone": prof.get("timezone") or "Europe/Rome",
+                "schedule": prof.get("schedule") or {},
+                "holidays": merged_holidays,
                 "schedule_overrides": c.schedule_overrides or [],
             },
         })
