@@ -115,6 +115,16 @@
                     </label>
                 </div>
             </div>
+            {# M041: force_live — bypass shadow cascade #}
+            <div class="rf-row">
+                <label>⚡ Force live</label>
+                <div>
+                    <label style="font-weight:normal;">
+                        <input type="checkbox" name="force_live" value="1" {% if record.force_live %}checked{% endif %}>
+                        Esegui in live anche se dominio/recipient è in shadow (override cascade)
+                    </label>
+                </div>
+            </div>
             <div class="rf-row rf-advanced-only">
                 <label>Note shadow</label>
                 <input type="text" name="shadow_note" value="{{ record.shadow_note or '' }}"

@@ -307,6 +307,26 @@
                        placeholder="es. Test 2026-05-05, validare per 7gg">
             </div>
 
+            {# M041: force_live — bypass shadow cascade (sempre visibile) #}
+            <div class="rf-row">
+                <label>⚡ Force live<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
+                    Se attivo, questa regola gira <strong>SEMPRE in live</strong> anche
+                    se il dominio destinatario, il gruppo destinatari o la regola stessa
+                    sono in shadow mode. Caso d'uso: regola <em>ai_classify</em> che
+                    deve analizzare la mail anche durante la fase di cutover di un
+                    dominio.<br><br>
+                    <strong>Override</strong>: bypassa il check cascata shadow
+                    (dominio &gt; recipient_group &gt; rule).
+                </span></span></label>
+                <div>
+                    <label style="font-weight:normal;">
+                        <input type="checkbox" name="force_live" value="1"
+                               {% if record.force_live %}checked{% endif %}>
+                        Esegui in live anche se il dominio/recipient/regola è in shadow
+                    </label>
+                </div>
+            </div>
+
             <div class="rf-row">
                 <label>Cascata<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
                     Se attivo, dopo il match continua a valutare le regole successive.

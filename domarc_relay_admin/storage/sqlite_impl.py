@@ -590,6 +590,7 @@ class SqliteStorage(Storage):
                           rule_set_id = ?,
                           shadow_mode = ?, shadow_note = ?,
                           match_is_thread_continuation = ?,
+                          force_live = ?,
                           updated_at = datetime('now')
                        WHERE id = ?""",
                     (
@@ -629,6 +630,7 @@ class SqliteStorage(Storage):
                         1 if data.get("shadow_mode") else 0,
                         data.get("shadow_note") or None,
                         _bint(data.get("match_is_thread_continuation")),
+                        1 if data.get("force_live") else 0,
                         int(rid),
                     ),
                 )
@@ -646,14 +648,14 @@ class SqliteStorage(Storage):
                         parent_id, is_group, group_label,
                         exclusive_match, continue_in_group, exit_group_continue,
                         rule_set_id, shadow_mode, shadow_note,
-                        match_is_thread_continuation)
+                        match_is_thread_continuation, force_live)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                            ?, ?, ?,
                            ?, ?, ?,
                            ?, ?,
                            ?, ?, ?, ?, ?, ?,
                            ?, ?, ?,
-                           ?)""",
+                           ?, ?)""",
                 (
                     int(tenant_id),
                     (data.get("name") or "").strip(),
@@ -697,6 +699,8 @@ class SqliteStorage(Storage):
                     data.get("shadow_note") or None,
                     # M036: thread continuation
                     _bint(data.get("match_is_thread_continuation")),
+                    # M041: force_live (bypass shadow cascade per questa regola)
+                    1 if data.get("force_live") else 0,
                 ),
             )
             return int(cur.lastrowid or 0)

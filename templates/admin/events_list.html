@@ -48,6 +48,21 @@
     .ev-mini.ai-skip { background:#fef3c7; color:#92400e; }
     .ev-mini.chain-extra { background:#dcfce7; color:#14532d; }
 
+    /* Chain pill per ogni regola matched (no piu' "+N") */
+    .ev-rule-pill {
+        display: inline-block; padding: 0.05rem 0.32rem; border-radius: 3px;
+        font-size: 0.7rem; font-weight: 600; text-decoration: none;
+        background: #e0e7ff; color: #3730a3;
+        font-family: ui-monospace, Menlo, monospace;
+    }
+    .ev-rule-pill:hover { background: #c7d2fe; }
+    .ev-rule-pill.winner {
+        background: #dcfce7; color: #14532d;
+        box-shadow: inset 0 0 0 1px #16a34a;
+    }
+    .ev-rule-arrow { color: #94a3b8; font-size: 0.7rem; margin: 0 0.05rem; }
+    .ev-col-rule { white-space: normal; max-width: 240px; }
+
     /* === KPI block === */
     .ev-kpi-grid {
         display: grid;
@@ -381,17 +396,21 @@
                     {% endif %}
                 </td>
                 <td class="ev-col-rule">
-                    {% if e.rule_id %}
-                    <a href="{{ url_for('rules.form_view', rule_id=e.rule_id) }}" onclick="event.stopPropagation();">#{{ e.rule_id }}</a>
                     {% set chain = pm.get('chain') if pm else None %}
-                    {% if chain %}
-                        {% set extra_matched = (chain | selectattr('matched') | list | length) - 1 %}
-                        {% if extra_matched > 0 %}
-                        <span class="ev-mini chain-extra"
-                              title="Catena: {{ chain | length }} regole valutate, {{ extra_matched + 1 }} in match"
-                              style="cursor:help;">+{{ extra_matched }}</span>
-                        {% endif %}
-                    {% endif %}
+                    {% set matched_chain = (chain | selectattr('matched') | list) if chain else [] %}
+                    {% if matched_chain %}
+                        {# Mostra TUTTE le regole matched in cascata (con tooltip nome) #}
+                        {% for step in matched_chain %}
+                            <a href="{{ url_for('rules.form_view', rule_id=step.rule_id) }}"
+                               onclick="event.stopPropagation();"
+                               class="ev-rule-pill{% if step.rule_id == e.rule_id %} winner{% endif %}"
+                               title="{{ step.rule_name }} (priority {{ step.priority }}){% if step.rule_id == e.rule_id %} — VINCENTE{% endif %}">#{{ step.rule_id }}</a>{%- if not loop.last %} <span class="ev-rule-arrow">→</span> {% endif -%}
+                        {% endfor %}
+                    {% elif e.rule_id %}
+                        {# Fallback: no chain in payload_metadata, mostra solo rule_id #}
+                        <a href="{{ url_for('rules.form_view', rule_id=e.rule_id) }}"
+                           onclick="event.stopPropagation();"
+                           class="ev-rule-pill winner">#{{ e.rule_id }}</a>
                     {% else %}<span style="color:#cbd5e1;">—</span>{% endif %}
                 </td>
                 <td class="ev-col-ticket mono" title="{{ e.ticket_id }}">{{ e.ticket_id or '—' }}</td>

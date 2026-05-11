@@ -401,6 +401,8 @@ class Storage:
                 ("events_log", "reply_to_event_uuid", "ALTER TABLE events_log ADD COLUMN reply_to_event_uuid TEXT"),
                 ("events_log", "thread_root_uuid", "ALTER TABLE events_log ADD COLUMN thread_root_uuid TEXT"),
                 ("rules_cache", "match_is_thread_continuation", "ALTER TABLE rules_cache ADD COLUMN match_is_thread_continuation INTEGER"),
+                # M041: force_live (bypass shadow cascade)
+                ("rules_cache", "force_live", "ALTER TABLE rules_cache ADD COLUMN force_live INTEGER NOT NULL DEFAULT 0"),
                 # M039: body_text/body_html persistiti su events_log (cap 32KB/64KB applicato in insert_event).
                 # Senza queste colonne, insert_event crasha al primo evento su relay.db fresca.
                 ("events_log", "body_text", "ALTER TABLE events_log ADD COLUMN body_text TEXT"),
@@ -930,6 +932,17 @@ class Storage:
                     conn.execute(
                         "UPDATE rules_cache SET match_is_thread_continuation = ? WHERE id = ?",
                         (int(mitc) if mitc not in (None, "") else None, int(r["id"])),
+                    )
+                # M041: force_live (bypass shadow cascade per questa regola)
+                if r.get("force_live"):
+                    conn.execute(
+                        "UPDATE rules_cache SET force_live = 1 WHERE id = ?",
+                        (int(r["id"]),),
+                    )
+                else:
+                    conn.execute(
+                        "UPDATE rules_cache SET force_live = 0 WHERE id = ?",
+                        (int(r["id"]),),
                     )
             self._set_sync_meta(conn, "rules", synced)
         return len(rules)

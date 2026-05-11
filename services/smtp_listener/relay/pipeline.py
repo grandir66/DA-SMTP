@@ -204,7 +204,13 @@ def _check_shadow_cascata(parsed: ParsedMessage, storage: "Storage",
     Ritorna (origin, info) del PRIMO trigger trovato, None se nessuno scatta.
 
       origin = "domain:<domain>" | "recipient_group:<code>" | "rule:<id>"
+
+    M041: se la regola vincente ha `force_live=true`, esce subito dal cascade
+    senza applicare lo shadow. Caso d'uso: regola ai_classify che deve girare
+    in produzione anche se il dominio è ancora in shadow_mode (cutover prep).
     """
+    if winning_rule and winning_rule.get("force_live"):
+        return None
     info = _check_shadow_domain(parsed, storage)
     if info:
         return (f"domain:{info.get('matched_domain') or info.get('domain')}", info)

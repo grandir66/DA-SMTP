@@ -932,6 +932,8 @@ def group_form_view(group_id: int | None = None):
             # M033: shadow mode
             "shadow_mode": (request.form.get("shadow_mode") or "").lower() in ("on", "true", "1"),
             "shadow_note": request.form.get("shadow_note") or None,
+            # M041: force_live = bypass shadow cascade
+            "force_live": (request.form.get("force_live") or "").lower() in ("on", "true", "1"),
             "action_map": action_map or None,
             "exclusive_match": (request.form.get("exclusive_match") or "").lower() in ("on", "true", "1"),
         }
@@ -1223,6 +1225,8 @@ def _parse_form(form) -> dict:
         # M033: shadow per regola singola
         "shadow_mode": (form.get("shadow_mode") or "").lower() in ("on", "true", "1"),
         "shadow_note": form.get("shadow_note") or None,
+        # M041: force_live = bypass shadow cascade
+        "force_live": (form.get("force_live") or "").lower() in ("on", "true", "1"),
     }
 
 
