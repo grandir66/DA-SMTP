@@ -214,6 +214,8 @@
 - [ ] FTS5 virtual table su `events(from_address, to_address, subject)` per ricerca testuale.
 - [ ] Paginazione DB-side `/customers` `/events` `/queue` (oggi carica tutto in memoria su ~5000 record).
 - [ ] Validate H24 codes: verifica `from_address` corrisponda al `codice_cliente` legato (bug audit fatturazione segnalato).
+- [ ] **Bug TZ `match_in_service`**: il rule engine confronta `datetime.utcnow()` con orari salvati in `Europe/Rome` senza convertire TZ. Sintomo verificato 2026-05-11: lunedì 14:36 italiana = 12:36 UTC → `in_service` calcolato `false` (pausa pranzo 13:00-14:30 confrontata erroneamente in UTC). Fix: convertire `now` alla TZ del cliente (`service_hours.timezone` default `Europe/Rome`) prima del confronto HH:MM.
+- [x] **Rule 27/28/29 disabilitate** (2026-05-11): "[GRUPPO] Fuori orario contratto" matchava qualunque `*@domarc.it` fuori orario con cliente contract_active → tutti i clienti normali apriva ticket. Disabilitato perché troppo aggressivo + il bug TZ peggiorava il problema. Le mail urgenti usano i codici AUTH/H24 (rule 52, 54).
 
 ### 2.12 Firewall UFW via UI (nuova sezione 2026-05-11)
 - [x] Modulo `firewall_manager.py`: wrapper sicuro per `ufw` con subprocess shell=False + whitelist regex su port/proto/source/comment.
