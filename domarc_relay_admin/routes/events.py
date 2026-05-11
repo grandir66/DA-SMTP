@@ -57,13 +57,88 @@ def list_view():
         e["received_short"] = _format_short_ts(e.get("received_at"), _now)
     pages = max(1, (total + page_size - 1) // page_size)
     available_actions = ["create_ticket", "auto_reply", "forward", "redirect",
-                         "quarantine", "flag_only", "ignore", "default_delivery"]
+                         "quarantine", "flag_only", "ignore", "default_delivery",
+                         "create_authorized_ticket", "received_only", "passthrough_only"]
+
+    # KPI/stats aggregati su dataset ALLARGATO (non solo pagina corrente, ma
+    # con cap a 2000 eventi per evitare costo eccessivo). Le statistiche
+    # rispettano i filtri attivi (hours, action, q, ecc.).
+    stats = _compute_event_stats(
+        _storage(), tenant_id=_tid(), hours=hours, filters=filters,
+    )
+
     return render_template(
         "admin/events_list.html",
         events=events, total=total, page=page, page_size=page_size, pages=pages,
         available_actions=available_actions,
         filters={**filters, "hours": hours, "q": request.args.get("q") or ""},
+        stats=stats,
     )
+
+
+def _compute_event_stats(storage, *, tenant_id: int, hours: int,
+                          filters: dict[str, Any]) -> dict[str, Any]:
+    """Aggrega KPI sugli eventi nel filtro attivo (cap 2000 record).
+
+    Ritorna dict con:
+      - total_sample: numero eventi nel sample
+      - top_from_domains: [(domain, n), ...]
+      - top_to_recipients: [(email, n), ...]  (split anche su to_address CSV)
+      - top_to_domains: [(domain, n), ...]
+      - top_codcli: [(codcli, n), ...]
+      - top_rules: [(rule_id, rule_name, n), ...]
+      - by_action: [(action_taken, n), ...]
+    """
+    from collections import Counter
+    sample, _ = storage.list_events(
+        tenant_id=tenant_id, hours=hours,
+        page=1, page_size=2000, filters=filters,
+    )
+    from_doms = Counter()
+    to_recs = Counter()
+    to_doms = Counter()
+    codclis = Counter()
+    rules = Counter()
+    actions = Counter()
+    for e in sample:
+        if e.get("from_address") and "@" in e["from_address"]:
+            from_doms[e["from_address"].rsplit("@", 1)[1].lower()] += 1
+        ta = (e.get("to_address") or "").strip()
+        if ta:
+            # to_address puo' contenere CSV (vedi pipeline.to_address_internal)
+            for piece in ta.split(","):
+                addr = piece.strip().lower()
+                if addr and "@" in addr:
+                    to_recs[addr] += 1
+                    to_doms[addr.rsplit("@", 1)[1]] += 1
+        if e.get("codice_cliente"):
+            codclis[str(e["codice_cliente"])] += 1
+        if e.get("rule_id"):
+            rules[int(e["rule_id"])] += 1
+        if e.get("action_taken"):
+            actions[str(e["action_taken"])] += 1
+    # Risolvi rule_name per le top rules
+    top_rules_raw = rules.most_common(8)
+    rule_names: dict[int, str] = {}
+    for rid, _ in top_rules_raw:
+        try:
+            r = storage.get_rule(rid)
+            if r:
+                rule_names[rid] = r.get("name") or f"rule {rid}"
+        except Exception:  # noqa: BLE001
+            pass
+    top_rules = [(rid, rule_names.get(rid, f"rule #{rid}"), n)
+                  for rid, n in top_rules_raw]
+    return {
+        "total_sample": len(sample),
+        "sample_capped": len(sample) >= 2000,
+        "top_from_domains": from_doms.most_common(8),
+        "top_to_recipients": to_recs.most_common(8),
+        "top_to_domains": to_doms.most_common(8),
+        "top_codcli": codclis.most_common(8),
+        "top_rules": top_rules,
+        "by_action": actions.most_common(),
+    }
 
 
 def _format_short_ts(s, now: datetime | None = None) -> str:

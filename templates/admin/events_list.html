@@ -47,6 +47,64 @@
     .ev-mini.ai-failsafe { background:#fee2e2; color:#dc2626; }
     .ev-mini.ai-skip { background:#fef3c7; color:#92400e; }
     .ev-mini.chain-extra { background:#dcfce7; color:#14532d; }
+
+    /* === KPI block === */
+    .ev-kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 0.7rem;
+        margin: 1rem 0;
+    }
+    .ev-kpi-card {
+        background: #fff; border: 1px solid #e2e8f0; border-radius: 8px;
+        padding: 0.6rem 0.8rem; box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    }
+    .ev-kpi-card h4 {
+        margin: 0 0 0.5rem; font-size: 0.74rem; color: var(--dr-gray-dark);
+        text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;
+        display: flex; align-items: center; gap: 0.35rem;
+    }
+    .ev-kpi-card h4 i { color: var(--dr-blue); }
+    .ev-kpi-card h4 .total { margin-left: auto; color: var(--dr-primary);
+        font-size: 0.7rem; font-weight: 700; background: #eff6ff;
+        padding: 0.05rem 0.4rem; border-radius: 999px; }
+    .ev-kpi-list { list-style: none; margin: 0; padding: 0; font-size: 0.78rem; }
+    .ev-kpi-list li {
+        display: flex; gap: 0.4rem; padding: 0.18rem 0;
+        border-bottom: 1px solid #f1f5f9;
+    }
+    .ev-kpi-list li:last-child { border-bottom: none; }
+    .ev-kpi-list .name {
+        flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        font-family: ui-monospace, Menlo, monospace; font-size: 0.74rem;
+        color: var(--dr-primary);
+    }
+    .ev-kpi-list .name a { color: inherit; text-decoration: none; }
+    .ev-kpi-list .name a:hover { color: var(--dr-blue); text-decoration: underline; }
+    .ev-kpi-list .count {
+        color: var(--dr-blue); font-weight: 700; font-size: 0.74rem;
+        font-family: ui-monospace, Menlo, monospace;
+        background: #eff6ff; padding: 0.02rem 0.4rem; border-radius: 3px;
+    }
+    .ev-kpi-list .empty { color: var(--dr-gray); font-style: italic; padding: 0.4rem 0; }
+    .ev-kpi-actions {
+        display: flex; gap: 0.3rem; flex-wrap: wrap;
+    }
+    .ev-kpi-actions .a-pill {
+        font-size: 0.7rem; padding: 0.1rem 0.45rem; border-radius: 3px;
+        font-weight: 600; text-decoration: none; cursor: pointer;
+        font-family: ui-monospace, Menlo, monospace;
+    }
+    .ev-kpi-actions .a-pill.default_delivery { background:#dcfce7; color:#166534; }
+    .ev-kpi-actions .a-pill.create_ticket { background:#dbeafe; color:#1e40af; }
+    .ev-kpi-actions .a-pill.auto_reply { background:#fef3c7; color:#78350f; }
+    .ev-kpi-actions .a-pill.quarantine { background:#fee2e2; color:#991b1b; }
+    .ev-kpi-actions .a-pill.ignore, .ev-kpi-actions .a-pill.flag_only { background:#e5e7eb; color:#374151; }
+    .ev-kpi-actions .a-pill.forward, .ev-kpi-actions .a-pill.redirect { background:#e0e7ff; color:#3730a3; }
+    .ev-kpi-actions .a-pill.received_only { background:#f3f4f6; color:#6b7280; }
+    .ev-kpi-actions .a-pill.create_authorized_ticket { background:#bfdbfe; color:#1e3a8a; }
+    .ev-kpi-actions .a-pill.passthrough_only { background:#fef3c7; color:#78350f; }
+    .ev-kpi-actions .a-pill.ai_classify, .ev-kpi-actions .a-pill.ai_classify_failsafe { background:#fce7f3; color:#9d174d; }
     .action-pill { display:inline-flex; align-items:center; gap:0.25rem; padding:0.15rem 0.5rem; border-radius:11px; font-size:0.74rem; font-weight:500; white-space:nowrap; }
     .action-pill.create_ticket { background:#dbeafe; color:#1d4ed8; }
     .action-pill.auto_reply    { background:#d1fae5; color:#047857; }
@@ -131,6 +189,123 @@
         </div>
     </form>
 </section>
+
+{% if stats and stats.total_sample %}
+{# Helper: costruisce URL preservando i filtri attivi e aggiungendo/sostituendo un parametro. #}
+{%- macro filt_url(extra_key, extra_value) -%}
+?hours={{ filters.hours }}
+{%- if filters.q %}&q={{ filters.q|urlencode }}{% endif -%}
+{%- if filters.action and extra_key != 'action' %}&action={{ filters.action }}{% endif -%}
+{%- if filters.no_client %}&no_client=on{% endif -%}
+{%- if filters.no_rule %}&no_rule=on{% endif -%}
+{%- if filters.only_ticket %}&only_ticket=on{% endif -%}
+{%- if filters.only_shadow %}&only_shadow=on{% endif -%}
+{%- if extra_value %}&{{ extra_key }}={{ extra_value|urlencode }}{% endif -%}
+{%- endmacro -%}
+
+<section class="dr-section">
+    <h3 style="margin: 0.8rem 0 0.3rem; font-size: 0.9rem; color: var(--dr-primary);
+                display: flex; align-items: center; gap: 0.4rem;">
+        <i class="fas fa-chart-bar"></i> Statistiche sui {{ stats.total_sample }} eventi
+        {% if stats.sample_capped %}<span style="font-size: 0.72rem; color: var(--dr-gray); font-weight: 400;">(cap 2000 — filtra periodo per ridurre)</span>{% endif %}
+    </h3>
+    <div class="ev-kpi-grid">
+        {# === Top domini di origine === #}
+        <div class="ev-kpi-card">
+            <h4><i class="fas fa-paper-plane"></i> Top mittenti (dominio)
+                <span class="total">{{ stats.top_from_domains|length }}</span></h4>
+            <ul class="ev-kpi-list">
+                {% for dom, n in stats.top_from_domains %}
+                <li>
+                    <span class="name" title="{{ dom }}">
+                        <a href="{{ filt_url('q', dom) }}">{{ dom }}</a>
+                    </span>
+                    <span class="count">{{ n }}</span>
+                </li>
+                {% else %}<li class="empty">— nessun mittente —</li>{% endfor %}
+            </ul>
+        </div>
+
+        {# === Top destinatari individuali === #}
+        <div class="ev-kpi-card">
+            <h4><i class="fas fa-inbox"></i> Top destinatari
+                <span class="total">{{ stats.top_to_recipients|length }}</span></h4>
+            <ul class="ev-kpi-list">
+                {% for addr, n in stats.top_to_recipients %}
+                <li>
+                    <span class="name" title="{{ addr }}">
+                        <a href="{{ filt_url('q', addr) }}">{{ addr }}</a>
+                    </span>
+                    <span class="count">{{ n }}</span>
+                </li>
+                {% else %}<li class="empty">— nessun destinatario —</li>{% endfor %}
+            </ul>
+        </div>
+
+        {# === Top domini destinatari === #}
+        <div class="ev-kpi-card">
+            <h4><i class="fas fa-globe"></i> Top domini destinatari
+                <span class="total">{{ stats.top_to_domains|length }}</span></h4>
+            <ul class="ev-kpi-list">
+                {% for dom, n in stats.top_to_domains %}
+                <li>
+                    <span class="name" title="{{ dom }}">
+                        <a href="{{ filt_url('q', dom) }}">{{ dom }}</a>
+                    </span>
+                    <span class="count">{{ n }}</span>
+                </li>
+                {% else %}<li class="empty">— nessun dominio —</li>{% endfor %}
+            </ul>
+        </div>
+
+        {# === Top clienti (codcli) === #}
+        <div class="ev-kpi-card">
+            <h4><i class="fas fa-user-tie"></i> Top clienti (codcli)
+                <span class="total">{{ stats.top_codcli|length }}</span></h4>
+            <ul class="ev-kpi-list">
+                {% for cc, n in stats.top_codcli %}
+                <li>
+                    <span class="name" title="codcli={{ cc }}">
+                        <a href="{{ filt_url('q', cc) }}">{{ cc }}</a>
+                    </span>
+                    <span class="count">{{ n }}</span>
+                </li>
+                {% else %}<li class="empty">— nessun cliente mappato —</li>{% endfor %}
+            </ul>
+        </div>
+
+        {# === Top regole matchate === #}
+        <div class="ev-kpi-card">
+            <h4><i class="fas fa-filter"></i> Top regole
+                <span class="total">{{ stats.top_rules|length }}</span></h4>
+            <ul class="ev-kpi-list">
+                {% for rid, rname, n in stats.top_rules %}
+                <li>
+                    <span class="name" title="{{ rname }}">
+                        <a href="{{ url_for('rules.form_view', rule_id=rid) }}"
+                           title="Apri regola {{ rid }}">#{{ rid }}</a>
+                        {{ rname }}
+                    </span>
+                    <span class="count">{{ n }}</span>
+                </li>
+                {% else %}<li class="empty">— nessuna regola matchata —</li>{% endfor %}
+            </ul>
+        </div>
+
+        {# === Distribuzione azioni === #}
+        <div class="ev-kpi-card">
+            <h4><i class="fas fa-bolt"></i> Distribuzione azioni
+                <span class="total">{{ stats.by_action|length }}</span></h4>
+            <div class="ev-kpi-actions">
+                {% for act, n in stats.by_action %}
+                <a href="{{ filt_url('action', act) }}" class="a-pill {{ act }}"
+                   title="Filtra: action_taken = {{ act }}">{{ act }} · <strong>{{ n }}</strong></a>
+                {% else %}<span style="font-style:italic; color:var(--dr-gray); font-size:0.78rem;">— nessuna azione —</span>{% endfor %}
+            </div>
+        </div>
+    </div>
+</section>
+{% endif %}
 
 <section class="dr-section">
     {% if events %}
