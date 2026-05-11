@@ -111,6 +111,70 @@
         letter-spacing: 0.04em; margin-top: 0.3rem; }
     .dr-footer-grid dt:first-child { margin-top: 0; }
     .dr-footer-grid dd { margin: 0 0 0.1rem; color: var(--dr-primary); font-weight: 500; }
+
+    /* === Prima riga: azioni rapide (kill switch + documentazione) === */
+    .dr-actions-row {
+        display: grid;
+        grid-template-columns: minmax(280px, 1fr) 1.6fr;
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+    @media (max-width: 800px) {
+        .dr-actions-row { grid-template-columns: 1fr; }
+    }
+    .dr-action-card {
+        background: #fff;
+        border: 1px solid var(--dr-gray);
+        border-radius: 10px;
+        padding: 1rem 1.2rem;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        display: flex;
+        flex-direction: column;
+        gap: 0.7rem;
+    }
+    .dr-action-card .head {
+        display: flex; align-items: center; gap: 0.55rem;
+        font-size: 0.95rem; font-weight: 600; color: var(--dr-primary);
+    }
+    .dr-action-card .head i { font-size: 1.1rem; }
+    .dr-action-card .head .pill {
+        margin-left: auto; padding: 0.15rem 0.55rem; border-radius: 999px;
+        font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+    }
+    .dr-action-card .head .pill.on  { background: #fee2e2; color: #b91c1c; }
+    .dr-action-card .head .pill.off { background: #dcfce7; color: #166534; }
+    .dr-action-card .desc {
+        font-size: 0.8rem; color: var(--dr-gray-dark); line-height: 1.4;
+    }
+    .dr-kill { border-left: 5px solid #16a34a; }
+    .dr-kill.on { border-left-color: #dc2626; background: #fef2f2; }
+    .dr-kill .actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: auto; }
+    .dr-kill .actions form { flex: 1; }
+    .dr-kill .actions button { width: 100%; }
+    .dr-docs { border-left: 5px solid #0ea5e9; }
+    .dr-docs .links {
+        display: grid; gap: 0.5rem;
+        grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+        margin-top: auto;
+    }
+    .dr-docs .links a {
+        background: #f1f5f9; border: 1px solid #e2e8f0;
+        padding: 0.55rem 0.7rem; border-radius: 6px;
+        font-size: 0.82rem; color: var(--dr-primary);
+        text-decoration: none; font-weight: 500;
+        display: flex; align-items: center; gap: 0.45rem;
+        transition: all 0.15s ease;
+    }
+    .dr-docs .links a:hover {
+        background: #e0f2fe; border-color: #7dd3fc; color: #075985;
+        transform: translateY(-1px);
+    }
+    .dr-docs .links a.primary {
+        background: #2563eb; border-color: #1d4ed8; color: #fff;
+    }
+    .dr-docs .links a.primary:hover {
+        background: #1d4ed8; color: #fff;
+    }
 </style>
 {% endblock %}
 
@@ -129,6 +193,68 @@
     </span>
 </div>
 
+<!-- ===== PRIMA RIGA: AZIONI RAPIDE (kill switch + documentazione) ===== -->
+<div class="dr-actions-row">
+    {% if session.get('role') in ('admin','superadmin') %}
+    <div class="dr-action-card dr-kill {% if RELAY_PASSTHROUGH_ONLY %}on{% endif %}">
+        <div class="head">
+            <i class="fas fa-power-off" style="color:{% if RELAY_PASSTHROUGH_ONLY %}#dc2626{% else %}#16a34a{% endif %};"></i>
+            Kill switch — passthrough only
+            <span class="pill {% if RELAY_PASSTHROUGH_ONLY %}on{% else %}off{% endif %}">
+                {% if RELAY_PASSTHROUGH_ONLY %}ON{% else %}OFF{% endif %}
+            </span>
+        </div>
+        <div class="desc">
+            {% if RELAY_PASSTHROUGH_ONLY %}
+                <strong style="color:#b91c1c;">Emergenza ATTIVA</strong>: il relay sta facendo
+                <em>solo default delivery via smarthost</em>. Rule engine, IA e aggregations sono bypassati.
+                Disattiva per tornare al funzionamento normale.
+            {% else %}
+                In emergenza, attiva per bypassare rule engine + IA e fare <em>solo default delivery</em>.
+                Sincronizzazione listener entro 5 min (o restart scheduler immediato).
+            {% endif %}
+        </div>
+        <div class="actions">
+            <form method="post" action="{{ url_for('settings.toggle_passthrough') }}"
+                  onsubmit="return confirm({% if RELAY_PASSTHROUGH_ONLY %}'Disattivare il kill switch? Regole e IA torneranno operative.'{% else %}'Attivare il kill switch? Tutte le regole e l\'IA verranno bypassate.'{% endif %});">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="dr-btn {% if RELAY_PASSTHROUGH_ONLY %}dr-btn-primary{% else %}dr-btn-danger{% endif %}">
+                    <i class="fas fa-{% if RELAY_PASSTHROUGH_ONLY %}rotate-left{% else %}triangle-exclamation{% endif %}"></i>
+                    {% if RELAY_PASSTHROUGH_ONLY %}Disattiva passthrough{% else %}Attiva emergenza{% endif %}
+                </button>
+            </form>
+        </div>
+    </div>
+    {% else %}
+    <div class="dr-action-card">
+        <div class="head"><i class="fas fa-power-off"></i> Kill switch</div>
+        <div class="desc">Disponibile solo agli amministratori.</div>
+    </div>
+    {% endif %}
+
+    <div class="dr-action-card dr-docs">
+        <div class="head">
+            <i class="fas fa-book-open" style="color:#0ea5e9;"></i>
+            Documentazione & guide
+        </div>
+        <div class="desc">
+            Manuali per operatori e amministratori — istruzioni passo-passo con screenshot dell'applicativo.
+        </div>
+        <div class="links">
+            <a href="{{ url_for('manual.user_manual') }}" class="primary">
+                <i class="fas fa-user-graduate"></i> Manuale utente
+            </a>
+            <a href="{{ url_for('manual.view') }}">
+                <i class="fas fa-cogs"></i> Manuale tecnico
+            </a>
+            <a href="{{ url_for('manual.changelog') }}">
+                <i class="fas fa-clock-rotate-left"></i> Changelog
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- ===== KPI di business ===== -->
 <div class="dr-section-h">
     <i class="fas fa-chart-simple"></i> Stato operativo
     <span class="meta">
@@ -175,56 +301,6 @@
             <div class="value">{{ kpi.h24_perm_active }}</div>
             <div class="sub">{{ kpi.h24_perm_uses }} utilizzi · {{ kpi.h24_targets_active }} mailbox H24</div>
         </a>
-    </div>
-
-    {# Kill switch — KPI compatto con stato live + toggle inline #}
-    {% if session.get('role') in ('admin','superadmin') %}
-    <div class="dr-kpi {% if RELAY_PASSTHROUGH_ONLY %}danger{% endif %}"
-         style="{% if RELAY_PASSTHROUGH_ONLY %}background:#fef2f2;{% endif %}">
-        <div class="label"><i class="fas fa-power-off"></i> Kill switch</div>
-        <div class="value" style="font-size:1.2rem;">
-            {% if RELAY_PASSTHROUGH_ONLY %}
-                <span style="color:#b91c1c;">ON</span>
-                <span style="font-size:0.7rem; color:#7f1d1d;"> · passthrough</span>
-            {% else %}
-                <span style="color:#16a34a;">OFF</span>
-                <span style="font-size:0.7rem; color:var(--dr-gray-dark);"> · normale</span>
-            {% endif %}
-        </div>
-        <form method="post" action="{{ url_for('settings.toggle_passthrough') }}"
-              style="margin-top:0.4rem;"
-              onsubmit="return confirm({% if RELAY_PASSTHROUGH_ONLY %}'Disattivare il kill switch? Le regole e l\'IA torneranno operative.'{% else %}'Attivare il kill switch? Tutte le regole e l\'IA verranno bypassate. Da usare in emergenza.'{% endif %});">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="dr-btn dr-btn-sm {% if RELAY_PASSTHROUGH_ONLY %}{% else %}dr-btn-danger{% endif %}"
-                    style="width:100%; padding:0.3rem 0.5rem; font-size:0.78rem;"
-                    title="{% if RELAY_PASSTHROUGH_ONLY %}Disattiva passthrough{% else %}Attiva kill switch d'emergenza (passthrough only){% endif %}">
-                <i class="fas fa-{% if RELAY_PASSTHROUGH_ONLY %}check{% else %}triangle-exclamation{% endif %}"></i>
-                {% if RELAY_PASSTHROUGH_ONLY %}Disattiva{% else %}Attiva emergenza{% endif %}
-            </button>
-        </form>
-    </div>
-    {% endif %}
-
-    {# Documentazione — KPI compatto con 3 link inline #}
-    <div class="dr-kpi" style="border-left-color:#0ea5e9;">
-        <div class="label"><i class="fas fa-book-open"></i> Documentazione</div>
-        <div style="display:flex; flex-direction:column; gap:0.3rem; margin-top:0.4rem;">
-            <a href="{{ url_for('manual.user_manual') }}"
-               class="dr-btn dr-btn-sm dr-btn-primary"
-               style="padding:0.25rem 0.5rem; font-size:0.76rem; text-align:left;">
-                <i class="fas fa-user-graduate"></i> Manuale utente
-            </a>
-            <a href="{{ url_for('manual.view') }}"
-               class="dr-btn dr-btn-sm"
-               style="padding:0.2rem 0.5rem; font-size:0.74rem; text-align:left;">
-                <i class="fas fa-cogs"></i> Manuale tecnico
-            </a>
-            <a href="{{ url_for('manual.changelog') }}"
-               class="dr-btn dr-btn-sm"
-               style="padding:0.2rem 0.5rem; font-size:0.74rem; text-align:left;">
-                <i class="fas fa-clock-rotate-left"></i> Changelog
-            </a>
-        </div>
     </div>
 </div>
 
