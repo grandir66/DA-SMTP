@@ -11,13 +11,21 @@ Endpoint:
 """
 from __future__ import annotations
 
-from flask import (Blueprint, current_app, flash, redirect, render_template,
-                   request, session, url_for)
+from flask import (Blueprint, current_app, flash, make_response, redirect,
+                   render_template, request, session, url_for)
 
 from ..auth import login_required
 from .. import firewall_manager as fwm
 
 firewall_bp = Blueprint("firewall", __name__, url_prefix="/firewall")
+
+
+def _no_cache(resp):
+    """Disabilita caching browser/proxy per pagine firewall (dati live)."""
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, private"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
+    return resp
 
 
 def _actor() -> str:
@@ -38,13 +46,14 @@ def index():
             info["active"] = active
         except fwm.UfwError as exc:
             error = str(exc)
-    return render_template(
+    resp = make_response(render_template(
         "admin/firewall.html",
         available=available,
         rules=rules,
         info=info,
         error=error,
-    )
+    ))
+    return _no_cache(resp)
 
 
 @firewall_bp.route("/add", methods=["POST"])
