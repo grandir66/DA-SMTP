@@ -18,7 +18,12 @@ StartLimitIntervalSec=60
 StartLimitBurst=5
 
 # Hardening
-NoNewPrivileges=true
+# NoNewPrivileges DISABILITATO: l'admin web usa `sudo ufw` (setuid) per
+# gestire il firewall da UI. NoNewPrivileges=true impedirebbe sudo.
+# Mitigation: sudoers `/etc/sudoers.d/domarc-relay-ufw` autorizza SOLO
+# i comandi ufw whitelistati (nessun shell escape), e la UI espone le
+# mutation solo a ruolo superadmin.
+NoNewPrivileges=false
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
