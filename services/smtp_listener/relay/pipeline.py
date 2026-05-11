@@ -46,19 +46,43 @@ class PipelineResult:
     extra: dict[str, Any]
 
 
-def _resolve_customer(parsed: ParsedMessage, storage: Storage) -> tuple[CustomerContext, sqlite3.Row | None]:
+def _resolve_customer(parsed: ParsedMessage, storage: Storage,
+                       primary_to_override: str | None = None
+                       ) -> tuple[CustomerContext, sqlite3.Row | None]:
+    """Resolve cliente + route per la mail.
+
+    `primary_to_override` (es. envelope.rcpt_tos[0] = primo destinatario SMTP
+    su dominio gestito) ha priorita' sul MIME parsed.primary_to. Cosi' per
+    mail con CC verso domarc.it + MIME To: esterno, il lookup cliente parte
+    dal destinatario INTERNO (es. qualcuno@domarc.it) e non dall'esterno
+    (che non e' un cliente Domarc).
+    """
+    eff_local: str | None = parsed.primary_to_local
+    eff_domain: str | None = parsed.primary_to_domain
+    if primary_to_override and "@" in primary_to_override:
+        ov_local, _, ov_domain = primary_to_override.rpartition("@")
+        if ov_local and ov_domain:
+            eff_local = ov_local.lower()
+            eff_domain = ov_domain.lower()
+
     route_row: sqlite3.Row | None = None
-    if parsed.primary_to_local and parsed.primary_to_domain:
-        route_row = storage.find_route(parsed.primary_to_local, parsed.primary_to_domain)
+    if eff_local and eff_domain:
+        route_row = storage.find_route(eff_local, eff_domain)
 
     cust_row: sqlite3.Row | None = None
     codcli: str | None = None
     if route_row is not None and route_row["codcli"]:
         codcli = str(route_row["codcli"])
-        cust_row = storage.find_customer_by_alias(f"{parsed.primary_to_local}@{parsed.primary_to_domain}")
+        cust_row = storage.find_customer_by_alias(f"{eff_local}@{eff_domain}")
         if cust_row is None and codcli:
             with storage._connect() as conn:  # type: ignore[attr-defined]
                 cust_row = conn.execute("SELECT * FROM customers_cache WHERE codcli = ?", (codcli,)).fetchone()
+    # Lookup per dominio destinatario interno (eff_domain) se non risolto via route
+    if cust_row is None and eff_domain:
+        cust_row = storage.find_customer_by_domain(eff_domain)
+        if cust_row is not None:
+            codcli = str(cust_row["codcli"])
+    # Fallback su dominio mittente (mail in entrata da cliente noto)
     if cust_row is None and parsed.from_domain:
         cust_row = storage.find_customer_by_domain(parsed.from_domain)
         if cust_row is not None:
@@ -309,7 +333,18 @@ def process(
     envelope_rcpt_to: list[str] | None = None,
 ) -> PipelineResult:
     import uuid as _uuid
-    ctx, route_row = _resolve_customer(parsed, storage)
+    # Pre-estrai primo destinatario interno dall'envelope (se disponibile),
+    # cosi' _resolve_customer parte dal destinatario REALE (interno) invece
+    # del MIME To: che puo' essere esterno (CC pattern).
+    _envelope_first_internal: str | None = None
+    if envelope_rcpt_to:
+        for a in envelope_rcpt_to:
+            la = (a or "").strip().lower()
+            if la and "@" in la:
+                _envelope_first_internal = la
+                break
+    ctx, route_row = _resolve_customer(parsed, storage,
+                                        primary_to_override=_envelope_first_internal)
     # envelope_rcpt_to = i destinatari SMTP che il listener ha accettato in
     # handle_RCPT (gia' filtrati per accepted_domains). Da usare per la delivery
     # invece di parsed.to_addresses (che viene dal MIME To: header e puo' essere
@@ -330,14 +365,15 @@ def process(
         if norm:
             extra["envelope_rcpt_to"] = norm
 
-    # `to_address_internal` = primo destinatario SMTP su dominio gestito.
-    # Se la mail aveva envelope.rcpt_tos (gia' filtrati da handle_RCPT), uso quelli.
-    # Cosi' nell'UI vediamo il destinatario interno (es. qualcuno@domarc.it) invece
-    # del MIME `To:` (es. silvia.ascari@aziendacasamo.it esterno).
-    to_address_internal = (
-        extra.get("envelope_rcpt_to", [None])[0]
-        if extra.get("envelope_rcpt_to") else parsed.primary_to
-    )
+    # `to_address_internal` = TUTTI i destinatari SMTP su dominio gestito,
+    # joined con ", ". Se la mail aveva envelope.rcpt_tos (gia' filtrati da
+    # handle_RCPT contro accepted_domains), li uso TUTTI per non perdere
+    # destinatari interni multipli. Fallback su MIME primary_to.
+    _env_list = extra.get("envelope_rcpt_to") or []
+    if _env_list:
+        to_address_internal = ", ".join(_env_list)
+    else:
+        to_address_internal = parsed.primary_to
     chain_dump: list[dict[str, Any]] = []
     rule_id: int | None = None
     # Pre-genera l'UUID dell'evento PRIMA di invocare le action, così
