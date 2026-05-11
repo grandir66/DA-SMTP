@@ -105,6 +105,56 @@
             <div class="sub">{{ kpi.h24_perm_uses }} utilizzi · {{ kpi.h24_targets_active }} mailbox H24</div>
         </a>
     </div>
+
+    {# Kill switch — KPI compatto con stato live + toggle inline #}
+    {% if session.get('role') in ('admin','superadmin') %}
+    <div class="dr-kpi {% if RELAY_PASSTHROUGH_ONLY %}danger{% endif %}"
+         style="{% if RELAY_PASSTHROUGH_ONLY %}background:#fef2f2;{% endif %}">
+        <div class="label"><i class="fas fa-power-off"></i> Kill switch</div>
+        <div class="value" style="font-size:1.2rem;">
+            {% if RELAY_PASSTHROUGH_ONLY %}
+                <span style="color:#b91c1c;">ON</span>
+                <span style="font-size:0.7rem; color:#7f1d1d;"> · passthrough</span>
+            {% else %}
+                <span style="color:#16a34a;">OFF</span>
+                <span style="font-size:0.7rem; color:var(--dr-gray-dark);"> · normale</span>
+            {% endif %}
+        </div>
+        <form method="post" action="{{ url_for('settings.toggle_passthrough') }}"
+              style="margin-top:0.4rem;"
+              onsubmit="return confirm({% if RELAY_PASSTHROUGH_ONLY %}'Disattivare il kill switch? Le regole e l\'IA torneranno operative.'{% else %}'Attivare il kill switch? Tutte le regole e l\'IA verranno bypassate. Da usare in emergenza.'{% endif %});">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="dr-btn dr-btn-sm {% if RELAY_PASSTHROUGH_ONLY %}{% else %}dr-btn-danger{% endif %}"
+                    style="width:100%; padding:0.3rem 0.5rem; font-size:0.78rem;"
+                    title="{% if RELAY_PASSTHROUGH_ONLY %}Disattiva passthrough{% else %}Attiva kill switch d'emergenza (passthrough only){% endif %}">
+                <i class="fas fa-{% if RELAY_PASSTHROUGH_ONLY %}check{% else %}triangle-exclamation{% endif %}"></i>
+                {% if RELAY_PASSTHROUGH_ONLY %}Disattiva{% else %}Attiva emergenza{% endif %}
+            </button>
+        </form>
+    </div>
+    {% endif %}
+
+    {# Documentazione — KPI compatto con 3 link inline #}
+    <div class="dr-kpi" style="border-left-color:#0ea5e9;">
+        <div class="label"><i class="fas fa-book-open"></i> Documentazione</div>
+        <div style="display:flex; flex-direction:column; gap:0.3rem; margin-top:0.4rem;">
+            <a href="{{ url_for('manual.user_manual') }}"
+               class="dr-btn dr-btn-sm dr-btn-primary"
+               style="padding:0.25rem 0.5rem; font-size:0.76rem; text-align:left;">
+                <i class="fas fa-user-graduate"></i> Manuale utente
+            </a>
+            <a href="{{ url_for('manual.view') }}"
+               class="dr-btn dr-btn-sm"
+               style="padding:0.2rem 0.5rem; font-size:0.74rem; text-align:left;">
+                <i class="fas fa-cogs"></i> Manuale tecnico
+            </a>
+            <a href="{{ url_for('manual.changelog') }}"
+               class="dr-btn dr-btn-sm"
+               style="padding:0.2rem 0.5rem; font-size:0.74rem; text-align:left;">
+                <i class="fas fa-clock-rotate-left"></i> Changelog
+            </a>
+        </div>
+    </div>
 </div>
 
 <!-- ===== METRICHE LIVE (sotto-insieme di /metrics/) ===== -->
@@ -217,59 +267,6 @@
             Nessuna mail nelle ultime 24h.
         </p>
     {% endif %}
-</section>
-
-{% if not RELAY_PASSTHROUGH_ONLY and session.get('role') in ('admin','superadmin') %}
-<section class="dr-section" style="margin-bottom:0.6rem;">
-    <details style="background:#fff7ed; border:1px solid #fdba74; border-radius:6px; padding:0.55rem 0.85rem;">
-        <summary style="cursor:pointer; color:#9a3412; font-weight:600; font-size:0.9rem;">
-            <i class="fas fa-shield-halved"></i> Kill switch d'emergenza (relay passthrough only)
-        </summary>
-        <div style="margin-top:0.6rem; font-size:0.85rem; color:#7c2d12;">
-            <p style="margin:0 0 0.5rem 0;">
-                Premendo "Attiva kill switch" il relay smetterà di applicare regole + IA e farà
-                <strong>solo default delivery via smarthost</strong> per tutte le mail. Da usare come
-                rollback rapido se al cutover di un dominio qualcosa va storto: tornerai
-                al comportamento di un classico smarthost MTA in 1 click.
-                Si propaga al listener entro 5 min (o subito con restart scheduler).
-            </p>
-            <form method="post" action="{{ url_for('settings.toggle_passthrough') }}"
-                  onsubmit="return confirm('Attivare il kill switch? Tutte le regole e l\\'IA verranno bypassate fino a riattivazione manuale.');">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button class="dr-btn dr-btn-danger">
-                    <i class="fas fa-power-off"></i> Attiva kill switch (passthrough only)
-                </button>
-            </form>
-        </div>
-    </details>
-</section>
-{% endif %}
-
-<section class="dr-section" style="margin-bottom:1.2rem;">
-    <div style="display:flex; gap:0.75rem; flex-wrap:wrap; align-items:center;
-                padding:0.85rem 1rem; background:#eff6ff; border:1px solid #bfdbfe;
-                border-radius:8px;">
-        <div style="font-size:1.4rem; color:#2563eb;"><i class="fas fa-book-open"></i></div>
-        <div style="flex:1; min-width:240px;">
-            <strong style="color:#1e3a8a;">Documentazione</strong>
-            <div style="font-size:0.82rem; color:#475569; margin-top:0.15rem;">
-                Manuali per operatori e amministratori — istruzioni passo-passo
-                con screenshot dell'applicativo.
-            </div>
-        </div>
-        <a href="{{ url_for('manual.user_manual') }}" class="dr-btn dr-btn-primary"
-           style="white-space:nowrap;">
-            <i class="fas fa-user-graduate"></i> Manuale utente
-        </a>
-        <a href="{{ url_for('manual.view') }}" class="dr-btn"
-           style="white-space:nowrap;">
-            <i class="fas fa-cogs"></i> Manuale tecnico
-        </a>
-        <a href="{{ url_for('manual.changelog') }}" class="dr-btn"
-           style="white-space:nowrap;">
-            <i class="fas fa-clock-rotate-left"></i> Changelog
-        </a>
-    </div>
 </section>
 
 <div class="charts-grid">
