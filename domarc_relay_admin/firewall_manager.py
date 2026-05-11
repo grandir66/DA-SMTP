@@ -175,20 +175,38 @@ def _parse_status_numbered(output: str) -> tuple[bool, list[UfwRule]]:
 
 
 def is_available() -> bool:
-    """ufw installato e sudoers configurato?"""
-    if not shutil.which(UFW_BIN.split("/")[-1]) and not (shutil.which(UFW_BIN) or False):
-        return False
+    available, _ = check_availability()
+    return available
+
+
+def check_availability() -> tuple[bool, str]:
+    """Ritorna (available, diagnostic_message).
+    Il messaggio diagnostico viene mostrato in UI se available=False."""
+    import os
+    # 1) ufw binary presente?
+    if not os.path.exists(UFW_BIN):
+        return (False, f"binario UFW non trovato in {UFW_BIN}. Esegui: apt install ufw")
+    if not os.path.exists(SUDO_BIN):
+        return (False, f"binario sudo non trovato in {SUDO_BIN}.")
+    # 2) prova chiamata reale
     try:
         cp = _run(["status"], check=False)
-    except (UfwError, FileNotFoundError):
-        return False
+    except UfwError as exc:
+        return (False, f"errore esecuzione ufw: {exc}")
+    except FileNotFoundError as exc:
+        return (False, f"file non trovato: {exc}")
     if cp.returncode == 0:
-        return True
-    # Exit 1 con "needs root" → sudoers manca
-    stderr = (cp.stderr or "").lower()
-    if "root" in stderr or "permission" in stderr or "sudo" in stderr:
-        return False
-    return False
+        return (True, "")
+    stderr = (cp.stderr or cp.stdout or "").strip()
+    # Diagnose errore tipico
+    low = stderr.lower()
+    if "may not run sudo" in low or "is not allowed" in low or "a password is required" in low:
+        return (False, f"sudoers non autorizza domarc-relay per ufw. "
+                f"Verifica /etc/sudoers.d/domarc-relay-ufw. Errore: {stderr[:200]}")
+    if "you need to be root" in low or "permission denied" in low:
+        return (False, f"sudo non funziona (probabilmente NoNewPrivileges in systemd unit). "
+                f"Errore: {stderr[:200]}")
+    return (False, f"ufw exit={cp.returncode}: {stderr[:300]}")
 
 
 def status_numbered() -> tuple[bool, list[UfwRule]]:

@@ -35,7 +35,7 @@ def _actor() -> str:
 @firewall_bp.route("/")
 @login_required(role="superadmin")
 def index():
-    available = fwm.is_available()
+    available, diagnostic = fwm.check_availability()
     rules: list = []
     info: dict = {}
     error: str | None = None
@@ -46,9 +46,12 @@ def index():
             info["active"] = active
         except fwm.UfwError as exc:
             error = str(exc)
+    elif diagnostic:
+        current_app.logger.warning("UFW unavailable: %s", diagnostic)
     resp = make_response(render_template(
         "admin/firewall.html",
         available=available,
+        diagnostic=diagnostic,
         rules=rules,
         info=info,
         error=error,
