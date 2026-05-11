@@ -329,6 +329,15 @@ def process(
                 norm.append(la)
         if norm:
             extra["envelope_rcpt_to"] = norm
+
+    # `to_address_internal` = primo destinatario SMTP su dominio gestito.
+    # Se la mail aveva envelope.rcpt_tos (gia' filtrati da handle_RCPT), uso quelli.
+    # Cosi' nell'UI vediamo il destinatario interno (es. qualcuno@domarc.it) invece
+    # del MIME `To:` (es. silvia.ascari@aziendacasamo.it esterno).
+    to_address_internal = (
+        extra.get("envelope_rcpt_to", [None])[0]
+        if extra.get("envelope_rcpt_to") else parsed.primary_to
+    )
     chain_dump: list[dict[str, Any]] = []
     rule_id: int | None = None
     # Pre-genera l'UUID dell'evento PRIMA di invocare le action, così
@@ -356,7 +365,7 @@ def process(
         )
         event_uuid = storage.insert_event(
             from_address=parsed.from_address,
-            to_address=parsed.primary_to,
+            to_address=to_address_internal,
             subject=parsed.subject,
             message_id=parsed.message_id,
             codcli=None,
@@ -397,7 +406,7 @@ def process(
         )
         event_uuid = storage.insert_event(
             from_address=parsed.from_address,
-            to_address=parsed.primary_to,
+            to_address=to_address_internal,
             subject=parsed.subject,
             message_id=parsed.message_id,
             codcli=None,
@@ -612,7 +621,7 @@ def process(
     inherited_ticket_id = extra.get("thread_parent_ticket_id")
     event_uuid = storage.insert_event(
         from_address=parsed.from_address,
-        to_address=parsed.primary_to,
+        to_address=to_address_internal,
         subject=parsed.subject,
         message_id=parsed.message_id,
         codcli=ctx.codcli,
