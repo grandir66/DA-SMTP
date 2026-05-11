@@ -306,11 +306,29 @@ def process(
     backend: Any | None = None,
     pre_action: str | None = None,
     pre_action_reason: str | None = None,
+    envelope_rcpt_to: list[str] | None = None,
 ) -> PipelineResult:
     import uuid as _uuid
     ctx, route_row = _resolve_customer(parsed, storage)
+    # envelope_rcpt_to = i destinatari SMTP che il listener ha accettato in
+    # handle_RCPT (gia' filtrati per accepted_domains). Da usare per la delivery
+    # invece di parsed.to_addresses (che viene dal MIME To: header e puo' essere
+    # su domini NON gestiti, es. CC esterni). Per ora lo passiamo dentro `extra`
+    # cosi' tutte le sub-functions possono accedervi.
 
     extra: dict[str, Any] = {}
+    if envelope_rcpt_to:
+        # Tieni gli rcpt envelope deduplicati + lowercase in payload_metadata.
+        # Serve sia per UI (mostrare i veri destinatari) sia per la delivery.
+        norm = []
+        seen = set()
+        for a in envelope_rcpt_to:
+            la = (a or "").strip().lower()
+            if la and "@" in la and la not in seen:
+                seen.add(la)
+                norm.append(la)
+        if norm:
+            extra["envelope_rcpt_to"] = norm
     chain_dump: list[dict[str, Any]] = []
     rule_id: int | None = None
     # Pre-genera l'UUID dell'evento PRIMA di invocare le action, così
@@ -334,6 +352,7 @@ def process(
     if is_bypass:
         action_taken, detail, queue_extra = _do_default_delivery(
             parsed, storage, "privacy_bypass", event_uuid=pre_event_uuid,
+            envelope_rcpt_to=extra.get("envelope_rcpt_to"),
         )
         event_uuid = storage.insert_event(
             from_address=parsed.from_address,
@@ -374,6 +393,7 @@ def process(
     if storage.is_passthrough_only():
         action_taken, detail, queue_extra = _do_default_delivery(
             parsed, storage, "passthrough_only", event_uuid=pre_event_uuid,
+            envelope_rcpt_to=extra.get("envelope_rcpt_to"),
         )
         event_uuid = storage.insert_event(
             from_address=parsed.from_address,
@@ -421,7 +441,7 @@ def process(
     elif _should_skip_rules(parsed, storage, route_row):
         # Bypass rule engine: alias o dominio ha apply_rules=FALSE
         # → skip valutazione regole e va direttamente a default delivery (o received_only)
-        action_taken, detail, queue_extra = _do_default_delivery(parsed, storage, "rules_disabled", event_uuid=pre_event_uuid)
+        action_taken, detail, queue_extra = _do_default_delivery(parsed, storage, "rules_disabled", event_uuid=pre_event_uuid, envelope_rcpt_to=extra.get("envelope_rcpt_to"))
         extra.update(queue_extra)
     else:
         rules_rows = storage.fetch_active_rules()
@@ -459,7 +479,7 @@ def process(
         shadow_check = _check_shadow_cascata(parsed, storage, outcome.rule)
 
         if outcome.rule is None:
-            action_taken, detail, queue_extra = _do_default_delivery(parsed, storage, "no_rule_match", event_uuid=pre_event_uuid)
+            action_taken, detail, queue_extra = _do_default_delivery(parsed, storage, "no_rule_match", event_uuid=pre_event_uuid, envelope_rcpt_to=extra.get("envelope_rcpt_to"))
             extra.update(queue_extra)
             if shadow_check:
                 origin, info = shadow_check
@@ -498,6 +518,7 @@ def process(
             }
             action_taken, detail, queue_extra = _do_default_delivery(
                 parsed, storage, "shadow_mode", event_uuid=pre_event_uuid,
+                envelope_rcpt_to=extra.get("envelope_rcpt_to"),
             )
             extra.update(queue_extra)
         else:
@@ -515,6 +536,7 @@ def process(
                 route_row=route_row,
                 ctx=ctx,
                 rule=outcome.rule,
+                envelope_rcpt_to=extra.get("envelope_rcpt_to"),
             )
             action_taken = res.action
             detail = res.detail
@@ -562,6 +584,7 @@ def process(
                         route_row=route_row,
                         ctx=ctx,
                         rule=outcome2.rule,
+                        envelope_rcpt_to=extra.get("envelope_rcpt_to"),
                     )
                     action_taken = res2.action
                     detail = res2.detail
@@ -572,6 +595,7 @@ def process(
                     action_taken, detail, queue_extra = _do_default_delivery(
                         parsed, storage, "no_rule_match_after_h24_fp",
                         event_uuid=pre_event_uuid,
+                        envelope_rcpt_to=extra.get("envelope_rcpt_to"),
                     )
                     extra.update(queue_extra)
 
@@ -657,6 +681,7 @@ def _dispatch_action(
     route_row: sqlite3.Row | None,
     ctx: CustomerContext,
     rule: dict[str, Any] | None = None,
+    envelope_rcpt_to: list[str] | None = None,
 ) -> "actions.ActionResult":
     if action_name == "ignore":
         result = actions.do_ignore(event_uuid=event_uuid, parsed=parsed)
@@ -667,6 +692,7 @@ def _dispatch_action(
         # (apply_rules implicito). Utile come catch-all "passa tutto".
         ko_taken, ko_detail, ko_extra = _do_default_delivery(
             parsed, storage, f"rule_action_{action_name}", event_uuid=event_uuid,
+            envelope_rcpt_to=envelope_rcpt_to,
         )
         result = actions.ActionResult(
             action="default_delivery", ok=True, detail=ko_detail, extra=ko_extra,
@@ -733,7 +759,7 @@ def _dispatch_action(
         "ai_classify", "ai_critical_check",
     ):
         try:
-            ko_action_taken, ko_detail, ko_extra = _do_default_delivery(parsed, storage, f"keep_original_after_{action_name}", event_uuid=event_uuid)
+            ko_action_taken, ko_detail, ko_extra = _do_default_delivery(parsed, storage, f"keep_original_after_{action_name}", event_uuid=event_uuid, envelope_rcpt_to=envelope_rcpt_to)
             existing_extra = result.extra or {}
             if ko_extra.get("queue_id"):
                 existing_extra["keep_original_queue_id"] = ko_extra["queue_id"]
@@ -1052,41 +1078,92 @@ def _do_default_delivery(
     storage: Storage,
     reason: str,
     event_uuid: str | None = None,
+    envelope_rcpt_to: list[str] | None = None,
 ) -> tuple[str, str, dict[str, Any]]:
-    """Esegue la default delivery verso lo smarthost del dominio destinatario.
+    """Esegue la default delivery raggruppando i destinatari per dominio gestito.
 
-    Se ``event_uuid`` non è fornito, ne viene generato uno fresh: la mail
-    viene comunque consegnata e tracciata in outbound_queue.
+    PRIORITA' destinatari:
+      1. envelope_rcpt_to (RCPT TO SMTP gia' filtrati da handle_RCPT) — corretti.
+      2. parsed.to_addresses (MIME To: header) — fallback per casi legacy.
 
-    Ritorna (action_taken, detail, extra_dict_per_event_metadata).
+    Per ogni dominio gestito (presente in domain_routing) raggruppa i suoi
+    destinatari e fa UN enqueue separato verso lo smarthost del dominio.
+    Destinatari su domini NON gestiti vengono ignorati: ESVA li gestisce a monte.
+
+    Se NESSUN destinatario e' su un dominio gestito → received_only.
+
+    Ritorna (action_taken, detail, extra_dict).
     """
     if event_uuid is None:
         import uuid as _uuid_mod
         event_uuid = str(_uuid_mod.uuid4())
-    domain_row = None
-    if parsed.primary_to_domain:
-        domain_row = storage.find_domain_routing(parsed.primary_to_domain)
-    if domain_row is None:
-        return ("received_only",
-                f"{reason}, dominio {parsed.primary_to_domain or '(?)'} non gestito",
+
+    # Sorgente prioritaria: envelope SMTP. Fallback: MIME To: header.
+    candidates: list[str] = []
+    if envelope_rcpt_to:
+        candidates = [a for a in envelope_rcpt_to if a and "@" in a]
+    if not candidates:
+        candidates = list(parsed.to_addresses or [])
+        if not candidates and parsed.primary_to:
+            candidates = [parsed.primary_to]
+    if not candidates:
+        return ("received_only", f"{reason}, no rcpt disponibili",
                 {"reason": reason})
-    rcpt = list(parsed.to_addresses) or ([parsed.primary_to] if parsed.primary_to else [])
-    if not rcpt:
-        return ("received_only", f"{reason}, no rcpt nel MIME", {"reason": reason})
-    qid = actions._enqueue_outbound(
-        storage,
-        event_uuid=event_uuid,
-        action="default_delivery",
-        mime_blob=parsed.raw,
-        mail_from=parsed.from_address or "",
-        rcpt_to=rcpt,
-        smarthost=domain_row["smarthost"],
-        smarthost_port=int(domain_row["smarthost_port"] or 25),
-        smarthost_tls=domain_row["smarthost_tls"] or "opportunistic",
-    )
-    return ("default_delivery",
-            f"queued id={qid} via {domain_row['smarthost']}:{domain_row['smarthost_port']} ({reason})",
-            {"queue_id": qid, "reason": reason})
+
+    # Raggruppa per dominio destinatario
+    by_domain: dict[str, list[str]] = {}
+    skipped: list[str] = []
+    for addr in candidates:
+        norm = addr.strip().lower()
+        if "@" not in norm:
+            continue
+        dom = norm.rsplit("@", 1)[1]
+        domain_row = storage.find_domain_routing(dom)
+        if domain_row is None:
+            skipped.append(norm)
+            continue
+        by_domain.setdefault(dom, []).append(norm)
+
+    if not by_domain:
+        # Nessun destinatario su dominio gestito: ESVA dovrebbe averli gia'
+        # smistati a monte; segnaliamo come received_only per audit.
+        return ("received_only",
+                f"{reason}, nessun rcpt su dominio gestito (skipped={','.join(skipped[:5])})",
+                {"reason": reason, "skipped_external": skipped})
+
+    # Enqueue separato per ogni dominio gestito (smarthost diverso)
+    queue_ids: list[int] = []
+    enqueued_rcpt: list[str] = []
+    smarthosts_used: list[str] = []
+    for dom, rcpts in by_domain.items():
+        domain_row = storage.find_domain_routing(dom)
+        if domain_row is None:
+            continue
+        qid = actions._enqueue_outbound(
+            storage,
+            event_uuid=event_uuid,
+            action="default_delivery",
+            mime_blob=parsed.raw,
+            mail_from=parsed.from_address or "",
+            rcpt_to=rcpts,
+            smarthost=domain_row["smarthost"],
+            smarthost_port=int(domain_row["smarthost_port"] or 25),
+            smarthost_tls=domain_row["smarthost_tls"] or "opportunistic",
+        )
+        queue_ids.append(qid)
+        enqueued_rcpt.extend(rcpts)
+        smarthosts_used.append(f"{domain_row['smarthost']}:{domain_row['smarthost_port']}")
+
+    detail = (f"queued id={','.join(str(q) for q in queue_ids)} "
+              f"via {','.join(smarthosts_used)} ({reason})")
+    if skipped:
+        detail += f" — skipped non-gestiti: {','.join(skipped[:3])}"
+    return ("default_delivery", detail,
+            {"queue_id": queue_ids[0] if len(queue_ids) == 1 else queue_ids,
+             "queue_ids": queue_ids,
+             "reason": reason,
+             "enqueued_rcpt_to": enqueued_rcpt,
+             "skipped_external_rcpt": skipped or None})
 
 
 _ADDR_SPLIT_RE = re.compile(r"[\s,;]+")

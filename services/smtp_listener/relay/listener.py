@@ -128,6 +128,7 @@ class RelayHandler:
                 backend=self._backend,
                 pre_action=pre_action,
                 pre_action_reason=pre_reason,
+                envelope_rcpt_to=list(envelope.rcpt_tos or []),
             )
         except Exception as exc:
             logger.exception("Pipeline fallita per messaggio da %s: %s", envelope.mail_from, exc)

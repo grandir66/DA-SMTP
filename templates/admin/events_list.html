@@ -158,7 +158,20 @@
                 <td class="ev-col-id"><strong>{{ e.id }}</strong></td>
                 <td class="ev-col-when mono" title="{{ e.received_at }}">{{ e.received_short }}</td>
                 <td class="ev-col-from mono" title="{{ e.from_address }}">{{ e.from_address or '—' }}</td>
-                <td class="ev-col-to mono" title="{{ e.to_address }}">{{ e.to_address or '—' }}</td>
+                <td class="ev-col-to mono">
+                    {% set env_rcpt = pm.get('envelope_rcpt_to') if pm else None %}
+                    {% if env_rcpt and env_rcpt|length > 1 %}
+                        <span title="MIME To: {{ e.to_address }}&#10;SMTP envelope RCPT TO ({{ env_rcpt|length }}):&#10;{{ env_rcpt|join('&#10;') }}">
+                            {{ env_rcpt[0] }}
+                            <span class="ev-mini chain-extra" style="margin-left:0.2rem;"
+                                  title="Mail con {{ env_rcpt|length }} destinatari accettati">+{{ env_rcpt|length - 1 }}</span>
+                        </span>
+                    {% elif env_rcpt and env_rcpt|length == 1 %}
+                        <span title="SMTP envelope: {{ env_rcpt[0] }}{% if env_rcpt[0] != e.to_address %}&#10;MIME To: {{ e.to_address }}{% endif %}">{{ env_rcpt[0] }}</span>
+                    {% else %}
+                        <span title="{{ e.to_address }}">{{ e.to_address or '—' }}</span>
+                    {% endif %}
+                </td>
                 <td class="ev-col-subject" title="{{ e.subject }}">{{ e.subject or '—' }}</td>
                 <td class="ev-col-cli">{{ e.codice_cliente or '—' }}</td>
                 <td class="ev-col-action">
