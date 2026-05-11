@@ -120,15 +120,15 @@
                 <input type="text" name="shadow_note" value="{{ record.shadow_note or '' }}"
                        placeholder="Note shadow (opzionale)">
             </div>
-            {# Specifico figlio: continue_in_group / exit_group_continue — Advanced #}
-            <div class="rf-row rf-advanced-only">
+            {# Specifico figlio: continue_in_group / exit_group_continue — sempre visibile #}
+            <div class="rf-row">
                 <label>Continue in group</label>
                 <div>
                     <label style="font-weight:normal;">
                         <input type="checkbox" name="continue_in_group" {% if record.continue_in_group %}checked{% endif %}>
                         Dopo match, valuta anche i fratelli successivi
                     </label>
-                    <div class="rf-help">Default OFF (STOP dopo il match). Per eseguire più azioni in cascata nel gruppo.</div>
+                    <div class="rf-help">Default OFF (STOP dopo il match). Per eseguire più azioni in cascata nel gruppo (es. ai_classify che arricchisce ma lascia decidere la successiva).</div>
                 </div>
             </div>
             <div class="rf-row rf-advanced-only">

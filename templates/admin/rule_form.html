@@ -307,10 +307,12 @@
                        placeholder="es. Test 2026-05-05, validare per 7gg">
             </div>
 
-            <div class="rf-row rf-advanced-only">
+            <div class="rf-row">
                 <label>Cascata<span class="rf-tip">ⓘ<span class="rf-tip-balloon">
                     Se attivo, dopo il match continua a valutare le regole successive.
                     Default OFF: prima regola che matcha vince.
+                    Tipico uso: <em>ai_classify</em> che arricchisce ma lascia decidere
+                    alle regole successive l'azione finale (ticket, auto-reply, ecc).
                 </span></span></label>
                 <div><label style="font-weight:400;"><input type="checkbox" name="continue_after_match" {% if record.continue_after_match %}checked{% endif %}> Continua a valutare regole successive</label></div>
             </div>
