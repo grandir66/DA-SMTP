@@ -417,6 +417,8 @@ def process(
                 "size_bytes": len(parsed.raw),
                 "privacy_bypass": True,
                 "bypass_reason": bypass_reason,
+                "envelope_rcpt_to": extra.get("envelope_rcpt_to") or [],
+                "to_addresses_mime": list(parsed.to_addresses or []),
             },
         )
         if queue_extra.get("queue_id"):
@@ -460,6 +462,8 @@ def process(
                 "size_bytes": len(parsed.raw),
                 "passthrough_only": True,
                 "reason": "kill_switch_active",
+                "envelope_rcpt_to": extra.get("envelope_rcpt_to") or [],
+                "to_addresses_mime": list(parsed.to_addresses or []),
             },
             event_uuid=pre_event_uuid,
         )
@@ -730,6 +734,7 @@ def process(
             "in_service": ctx.in_service,
             "contract_active": ctx.contract_active,
             "chain": chain_dump,
+            "to_addresses_mime": list(parsed.to_addresses or []),
             **extra,
         },
     )

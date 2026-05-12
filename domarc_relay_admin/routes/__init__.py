@@ -75,8 +75,39 @@ def index():
     actions_breakdown = sorted(actions_counter.items(), key=lambda x: -x[1])
 
     # Top senders/recipients
-    top_senders = Counter((e.get("from_address") or "—").lower() for e in events_recent if e.get("from_address")).most_common(8)
-    top_recipients = Counter((e.get("to_address") or "—").lower() for e in events_recent if e.get("to_address")).most_common(8)
+    # Top recipients: privilegia envelope_rcpt_to / to_addresses_mime (lista
+    # dei destinatari REALI del messaggio), fallback su to_address (CSV split).
+    # Domini destinatari aggregati per ridurre dispersione (utili quando i
+    # singoli individui dominano una lunga coda).
+    top_senders = Counter(
+        (e.get("from_address") or "—").lower()
+        for e in events_recent if e.get("from_address")
+    ).most_common(25)
+    rec_counter: Counter = Counter()
+    rec_dom_counter: Counter = Counter()
+    for e in events_recent:
+        addrs: list[str] = []
+        pm = e.get("payload_metadata")
+        if isinstance(pm, dict):
+            for key in ("envelope_rcpt_to", "to_addresses_mime"):
+                v = pm.get(key)
+                if isinstance(v, list):
+                    addrs.extend(str(a) for a in v if a)
+        if not addrs and e.get("to_address"):
+            for piece in str(e["to_address"]).split(","):
+                p = piece.strip()
+                if p:
+                    addrs.append(p)
+        seen = set()
+        for raw in addrs:
+            a = raw.strip().lower()
+            if not a or "@" not in a or a in seen:
+                continue
+            seen.add(a)
+            rec_counter[a] += 1
+            rec_dom_counter[a.rsplit("@", 1)[1]] += 1
+    top_recipients = rec_counter.most_common(25)
+    top_recipient_domains = rec_dom_counter.most_common(15)
 
     last_event_seen = events_recent[0]["received_at"] if events_recent else None
 
@@ -131,6 +162,7 @@ def index():
             "actions_breakdown": actions_breakdown,
             "top_senders": top_senders,
             "top_recipients": top_recipients,
+            "top_recipient_domains": top_recipient_domains,
             "last_event_seen": last_event_seen,
             "aggregations_active": len(storage.list_aggregations(tenant_id=tid, only_enabled=True)) if hasattr(storage, "list_aggregations") else 0,
         },

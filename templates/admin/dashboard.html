@@ -436,12 +436,26 @@
         </div>
     </div>
     <div class="chart-card">
-        <h3><i class="fas fa-envelope-open"></i> Top destinatari</h3>
-        <div class="top-list">
+        <h3><i class="fas fa-envelope-open"></i> Top destinatari
+            <span style="margin-left:auto;font-size:.7em;color:#6b7280;">(top {{ stats.top_recipients|length }})</span>
+        </h3>
+        <div class="top-list" style="max-height:340px;overflow-y:auto;">
             {% for addr, count in stats.top_recipients %}
             <div class="row"><span class="name" title="{{ addr }}">{{ addr }}</span><span class="count">{{ count }}</span></div>
             {% else %}
             <div class="empty">— nessun destinatario —</div>
+            {% endfor %}
+        </div>
+    </div>
+    <div class="chart-card">
+        <h3><i class="fas fa-globe"></i> Top domini destinatari
+            <span style="margin-left:auto;font-size:.7em;color:#6b7280;">(top {{ stats.top_recipient_domains|length }})</span>
+        </h3>
+        <div class="top-list" style="max-height:340px;overflow-y:auto;">
+            {% for dom, count in stats.top_recipient_domains %}
+            <div class="row"><span class="name" title="{{ dom }}">{{ dom }}</span><span class="count">{{ count }}</span></div>
+            {% else %}
+            <div class="empty">— nessun dominio —</div>
             {% endfor %}
         </div>
     </div>

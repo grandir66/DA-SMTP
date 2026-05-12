@@ -4,7 +4,43 @@
 Tutte le modifiche rilevanti a questo progetto vengono documentate in questo file.
 Il formato è basato su [Keep a Changelog](https://keepachangelog.com/it/1.1.0/).
 
-## [Unreleased] — 2026-05-07
+## [Unreleased] — 2026-05-12
+
+### Aggiunte — Statistiche destinatari complete e accurate
+
+Le statistiche "Top destinatari" della dashboard e di `/events` mostravano solo 8
+righe e raggruppavano per il campo singolo `to_address`, ignorando i destinatari
+reali della mail. Risultato: i top erano dominati da alias automatici
+(`alerts@`, `checkcentral@`, `proxmox@`, `alarms@`, ecc.), mentre i destinatari
+"personali" (anche con decine di mail/giorno) sparivano dalla classifica.
+
+#### Modifiche
+
+- **Dashboard e `/events`**: top destinatari portato a 25, top domini destinatari
+  e top mittenti aumentati. Liste scrollabili con `max-height` per non rompere
+  il layout.
+- **Nuovo box "Top domini destinatari"** in dashboard, aggregato per dominio →
+  vista più sintetica per riconoscere il traffico per area aziendale.
+- **Conteggio sui destinatari reali**: la stat ora privilegia
+  `payload_metadata.envelope_rcpt_to` (RCPT TO SMTP) e
+  `payload_metadata.to_addresses_mime` (To/Cc del MIME), con fallback a
+  `to_address` (CSV split). Dashboard e `/events` ora usano la STESSA logica
+  (prima erano inconsistenti).
+- **Pipeline persiste `to_addresses_mime`** in `payload_metadata` su tutti i
+  rami (privacy_bypass, passthrough_only, normale): permette di ricostruire i
+  destinatari originali del MIME (utile quando un MTA upstream — es. ESVA — ha
+  fatto fanout in N RCPT separati).
+- **Ramo `privacy_bypass` ora salva anche `envelope_rcpt_to`** nel metadata
+  (prima era omesso, lasciando i 62 eventi privacy bypass senza la lista RCPT
+  nell'audit UI).
+
+Files: `routes/__init__.py`, `routes/events.py`, `templates/admin/dashboard.html`,
+`templates/admin/events_list.html`, `services/smtp_listener/relay/pipeline.py`
+(mirror sincronizzato).
+
+---
+
+## [Precedente] — 2026-05-07
 
 ### Aggiunte — AI Rule Wizard: generatore di regole guidato da prompt o campioni reali
 

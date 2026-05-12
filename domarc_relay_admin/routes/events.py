@@ -104,14 +104,28 @@ def _compute_event_stats(storage, *, tenant_id: int, hours: int,
     for e in sample:
         if e.get("from_address") and "@" in e["from_address"]:
             from_doms[e["from_address"].rsplit("@", 1)[1].lower()] += 1
-        ta = (e.get("to_address") or "").strip()
-        if ta:
-            # to_address puo' contenere CSV (vedi pipeline.to_address_internal)
-            for piece in ta.split(","):
-                addr = piece.strip().lower()
-                if addr and "@" in addr:
-                    to_recs[addr] += 1
-                    to_doms[addr.rsplit("@", 1)[1]] += 1
+        # Destinatari: privilegia envelope_rcpt_to / to_addresses_mime (lista
+        # reale dei rcpt SMTP/MIME), fallback su to_address (CSV split).
+        addrs: list[str] = []
+        pm = e.get("payload_metadata")
+        if isinstance(pm, dict):
+            for key in ("envelope_rcpt_to", "to_addresses_mime"):
+                v = pm.get(key)
+                if isinstance(v, list):
+                    addrs.extend(str(a) for a in v if a)
+        if not addrs:
+            ta = (e.get("to_address") or "").strip()
+            if ta:
+                for piece in ta.split(","):
+                    addrs.append(piece)
+        seen = set()
+        for raw in addrs:
+            addr = raw.strip().lower()
+            if not addr or "@" not in addr or addr in seen:
+                continue
+            seen.add(addr)
+            to_recs[addr] += 1
+            to_doms[addr.rsplit("@", 1)[1]] += 1
         if e.get("codice_cliente"):
             codclis[str(e["codice_cliente"])] += 1
         if e.get("rule_id"):
@@ -133,10 +147,10 @@ def _compute_event_stats(storage, *, tenant_id: int, hours: int,
     return {
         "total_sample": len(sample),
         "sample_capped": len(sample) >= 2000,
-        "top_from_domains": from_doms.most_common(8),
-        "top_to_recipients": to_recs.most_common(8),
-        "top_to_domains": to_doms.most_common(8),
-        "top_codcli": codclis.most_common(8),
+        "top_from_domains": from_doms.most_common(15),
+        "top_to_recipients": to_recs.most_common(25),
+        "top_to_domains": to_doms.most_common(15),
+        "top_codcli": codclis.most_common(15),
         "top_rules": top_rules,
         "by_action": actions.most_common(),
     }
