@@ -6,6 +6,40 @@ Il formato è basato su [Keep a Changelog](https://keepachangelog.com/it/1.1.0/)
 
 ## [Unreleased] — 2026-05-12
 
+### Aggiunte — Quarantena: classificazione esplicita del problema
+
+La pagina quarantena mostrava un generico `forward_dead_letter` come motivo,
+senza indicare la VERA causa (errore SMTP del smarthost). L'operatore doveva
+aprire il dettaglio e leggere il `last_error` per capire se era una casella
+inesistente, un relay rifiutato, una quota piena, ecc.
+
+#### Modifiche
+
+- **Nuovo helper `_classify_quarantine(reason, last_error)`** in `routes/queue.py`
+  che riconosce le cause più comuni:
+  - `5.4.1 Access denied` → "Casella inesistente sullo smarthost"
+  - `5.1.1` / `user unknown` → "Utente sconosciuto"
+  - `4.5.3 multiple tenants` → "Mail multi-tenant rifiutata (legacy)"
+  - `5.7.1 relay denied` → "Relay rifiutato dal smarthost"
+  - `5.7.x spam/policy/blocked` → "Bloccato per policy spam"
+  - `5.2.2` / quota / mailbox full → "Casella destinatario piena"
+  - timeout/refused → "Smarthost irraggiungibile/down"
+  - `pipeline_exception` / `loop_marker` / `too_many_hops` (dalla pipeline)
+  Ogni categoria ha severity (`info` / `warn` / `error`) e un hint di risoluzione.
+- **Tabella `/queue/` (tab Quarantena)**: colonna "Motivo" → "Problema". Mostra
+  badge colorato + ultimi 80 caratteri dell'errore SMTP raw.
+- **Dettaglio `/queue/quarantine/<id>`**: nuovo box in evidenza con label
+  problema, hint di risoluzione, errore smarthost in monospace, smarthost
+  contattato e numero di tentativi.
+- **JOIN automatico con `outbound_queue`** per recuperare il `last_error` del
+  smarthost per ogni evento in quarantena (la tabella `quarantine` non lo
+  conteneva, era nell'outbound).
+
+Files: `domarc_relay_admin/routes/queue.py`, `templates/admin/queue_index.html`,
+`templates/admin/queue_quarantine_detail.html`.
+
+---
+
 ### Aggiunte — Statistiche destinatari complete e accurate
 
 Le statistiche "Top destinatari" della dashboard e di `/events` mostravano solo 8

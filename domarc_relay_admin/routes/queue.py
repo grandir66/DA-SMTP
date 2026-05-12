@@ -96,6 +96,69 @@ def _smarthost_alias(host: str | None) -> tuple[str, str]:
     return (short, host)
 
 
+def _classify_quarantine(reason: str | None,
+                         last_error: str | None) -> tuple[str, str, str]:
+    """Categoria esplicita del problema (label umana, severity, hint risoluzione).
+
+    severity: 'info' | 'warn' | 'error'
+    Pattern di matching basati sui codici SMTP enhanced (RFC 3463) restituiti
+    dagli smarthost più comuni (Exchange Online, Postfix, Sendmail).
+    """
+    r = (reason or "").lower()
+    e = (last_error or "")
+    el = e.lower()
+
+    # Reason del relay (assegnato dalla pipeline/scheduler quando mette in quarantena)
+    if r == "pipeline_exception":
+        return ("Errore interno pipeline (DLQ)", "error",
+                "Bug applicativo: indagare nei log del listener.")
+    if r == "loop_marker_detected":
+        return ("Mail loop sospetto (X-Domarc-Forwarded-By)", "warn",
+                "La mail è già passata dal relay → potenziale loop.")
+    if r == "too_many_hops":
+        return ("Troppi hop SMTP (>25 Received)", "warn",
+                "La mail ha attraversato troppi server prima di arrivare.")
+
+    # forward_dead_letter: il vero motivo è nel last_error dello smarthost
+    if "5.4.1" in el and "access denied" in el:
+        return ("Casella inesistente sullo smarthost", "error",
+                "Il smarthost (M365/Exchange) rifiuta: la casella destinatario "
+                "NON esiste. Crea la casella o aggiungi un alias di redirect.")
+    if "5.1.1" in el or "user unknown" in el or "no such user" in el:
+        return ("Utente sconosciuto", "error",
+                "Casella inesistente sul server destinatario. "
+                "Crea la casella oppure intercetta l'indirizzo con una regola.")
+    if "4.5.3" in el and "multiple tenants" in el:
+        return ("Mail multi-tenant rifiutata (legacy)", "warn",
+                "Caso storico: la mail aveva destinatari su più tenant M365. "
+                "Bug pipeline risolto il 2026-05-11 — non si ripresenta.")
+    if "5.7.1" in el and "relay" in el:
+        return ("Relay rifiutato dal smarthost", "error",
+                "Il smarthost non accetta il relay per questo destinatario. "
+                "Verifica connector M365 o whitelist IP del relay.")
+    if "5.7." in el and ("spam" in el or "policy" in el or "blocked" in el):
+        return ("Bloccato per policy spam", "warn",
+                "Il smarthost ha rifiutato per policy antispam.")
+    if "5.2.2" in el or "quota" in el or "mailbox full" in el:
+        return ("Casella destinatario piena", "warn",
+                "Quota superata: il destinatario deve liberare spazio.")
+    if "timeout" in el or "timed out" in el:
+        return ("Smarthost irraggiungibile (timeout)", "error",
+                "Connessione al smarthost in timeout. "
+                "Verifica rete/firewall o stato smarthost.")
+    if "connection refused" in el or "connect" in el and "refused" in el:
+        return ("Smarthost down (connection refused)", "error",
+                "Lo smarthost rifiuta la connessione.")
+    if "smtprecipientsrefused" in el:
+        return ("Destinatario rifiutato dallo smarthost", "error",
+                "Codice SMTP permanente (5xx) sul rcpt — vedi dettaglio errore.")
+    if r == "forward_dead_letter":
+        return ("Forward fallito (max retry)", "warn",
+                "Dopo i retry massimi la consegna è fallita. Vedi errore.")
+    # Fallback
+    return ((reason or "—"), "info", "")
+
+
 def _format_short_ts(s: str | None, now: datetime | None = None) -> str:
     """Data/ora compatta:
        - oggi  → 'HH:MM'
@@ -260,17 +323,27 @@ def index():
             for r in conn.execute("SELECT state, COUNT(*) AS n FROM outbound_queue GROUP BY state"):
                 stats["outbound"][r["state"]] = r["n"]
 
-            # Quarantine
+            # Quarantine — JOIN con outbound_queue per recuperare last_error
+            # del smarthost (è il vero motivo per cui la mail è dead-letter,
+            # diverso dal generico reason="forward_dead_letter").
             for r in conn.execute("""
-                SELECT id, event_uuid, reason, from_address, to_address,
-                       decision, reviewed_at, notes, created_at,
-                       length(mime_blob) AS mime_size
-                FROM quarantine
-                ORDER BY id DESC LIMIT 200
+                SELECT q.id, q.event_uuid, q.reason, q.from_address, q.to_address,
+                       q.decision, q.reviewed_at, q.notes, q.created_at,
+                       length(q.mime_blob) AS mime_size,
+                       (SELECT ob.last_error FROM outbound_queue ob
+                          WHERE ob.event_uuid = q.event_uuid
+                          ORDER BY ob.id DESC LIMIT 1) AS smarthost_error
+                FROM quarantine q
+                ORDER BY q.id DESC LIMIT 200
             """):
                 qd = dict(r)
                 qd["created_short"] = _format_short_ts(qd.get("created_at"), now)
                 qd["reviewed_short"] = _format_short_ts(qd.get("reviewed_at"), now)
+                label, severity, hint = _classify_quarantine(
+                    qd.get("reason"), qd.get("smarthost_error"))
+                qd["problem_label"] = label
+                qd["problem_severity"] = severity
+                qd["problem_hint"] = hint
                 quarantine.append(qd)
             stats["quarantine_count"] = conn.execute(
                 "SELECT COUNT(*) FROM quarantine"
@@ -340,12 +413,28 @@ def quarantine_detail(queue_id: int):
         abort(503)
     try:
         row = conn.execute("""
-            SELECT id, event_uuid, reason, from_address, to_address, decision,
-                   reviewed_at, notes, created_at, length(mime_blob) AS mime_size
-            FROM quarantine WHERE id = ?
+            SELECT q.id, q.event_uuid, q.reason, q.from_address, q.to_address,
+                   q.decision, q.reviewed_at, q.notes, q.created_at,
+                   length(q.mime_blob) AS mime_size,
+                   (SELECT ob.last_error FROM outbound_queue ob
+                      WHERE ob.event_uuid = q.event_uuid
+                      ORDER BY ob.id DESC LIMIT 1) AS smarthost_error,
+                   (SELECT ob.smarthost FROM outbound_queue ob
+                      WHERE ob.event_uuid = q.event_uuid
+                      ORDER BY ob.id DESC LIMIT 1) AS smarthost,
+                   (SELECT ob.attempts FROM outbound_queue ob
+                      WHERE ob.event_uuid = q.event_uuid
+                      ORDER BY ob.id DESC LIMIT 1) AS attempts
+            FROM quarantine q WHERE q.id = ?
         """, (queue_id,)).fetchone()
         if not row:
             abort(404)
     finally:
         conn.close()
-    return render_template("admin/queue_quarantine_detail.html", item=dict(row))
+    item = dict(row)
+    label, severity, hint = _classify_quarantine(
+        item.get("reason"), item.get("smarthost_error"))
+    item["problem_label"] = label
+    item["problem_severity"] = severity
+    item["problem_hint"] = hint
+    return render_template("admin/queue_quarantine_detail.html", item=item)

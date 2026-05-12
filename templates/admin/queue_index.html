@@ -287,7 +287,7 @@
                 <th class="q-col-state">Decisione</th>
                 <th class="q-col-from">Da</th>
                 <th class="q-col-to">A</th>
-                <th>Motivo</th>
+                <th>Problema</th>
                 <th class="q-col-when">Reviewed</th>
                 <th class="q-col-size">Size</th>
                 <th class="q-col-actions"></th>
@@ -314,7 +314,21 @@
             </td>
             <td class="q-col-from q-mono" title="{{ q.from_address }}">{{ q.from_address|default('—') }}</td>
             <td class="q-col-to q-mono" title="{{ q.to_address }}">{{ q.to_address|default('—') }}</td>
-            <td title="{{ q.reason }}"><small>{{ q.reason|default('—') }}</small></td>
+            <td title="reason raw: {{ q.reason }}{% if q.smarthost_error %}&#10;&#10;errore smarthost:&#10;{{ q.smarthost_error }}{% endif %}{% if q.problem_hint %}&#10;&#10;{{ q.problem_hint }}{% endif %}">
+                {% set sev_color = {'error':'#b91c1c', 'warn':'#b45309', 'info':'#475569'}[q.problem_severity] or '#475569' %}
+                <span style="display:inline-block;padding:0.1rem 0.5rem;border-radius:4px;
+                             background:{{ sev_color }}1a;color:{{ sev_color }};
+                             font-size:0.72rem;font-weight:600;border:1px solid {{ sev_color }}40;">
+                    {{ q.problem_label }}
+                </span>
+                {% if q.smarthost_error %}
+                <div style="font-size:0.7rem;color:#b91c1c;font-family:ui-monospace,Menlo,monospace;
+                            margin-top:0.15rem;line-height:1.2;max-width:380px;
+                            overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                    {{ q.smarthost_error|truncate(80) }}
+                </div>
+                {% endif %}
+            </td>
             <td class="q-col-when q-mono" title="{{ q.reviewed_at or '' }}">{{ q.reviewed_short }}</td>
             <td class="q-col-size q-mono">{{ '%.1f'|format(q.mime_size / 1024) }}K</td>
             <td class="q-col-actions">

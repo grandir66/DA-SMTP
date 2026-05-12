@@ -6,9 +6,43 @@
     <h2 style="margin:0.5rem 0;"><i class="fas fa-shield-virus"></i> Quarantena #{{ item.id }}</h2>
 </section>
 
+{# === BOX PROBLEMA: la prima cosa che l'operatore deve vedere === #}
+{% set sev = item.problem_severity or 'info' %}
+{% set sev_bg = {'error':'#fef2f2', 'warn':'#fffbeb', 'info':'#f1f5f9'}[sev] %}
+{% set sev_border = {'error':'#dc2626', 'warn':'#f59e0b', 'info':'#64748b'}[sev] %}
+{% set sev_fg = {'error':'#991b1b', 'warn':'#92400e', 'info':'#334155'}[sev] %}
+{% set sev_icon = {'error':'fa-circle-exclamation', 'warn':'fa-triangle-exclamation', 'info':'fa-circle-info'}[sev] %}
+<div style="margin-bottom:1rem; max-width:900px; padding:1rem 1.2rem;
+            background:{{ sev_bg }}; border-left:4px solid {{ sev_border }};
+            border-radius:0 8px 8px 0;">
+    <div style="font-size:0.78rem; color:{{ sev_fg }}; text-transform:uppercase;
+                letter-spacing:.05em; font-weight:600; margin-bottom:0.3rem;">
+        <i class="fas {{ sev_icon }}"></i> Problema rilevato
+    </div>
+    <div style="font-size:1.05rem; font-weight:600; color:{{ sev_fg }};">
+        {{ item.problem_label }}
+    </div>
+    {% if item.problem_hint %}
+    <div style="margin-top:0.5rem; font-size:0.88rem; color:{{ sev_fg }};">
+        {{ item.problem_hint }}
+    </div>
+    {% endif %}
+    {% if item.smarthost_error %}
+    <div style="margin-top:0.7rem; padding:0.5rem 0.7rem; background:#1f2937;
+                color:#f3f4f6; border-radius:4px; font-family:ui-monospace,Menlo,monospace;
+                font-size:0.78rem; white-space:pre-wrap; word-break:break-word;">{{ item.smarthost_error }}</div>
+    {% endif %}
+    {% if item.smarthost %}
+    <div style="margin-top:0.4rem; font-size:0.78rem; color:{{ sev_fg }};">
+        <strong>Smarthost:</strong> <code>{{ item.smarthost }}</code>
+        {% if item.attempts %} · <strong>Tentativi:</strong> {{ item.attempts }}{% endif %}
+    </div>
+    {% endif %}
+</div>
+
 <div class="dr-card" style="background:#fff; border:1px solid #cbd5e1; border-radius:8px; padding:1rem; max-width:900px;">
     <div class="dr-form-row"><label>Event UUID</label><div><code>{{ item.event_uuid }}</code></div></div>
-    <div class="dr-form-row"><label>Motivo</label><div>{{ item.reason }}</div></div>
+    <div class="dr-form-row"><label>Motivo (raw)</label><div><code>{{ item.reason }}</code></div></div>
     <div class="dr-form-row"><label>From</label><div class="mono">{{ item.from_address }}</div></div>
     <div class="dr-form-row"><label>To</label><div class="mono">{{ item.to_address }}</div></div>
     <div class="dr-form-row"><label>Decisione</label><div>{{ item.decision or 'in attesa di review' }}</div></div>
