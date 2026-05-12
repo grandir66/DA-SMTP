@@ -604,7 +604,8 @@ def rules_overview():
     # Tutte le regole con action IA
     all_rules = storage.list_rules(tenant_id=tid)
     ai_rules = [r for r in all_rules
-                if r.get("action") in ("ai_classify", "ai_critical_check")]
+                if r.get("action") in ("ai_classify", "ai_critical_check",
+                                        "ai_taxonomy")]
 
     # Mappa job_code → action_name (oggi 1:1 ma teniamolo flessibile)
     def _job_for_action(action: str) -> str:
@@ -612,6 +613,8 @@ def rules_overview():
             return "classify_email"
         if action == "ai_critical_check":
             return "critical_classify"
+        if action == "ai_taxonomy":
+            return "email_taxonomy"
         return action
 
     # Bindings attivi per ciascun job

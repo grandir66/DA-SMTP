@@ -300,7 +300,7 @@
                             <span class="rule-desc-pill" title="{{ c.description }}"
                                   style="display:inline-block; cursor:help; color:#2563eb; margin-left:0.3rem; font-size:0.78rem;">ⓘ</span>
                             {% endif %}
-                            <span class="dr-action-pill {{ c.action }}{% if c.action in ('ai_classify', 'ai_critical_check') %} ai-action{% endif %}">
+                            <span class="dr-action-pill {{ c.action }}{% if c.action in ('ai_classify', 'ai_critical_check', 'ai_taxonomy') %} ai-action{% endif %}">
                                 {%- if c.action == 'create_ticket' %}<i class="fas fa-ticket"></i>
                                 {%- elif c.action == 'auto_reply' %}<i class="fas fa-reply"></i>
                                 {%- elif c.action == 'forward' %}<i class="fas fa-share"></i>
@@ -308,10 +308,10 @@
                                 {%- elif c.action == 'quarantine' %}<i class="fas fa-shield-virus"></i>
                                 {%- elif c.action == 'flag_only' %}<i class="fas fa-flag"></i>
                                 {%- elif c.action == 'ignore' %}<i class="fas fa-ban"></i>
-                                {%- elif c.action in ('ai_classify', 'ai_critical_check') %}<i class="fas fa-robot"></i>
+                                {%- elif c.action in ('ai_classify', 'ai_critical_check', 'ai_taxonomy') %}<i class="fas fa-robot"></i>
                                 {%- endif %} {{ c.action }}
                             </span>
-                            {% if c.action in ('ai_classify', 'ai_critical_check') %}
+                            {% if c.action in ('ai_classify', 'ai_critical_check', 'ai_taxonomy') %}
                             <a href="{{ url_for('ai.rules_overview') }}" onclick="event.stopPropagation();"
                                class="rule-ai-badge"
                                title="Questa regola invoca l'IA (job: classify_email). Click per overview regole IA.">
@@ -381,7 +381,7 @@
                     <span class="rule-desc-pill" title="{{ r.description }}"
                           style="display:inline-block; cursor:help; color:#2563eb; margin-left:0.3rem; font-size:0.78rem;">ⓘ</span>
                     {% endif %}
-                    <span class="dr-action-pill {{ r.action }}{% if r.action in ('ai_classify', 'ai_critical_check') %} ai-action{% endif %}">
+                    <span class="dr-action-pill {{ r.action }}{% if r.action in ('ai_classify', 'ai_critical_check', 'ai_taxonomy') %} ai-action{% endif %}">
                         {%- if r.action == 'create_ticket' %}<i class="fas fa-ticket"></i>
                         {%- elif r.action == 'auto_reply' %}<i class="fas fa-reply"></i>
                         {%- elif r.action == 'forward' %}<i class="fas fa-share"></i>
@@ -389,10 +389,10 @@
                         {%- elif r.action == 'quarantine' %}<i class="fas fa-shield-virus"></i>
                         {%- elif r.action == 'flag_only' %}<i class="fas fa-flag"></i>
                         {%- elif r.action == 'ignore' %}<i class="fas fa-ban"></i>
-                        {%- elif r.action in ('ai_classify', 'ai_critical_check') %}<i class="fas fa-robot"></i>
+                        {%- elif r.action in ('ai_classify', 'ai_critical_check', 'ai_taxonomy') %}<i class="fas fa-robot"></i>
                         {%- endif %} {{ r.action }}
                     </span>
-                    {% if r.action in ('ai_classify', 'ai_critical_check') %}
+                    {% if r.action in ('ai_classify', 'ai_critical_check', 'ai_taxonomy') %}
                     <a href="{{ url_for('ai.rules_overview') }}" onclick="event.stopPropagation();"
                        class="rule-ai-badge"
                        title="Questa regola invoca l'IA. Click per overview regole IA.">

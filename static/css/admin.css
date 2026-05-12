@@ -253,7 +253,7 @@ code { background: #eef2f7; padding: 0.05rem 0.35rem; border-radius: 3px; font-s
 .dr-action-pill.quarantine { background: #fee2e2; color: #b91c1c; }
 .dr-action-pill.flag_only { background: #f1f5f9; color: #475569; }
 .dr-action-pill.ignore { background: #f8fafc; color: #94a3b8; }
-.dr-action-pill.ai_classify, .dr-action-pill.ai_critical_check, .dr-action-pill.ai_classify_shadow, .dr-action-pill.ai_classify_failsafe, .dr-action-pill.ai-action { background: #ede9fe; color: #6d28d9; }
+.dr-action-pill.ai_classify, .dr-action-pill.ai_critical_check, .dr-action-pill.ai_classify_shadow, .dr-action-pill.ai_classify_failsafe, .dr-action-pill.ai_taxonomy, .dr-action-pill.ai_taxonomy_error, .dr-action-pill.ai-action { background: #ede9fe; color: #6d28d9; }
 .rule-ai-badge {
     display: inline-flex;
     align-items: center;
